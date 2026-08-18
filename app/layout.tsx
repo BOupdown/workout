@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import { TabBar } from "@/components/nav/tab-bar";
+import { ServiceWorkerRegistrar } from "@/components/pwa/service-worker-registrar";
 import { StorageGuard } from "@/components/storage/storage-guard";
 import "./globals.css";
 
@@ -73,6 +74,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
           <main className="min-h-0 flex-1">
             <StorageGuard>{children}</StorageGuard>
           </main>
+          <ServiceWorkerRegistrar />
           <TabBar />
         </div>
       </body>
