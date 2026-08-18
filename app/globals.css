@@ -1,0 +1,91 @@
+@import "tailwindcss";
+
+/*
+  Direction visuelle : neutres froids, cartes blanches détachées du fond, et
+  **une seule** couleur d'accent, un vert acide.
+
+  Contrainte que cet accent impose : sa luminance est très haute, il ne peut
+  donc jamais porter de texte clair (1,34:1 avec du blanc). Partout où il sert
+  de fond, le texte est `--accent-ink`, quasi noir, dans les deux modes. C'est
+  aussi ce qui donne au bouton d'enregistrement 14,2:1 de contraste.
+
+  Rayons : 20 px pour les surfaces (lignes, panneaux), 16 px pour les contrôles
+  (champs, boutons). Deux valeurs, une règle, appliquée partout.
+*/
+
+:root {
+  --surface: #f2f2f5;
+  --surface-raised: #ffffff;
+  --line: #e4e4e9;
+  --ink: #111113;
+  /* 7,2:1 sur le fond clair, pas les 4,5:1 du minimum AA : cet écran se lit à
+     bout de bras, en salle, parfois avec de la sueur dans les yeux. */
+  --ink-muted: #4e4e54;
+  --accent: #ccec4b;
+  --accent-ink: #111113;
+  --accent-wash: #f4fbdc;
+  --danger: #b91c1c;
+  /* Pas dediee au trace : l'accent d'interface est a 1,2:1 sur cette surface,
+     invisible en trait de 2px. Valide par scripts/validate_palette.js. */
+  --chart: #6f8b1a;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --surface: #0e0e10;
+    --surface-raised: #19191c;
+    --line: #2a2a30;
+    --ink: #f5f5f6;
+    --ink-muted: #a8a8b0;
+    --accent: #ccec4b;
+    --accent-ink: #111113;
+    --accent-wash: #1e2410;
+    --danger: #fca5a5;
+    /* Pas propre au mode sombre, pas un simple miroir du mode clair. */
+    --chart: #82a326;
+  }
+}
+
+@theme inline {
+  --color-surface: var(--surface);
+  --color-raised: var(--surface-raised);
+  --color-line: var(--line);
+  --color-ink: var(--ink);
+  --color-muted: var(--ink-muted);
+  --color-accent: var(--accent);
+  --color-accent-ink: var(--accent-ink);
+  --color-accent-wash: var(--accent-wash);
+  --color-danger: var(--danger);
+  --color-chart: var(--chart);
+
+  --radius-panel: 20px;
+  --radius-control: 16px;
+
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+}
+
+body {
+  background: var(--surface);
+  color: var(--ink);
+  font-family: var(--font-geist-sans), system-ui, sans-serif;
+  /* Usage en salle : pas de rebond élastique ni de zoom sur un double-tap
+     pendant qu'on ajuste une charge. */
+  overscroll-behavior-y: none;
+  touch-action: manipulation;
+}
+
+/* Confirmation qu'une série est partie. Le seul mouvement de l'écran, et il
+   répond à une action de l'utilisateur : c'est un accusé de réception. */
+@keyframes set-logged {
+  0% { transform: scale(0.86); opacity: 0; }
+  100% { transform: scale(1); opacity: 1; }
+}
+
+.animate-set-logged {
+  animation: set-logged 220ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-set-logged { animation: none; }
+}

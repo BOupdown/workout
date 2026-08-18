@@ -1,0 +1,164 @@
+'use client';
+
+import { ArrowLeft, TrendUp } from '@phosphor-icons/react';
+import { useExerciseProgression } from '@/hooks/use-exercise-progression';
+import type { Exercise } from '@/lib/db/types';
+import { describeSet, formatDuration, formatNumber } from '@/lib/format';
+import type { ProgressionMetric } from '@/lib/progression';
+import { ProgressionChart } from './progression-chart';
+
+interface ProgressionSheetProps {
+  exercise: Exercise;
+  onClose: () => void;
+}
+
+const DATE_FORMAT = new Intl.DateTimeFormat('fr-FR', {
+  weekday: 'short',
+  day: 'numeric',
+  month: 'short',
+});
+
+const UNITS: Record<ProgressionMetric, string> = {
+  weightKg: 'kg',
+  reps: 'reps',
+  durationSec: '',
+};
+
+function formatValue(value: number, metric: ProgressionMetric): string {
+  return metric === 'durationSec' ? formatDuration(value) : formatNumber(value);
+}
+
+/**
+ * Progression d'un exercice dans le temps.
+ *
+ * Trois niveaux de lecture, du plus rapide au plus complet : le chiffre de tête,
+ * la courbe, puis le tableau des séances. Le tableau n'est pas un complément
+ * décoratif — c'est lui qui garantit qu'aucune valeur n'est accessible
+ * uniquement par l'infobulle du graphique.
+ */
+export function ProgressionSheet({ exercise, onClose }: ProgressionSheetProps) {
+  const { loading, points, metric, delta, recentSets } = useExerciseProgression(exercise);
+
+  const unit = UNITS[metric];
+  const latest = points[points.length - 1];
+  const best = points.reduce<typeof latest | undefined>(
+    (top, point) => (!top || point.value > top.value ? point : top),
+    undefined,
+  );
+
+  return (
+    <div className="fixed inset-0 z-20 flex flex-col bg-surface">
+      <header className="flex shrink-0 items-center gap-2 border-b border-line bg-raised px-2 pt-[calc(env(safe-area-inset-top)+0.875rem)] pb-3.5">
+        <button
+          type="button"
+          onClick={onClose}
+          aria-label="Fermer la progression"
+          className="flex h-11 w-11 shrink-0 items-center justify-center rounded-control text-ink transition-transform active:scale-95"
+        >
+          <ArrowLeft size={20} weight="bold" />
+        </button>
+        <div className="min-w-0">
+          <h2 className="truncate text-[0.9375rem] font-semibold text-ink">{exercise.name}</h2>
+          <p className="text-xs text-muted">Progression</p>
+        </div>
+      </header>
+
+      <div className="flex-1 space-y-3 overflow-y-auto p-4 pb-[calc(env(safe-area-inset-bottom)+1rem)]">
+        {loading ? (
+          <div className="space-y-3">
+            <div className="h-28 rounded-panel bg-line" />
+            <div className="h-48 rounded-panel bg-line" />
+          </div>
+        ) : points.length === 0 ? (
+          <div className="rounded-panel bg-raised px-4 py-10 text-center">
+            <TrendUp size={28} weight="duotone" className="mx-auto text-muted" />
+            <p className="mt-3 text-sm font-medium text-ink">Aucune série de travail</p>
+            <p className="mt-1 text-sm text-muted">
+              Enregistre une série pour voir ta progression apparaître ici.
+            </p>
+          </div>
+        ) : (
+          <>
+            <section className="rounded-panel bg-raised px-4 py-4">
+              <p className="text-xs text-muted">Dernière séance</p>
+              {/* Chiffre de tête : chasse proportionnelle, pas `tabular-nums`.
+                  À cette taille, des chiffres de largeur égale sonnent lâches. */}
+              <p className="mt-1 flex items-baseline gap-1.5 text-5xl leading-none font-semibold text-ink">
+                {formatValue(latest.value, metric)}
+                {unit ? <span className="text-lg font-medium text-muted">{unit}</span> : null}
+                {latest.reps !== undefined ? (
+                  <span className="text-lg font-medium text-muted">× {latest.reps}</span>
+                ) : null}
+              </p>
+
+              <p className="mt-2.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted">
+                {delta !== null ? (
+                  <span
+                    className={`rounded-full px-2 py-0.5 font-mono font-semibold tabular-nums ${
+                      delta > 0
+                        ? 'bg-accent text-accent-ink'
+                        : delta < 0
+                          ? 'bg-line text-ink'
+                          : 'bg-line text-muted'
+                    }`}
+                  >
+                    {delta > 0 ? '+' : ''}
+                    {formatValue(delta, metric)} {unit}
+                  </span>
+                ) : null}
+                <span>
+                  {delta !== null ? 'vs séance précédente · ' : ''}
+                  record {best ? formatValue(best.value, metric) : '—'} {unit}
+                </span>
+              </p>
+            </section>
+
+            {points.length > 1 ? (
+              <section className="rounded-panel bg-raised px-3 py-3">
+                <ProgressionChart points={points} metric={metric} unit={unit} />
+              </section>
+            ) : (
+              <p className="px-1 text-xs text-muted">
+                La courbe apparaîtra dès la deuxième séance sur cet exercice.
+              </p>
+            )}
+
+            <section className="overflow-hidden rounded-panel bg-raised">
+              <h3 className="px-4 pt-3.5 pb-1 text-xs font-semibold text-muted uppercase">
+                Séance par séance
+              </h3>
+              <ul>
+                {[...points].reverse().map((point) => {
+                  const sessionSets = recentSets.filter((s) => s.sessionId === point.sessionId);
+                  return (
+                    <li key={point.sessionId} className="border-t border-line px-4 py-3 first:border-t-0">
+                      <div className="flex items-baseline justify-between gap-3">
+                        <span className="text-sm font-medium text-ink">
+                          {DATE_FORMAT.format(point.performedAt)}
+                        </span>
+                        <span className="font-mono text-sm font-semibold text-ink tabular-nums">
+                          {formatValue(point.value, metric)} {unit}
+                        </span>
+                      </div>
+                      <div className="mt-1.5 flex flex-wrap gap-x-2 gap-y-1 font-mono text-xs text-muted tabular-nums">
+                        {sessionSets.map((set) => {
+                          const { primary, secondary } = describeSet(set, exercise);
+                          return (
+                            <span key={set.id}>
+                              {primary}
+                              {secondary ? ` ${secondary}` : ''}
+                            </span>
+                          );
+                        })}
+                      </div>
+                    </li>
+                  );
+                })}
+              </ul>
+            </section>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
