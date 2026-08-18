@@ -2,7 +2,6 @@
 
 import { Barbell, CaretRight, Plus } from '@phosphor-icons/react';
 import { useLiveQuery } from 'dexie-react-hooks';
-import Link from 'next/link';
 import { useState } from 'react';
 import { useActiveSession } from '@/hooks/use-active-session';
 import { useSetDraft } from '@/hooks/use-set-draft';
@@ -14,6 +13,7 @@ import type { Id, SetKind } from '@/lib/db/types';
 import { NO_MESSAGES, toFieldMessages, type FieldMessages } from '@/lib/errors';
 import { draftToSetInput } from '@/lib/set-draft';
 import { ProgressionSheet } from '@/components/progression/progression-sheet';
+import { SessionDetailSheet } from '@/components/history/session-detail-sheet';
 import { ExercisePicker } from './exercise-picker';
 import { ExerciseRow } from './exercise-row';
 import { SessionHeader } from './session-header';
@@ -198,9 +198,17 @@ export function ActiveSessionScreen() {
 
 const DAY_FORMAT = new Intl.DateTimeFormat('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' });
 
-/** Rappel de la derniere seance, avec un lien vers l'historique complet. */
+/**
+ * Rappel de la derniere seance, qui l'ouvre directement.
+ *
+ * Elle ouvre le detail sur place plutot que de renvoyer vers l'historique :
+ * la question posee est « qu'est-ce que j'ai fait la derniere fois ? », pas
+ * « montre-moi la liste ». Fermer le detail ramene donc ici, et non sur un
+ * autre onglet.
+ */
 function LastSessionCard() {
   const summaries = useLiveQuery(() => listSessionSummaries({ limit: 1 }), []);
+  const [open, setOpen] = useState(false);
   const last = summaries?.[0];
 
   if (!last) return null;
@@ -208,9 +216,11 @@ function LastSessionCard() {
   const day = DAY_FORMAT.format(last.startedAt);
 
   return (
-    <Link
-      href="/historique"
-      className="block rounded-panel bg-raised px-4 py-3.5 transition-transform active:scale-[0.99]"
+    <>
+    <button
+      type="button"
+      onClick={() => setOpen(true)}
+      className="block w-full rounded-panel bg-raised px-4 py-3.5 text-left transition-transform active:scale-[0.99]"
     >
       <div className="flex items-center justify-between gap-3">
         <div className="min-w-0">
@@ -226,6 +236,9 @@ function LastSessionCard() {
         </div>
         <CaretRight size={16} className="shrink-0 text-muted" />
       </div>
-    </Link>
+    </button>
+
+    {open ? <SessionDetailSheet sessionId={last.id} onClose={() => setOpen(false)} /> : null}
+    </>
   );
 }
