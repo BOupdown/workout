@@ -7,16 +7,15 @@ import { db } from '@/lib/db/db';
 type Status = 'checking' | 'ready' | 'unavailable';
 
 /**
- * Garde-fou sur la disponibilité d'IndexedDB.
+ * Guard on IndexedDB availability.
  *
- * Sans lui, un navigateur où le stockage est bloqué — navigation privée sur
- * certains moteurs, réglage de confidentialité strict — donnait un écran cassé
- * sans explication. Toute l'app repose sur cette base : si elle ne s'ouvre pas,
- * il faut le dire, pas laisser l'utilisateur face à un chargement infini.
+ * Without it, a browser where storage is blocked - private browsing on some
+ * engines, a strict privacy setting - gave a broken screen with no explanation.
+ * The whole app rests on this database: if it will not open, say so rather than
+ * leaving the user staring at an endless spinner.
  *
- * Les enfants sont rendus tant que le verdict n'est pas tombé : chaque écran a
- * déjà son propre état de chargement, et un écran de garde supplémentaire ne
- * ferait qu'ajouter un clignotement.
+ * Children render until the verdict lands: every screen already has its own
+ * loading state, and one more guard screen would only add a flicker.
  */
 export function StorageGuard({ children }: { children: React.ReactNode }) {
   const [status, setStatus] = useState<Status>('checking');
@@ -38,11 +37,10 @@ export function StorageGuard({ children }: { children: React.ReactNode }) {
     return (
       <div className="flex h-full flex-col items-center justify-center px-6 text-center">
         <WarningCircle size={32} weight="duotone" className="text-muted" />
-        <h1 className="mt-4 text-lg font-semibold text-ink">Stockage indisponible</h1>
+        <h1 className="mt-4 text-lg font-semibold text-ink">Storage unavailable</h1>
         <p className="mt-2 max-w-[32ch] text-sm text-muted">
-          Cette app enregistre tes séances sur ton appareil, et ton navigateur ne l’y autorise pas.
-          En navigation privée, essaie une fenêtre normale ; sinon, vérifie que les données de site
-          sont autorisées.
+          This app stores your sessions on your device, and your browser will not allow it. In
+          private browsing, try a normal window; otherwise check that site data is allowed.
         </p>
       </div>
     );

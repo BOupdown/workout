@@ -19,7 +19,7 @@ import type { Exercise, SetEntry } from '../lib/db/types';
 import { referenceExercises, resetDatabase } from './helpers';
 
 let squat: Exercise;
-let pompes: Exercise;
+let pushUps: Exercise;
 
 /** Une base représentative : catalogue, exercice perso, deux séances, séries. */
 async function seedRealData() {
@@ -34,14 +34,14 @@ async function seedRealData() {
 
   const second = await startSession({ startedAt: Date.parse('2026-08-16T09:00:00Z') });
   const blockB = await addExerciseToSession(second.session.id, squat.id);
-  const blockC = await addExerciseToSession(second.session.id, pompes.id);
+  const blockC = await addExerciseToSession(second.session.id, pushUps.id);
   await createSet({ sessionExerciseId: blockB.id, weightKg: 100, reps: 5 });
   await createSet({ sessionExerciseId: blockC.id, reps: 25 });
 }
 
 beforeEach(async () => {
   await resetDatabase();
-  ({ squat, pompes } = await referenceExercises());
+  ({ squat, pushUps } = await referenceExercises());
 });
 
 describe('exportDatabase', () => {
@@ -93,7 +93,7 @@ describe('readBackup', () => {
   });
 
   it('rejette un fichier étranger', () => {
-    expect(() => readBackup({ ...valid(), format: 'autre-app' })).toThrow(/pas une sauvegarde/);
+    expect(() => readBackup({ ...valid(), format: 'autre-app' })).toThrow(/not a Workout backup/);
   });
 
   it('rejette une version inconnue en la nommant', () => {
@@ -114,7 +114,7 @@ describe('parseBackup', () => {
   });
 
   it('rejette du JSON invalide avec un message clair', () => {
-    expect(() => parseBackup('{ pas du json')).toThrow(/JSON valide/);
+    expect(() => parseBackup('{ pas du json')).toThrow(/valid JSON/);
   });
 });
 

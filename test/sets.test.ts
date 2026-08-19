@@ -7,51 +7,51 @@ import { SetValidationError, setFieldRequirements } from '../lib/db/validation';
 import { referenceExercises, resetDatabase } from './helpers';
 
 let squat: Exercise;
-let pompes: Exercise;
-let gainage: Exercise;
-let traction: Exercise;
+let pushUps: Exercise;
+let plank: Exercise;
+let pullUp: Exercise;
 
 let sessionId: string;
-let blocks: Record<'squat' | 'pompes' | 'gainage' | 'traction', string>;
+let blocks: Record<'squat' | 'pushUps' | 'plank' | 'pullUp', string>;
 
 const startedAt = Date.parse('2026-08-16T09:00:00Z');
 
 beforeEach(async () => {
   await resetDatabase();
-  ({ squat, pompes, gainage, traction } = await referenceExercises());
+  ({ squat, pushUps, plank, pullUp } = await referenceExercises());
 
   const { session } = await startSession({ startedAt, bodyweightKg: 78 });
   sessionId = session.id;
 
   const [b1, b2, b3, b4] = await Promise.all([
     addExerciseToSession(sessionId, squat.id),
-    addExerciseToSession(sessionId, pompes.id),
-    addExerciseToSession(sessionId, gainage.id),
-    addExerciseToSession(sessionId, traction.id),
+    addExerciseToSession(sessionId, pushUps.id),
+    addExerciseToSession(sessionId, plank.id),
+    addExerciseToSession(sessionId, pullUp.id),
   ]);
-  blocks = { squat: b1.id, pompes: b2.id, gainage: b3.id, traction: b4.id };
+  blocks = { squat: b1.id, pushUps: b2.id, plank: b3.id, pullUp: b4.id };
 });
 
 describe('setFieldRequirements', () => {
   it('exige une charge pour un exercice à charge externe', () => {
     expect(setFieldRequirements(squat).weightKg).toBe('required');
-    expect(setFieldRequirements(squat).weightLabel).toBe('Charge');
+    expect(setFieldRequirements(squat).weightLabel).toBe('Load');
   });
 
   it('interdit la charge au poids du corps', () => {
-    expect(setFieldRequirements(pompes).weightKg).toBe('forbidden');
-    expect(setFieldRequirements(pompes).weightLabel).toBeNull();
+    expect(setFieldRequirements(pushUps).weightKg).toBe('forbidden');
+    expect(setFieldRequirements(pushUps).weightLabel).toBeNull();
   });
 
   it('bascule reps ↔ durée selon la metric', () => {
-    expect(setFieldRequirements(gainage).durationSec).toBe('required');
-    expect(setFieldRequirements(gainage).reps).toBe('forbidden');
+    expect(setFieldRequirements(plank).durationSec).toBe('required');
+    expect(setFieldRequirements(plank).reps).toBe('forbidden');
     expect(setFieldRequirements(squat).reps).toBe('required');
     expect(setFieldRequirements(squat).durationSec).toBe('forbidden');
   });
 
   it('nomme la charge selon sa nature', () => {
-    expect(setFieldRequirements(traction).weightLabel).toBe('Lest');
+    expect(setFieldRequirements(pullUp).weightLabel).toBe('Added');
   });
 });
 
@@ -86,22 +86,22 @@ describe('createSet — cas valides', () => {
   });
 
   it('n’écrit aucune charge pour un exercice au poids du corps', async () => {
-    const set = await createSet({ sessionExerciseId: blocks.pompes, reps: 25 });
+    const set = await createSet({ sessionExerciseId: blocks.pushUps, reps: 25 });
 
     expect(set.weightKg).toBeUndefined();
     expect('weightKg' in set).toBe(false);
   });
 
   it('accepte une série au temps', async () => {
-    const set = await createSet({ sessionExerciseId: blocks.gainage, durationSec: 90 });
+    const set = await createSet({ sessionExerciseId: blocks.plank, durationSec: 90 });
 
     expect(set.durationSec).toBe(90);
     expect(set.reps).toBeUndefined();
   });
 
   it('accepte un lest nul puis sa progression', async () => {
-    const sansLest = await createSet({ sessionExerciseId: blocks.traction, weightKg: 0, reps: 8 });
-    const avecLest = await createSet({ sessionExerciseId: blocks.traction, weightKg: 10, reps: 4 });
+    const sansLest = await createSet({ sessionExerciseId: blocks.pullUp, weightKg: 0, reps: 8 });
+    const avecLest = await createSet({ sessionExerciseId: blocks.pullUp, weightKg: 10, reps: 4 });
 
     expect(sansLest.weightKg).toBe(0);
     expect(avecLest.weightKg).toBe(10);
@@ -117,11 +117,11 @@ describe('createSet — invariants dépendants de l’exercice', () => {
   };
 
   it('refuse une charge sur un exercice au poids du corps', async () => {
-    await rejects({ sessionExerciseId: blocks.pompes, weightKg: 20, reps: 10 }, 'weightKg');
+    await rejects({ sessionExerciseId: blocks.pushUps, weightKg: 20, reps: 10 }, 'weightKg');
   });
 
   it('refuse des répétitions sur un exercice au temps', async () => {
-    await rejects({ sessionExerciseId: blocks.gainage, reps: 10 }, 'reps');
+    await rejects({ sessionExerciseId: blocks.plank, reps: 10 }, 'reps');
   });
 
   it('refuse une durée sur un exercice en répétitions', async () => {
@@ -137,9 +137,9 @@ describe('createSet — invariants dépendants de l’exercice', () => {
   });
 
   it('cite l’exercice concerné dans le message', async () => {
-    await createSet({ sessionExerciseId: blocks.pompes, weightKg: 20, reps: 10 }).catch(
+    await createSet({ sessionExerciseId: blocks.pushUps, weightKg: 20, reps: 10 }).catch(
       (err: SetValidationError) => {
-        expect(err.message).toContain('Pompes');
+        expect(err.message).toContain('Push-ups');
       },
     );
   });
@@ -238,7 +238,7 @@ describe('updateSet', () => {
   });
 
   it('refuse un patch qui rendrait la série incohérente', async () => {
-    const set = await createSet({ sessionExerciseId: blocks.pompes, reps: 25 });
+    const set = await createSet({ sessionExerciseId: blocks.pushUps, reps: 25 });
     await expect(updateSet(set.id, { weightKg: 50 })).rejects.toThrow(SetValidationError);
 
     const untouched = (await db.sets.get(set.id))!;
@@ -317,8 +317,8 @@ describe('recentSetsForExercise', () => {
   });
 
   it('n’en mélange pas les exercices', async () => {
-    await createSet({ sessionExerciseId: blocks.pompes, reps: 25 });
-    expect(await recentSetsForExercise(pompes.id, 10)).toHaveLength(1);
+    await createSet({ sessionExerciseId: blocks.pushUps, reps: 25 });
+    expect(await recentSetsForExercise(pushUps.id, 10)).toHaveLength(1);
   });
 
   it('reste correct sur un volume qui dépasse la limite', async () => {

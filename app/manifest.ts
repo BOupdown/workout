@@ -1,24 +1,21 @@
 import type { MetadataRoute } from 'next';
 
 /**
- * Manifeste d'installation.
+ * Install manifest.
  *
- * `standalone` retire la barre d'adresse : en salle, ces ~90 px de hauteur
- * rendus au contenu font une ligne d'exercice de plus à l'écran. `portrait`
- * parce qu'on tient son téléphone d'une main entre deux séries.
- *
- * Attention : ce manifeste rend l'app **installable**, pas **hors ligne**.
- * Sans service worker, la coquille est toujours demandée au réseau.
+ * `standalone` drops the address bar: in the gym, those ~90px given back to the
+ * content are one more exercise row on screen. `portrait` because the phone is
+ * held one-handed between sets.
  */
 export default function manifest(): MetadataRoute.Manifest {
   return {
     name: 'Workout',
     short_name: 'Workout',
-    description: 'Suivi de séances : poids et répétitions, série par série.',
+    description: 'Training log: weights and reps, set by set.',
     start_url: '/',
     display: 'standalone',
     orientation: 'portrait',
-    lang: 'fr',
+    lang: 'en',
     background_color: '#f2f2f5',
     theme_color: '#f2f2f5',
     icons: [

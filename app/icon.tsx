@@ -4,11 +4,11 @@ export const size = { width: 512, height: 512 };
 export const contentType = 'image/png';
 
 /**
- * Icône d'application : une haltère composée de rectangles, sur le vert
- * d'accent. Formes géométriques uniquement, pas de tracé dessiné à la main.
+ * App icon: a barbell made of rectangles, on the accent green. Geometric shapes
+ * only, no hand-drawn paths.
  *
- * Le glyphe est sombre sur le vert, comme partout ailleurs dans l'app : à cette
- * luminance, l'accent ne peut porter que de l'encre foncée.
+ * The glyph is dark on the green, as everywhere else in the app: at this
+ * lightness the accent can only carry dark ink.
  */
 export default function Icon() {
   const bar = { background: '#111113', borderRadius: 12 };

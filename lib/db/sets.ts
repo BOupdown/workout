@@ -1,15 +1,14 @@
 /**
- * Couche d'écriture des séries — le seul point d'entrée pour créer ou modifier
- * une `SetEntry`.
+ * Write layer for sets — the only entry point to create or edit a `SetEntry`.
  *
- * Deux stratégies complémentaires pour tenir les invariants :
+ * Two complementary strategies hold the invariants:
  *
- *   1. **Dériver plutôt que valider.** `sessionId`, `exerciseId`, `performedAt`
- *      et `order` n'apparaissent dans aucun type d'entrée : ils sont recalculés
- *      depuis le bloc parent. Un appelant ne peut donc pas les désynchroniser,
- *      il n'y a rien à vérifier.
- *   2. **Valider ce qui reste**, dans la transaction, contre l'`Exercise`
- *      parent — ce que les hooks Dexie, synchrones, ne peuvent pas faire.
+ *   1. **Derive rather than validate.** `sessionId`, `exerciseId`, `performedAt`,
+ *      `loggedAt` and `order` appear in no input type: they are recomputed from
+ *      the parent block. A caller cannot desynchronise them, so there is
+ *      nothing to check.
+ *   2. **Validate what remains**, inside the transaction, against the parent
+ *      `Exercise` — which the synchronous Dexie hooks cannot do.
  */
 
 import { db } from './db';
@@ -18,26 +17,26 @@ import type { Id, SetEntry, SetKind } from './types';
 import { assertValidSet } from './validation';
 
 /**
- * Bornes des composantes numériques d'une clé composée.
+ * Bounds for the numeric components of a compound key.
  *
- * On n'utilise **pas** `Dexie.maxKey` : c'est une unique instance de tableau
- * (`[[]]`), or l'algorithme « convert a value to a key » de la spec IndexedDB
- * partage son ensemble `seen` entre les éléments frères d'une clé composée et
- * rejette toute valeur déjà rencontrée. La détection de cycle ne distingue pas
- * un vrai cycle d'un doublon d'instance : `[id, maxKey, maxKey]` lève donc un
- * `DataError`. `performedAt` et `order` étant toujours des nombres, ±Infinity
- * est une borne exacte et sans piège.
+ * `Dexie.maxKey` is **not** used: it is a single shared array instance (`[[]]`),
+ * and the IndexedDB spec's "convert a value to a key" algorithm shares its
+ * `seen` set across the sibling elements of a compound key, rejecting any value
+ * already encountered. Its cycle detection cannot tell a real cycle from a
+ * repeated instance, so `[id, maxKey, maxKey]` throws a `DataError`. Since
+ * `performedAt` and `order` are always numbers, ±Infinity is an exact and
+ * trap-free bound.
  */
 const MIN_NUMBER_KEY = -Infinity;
 const MAX_NUMBER_KEY = Infinity;
 
 /**
- * Ce qu'un appelant fournit pour créer une série. Tout le reste est dérivé —
- * c'est la moitié « rendue impossible » des invariants.
+ * What a caller supplies to create a set. Everything else is derived — that is
+ * the "made impossible" half of the invariants.
  */
 export interface NewSetInput {
   sessionExerciseId: Id;
-  /** Par défaut `'work'`. */
+  /** Defaults to `'work'`. */
   kind?: SetKind;
   weightKg?: number;
   reps?: number;
@@ -48,17 +47,18 @@ export interface NewSetInput {
 }
 
 /**
- * Champs modifiables après coup. Les champs dénormalisés en sont volontairement
- * absents : les retirer du type est plus solide que de les refuser à l'exécution.
+ * Fields editable after the fact. The denormalised ones are deliberately
+ * absent: removing them from the type is sturdier than refusing them at
+ * runtime.
  *
- * Une clé présente valant `undefined` **efface** le champ (même sémantique que
- * `Table.update` de Dexie) ; une clé absente le laisse tel quel.
+ * A key present with `undefined` **clears** the field (the same semantics as
+ * Dexie's `Table.update`); an absent key leaves it as is.
  */
 export type SetPatch = Partial<
   Pick<SetEntry, 'kind' | 'weightKg' | 'reps' | 'durationSec' | 'rpe' | 'isFailure' | 'notes'>
 >;
 
-/** Retire les clés à `undefined` pour ne pas les matérialiser en base. */
+/** Drops `undefined` keys so they are never materialised in the database. */
 function withoutUndefined<T extends object>(value: T): T {
   return Object.fromEntries(
     Object.entries(value).filter(([, v]) => v !== undefined),
@@ -66,11 +66,11 @@ function withoutUndefined<T extends object>(value: T): T {
 }
 
 /**
- * Crée une série dans un bloc existant.
+ * Creates a set inside an existing block.
  *
- * @throws {SetValidationError} si les mesures ne correspondent pas à l'exercice
- *   (charge sur un exercice au poids du corps, reps sur un exercice au temps…).
- * @throws {Error} si le bloc, la séance ou l'exercice sont introuvables.
+ * @throws {SetValidationError} when the measures do not match the exercise
+ *   (a load on a bodyweight movement, reps on a timed one…).
+ * @throws {Error} when the block, session or exercise cannot be found.
  */
 export async function createSet(input: NewSetInput): Promise<SetEntry> {
   return db.transaction(
@@ -82,19 +82,19 @@ export async function createSet(input: NewSetInput): Promise<SetEntry> {
     async () => {
       const block = await db.sessionExercises.get(input.sessionExerciseId);
       if (!block) {
-        throw new Error(`Bloc d'exercice introuvable : ${input.sessionExerciseId}`);
+        throw new Error(`Session exercise not found: ${input.sessionExerciseId}`);
       }
 
       const [session, exercise] = await Promise.all([
         db.sessions.get(block.sessionId),
         db.exercises.get(block.exerciseId),
       ]);
-      if (!session) throw new Error(`Séance introuvable : ${block.sessionId}`);
-      if (!exercise) throw new Error(`Exercice introuvable : ${block.exerciseId}`);
+      if (!session) throw new Error(`Session not found: ${block.sessionId}`);
+      if (!exercise) throw new Error(`Exercise not found: ${block.exerciseId}`);
 
-      // `order` strictement croissant, pas nécessairement contigu : supprimer
-      // une série ne doit pas obliger à renuméroter les suivantes. L'affichage
-      // « Série 1, 2, 3 » se fait sur l'index du tableau, pas sur ce champ.
+      // `order` is strictly increasing, not necessarily contiguous: deleting a
+      // set must not force renumbering the rest. The "Set 1, 2, 3" display uses
+      // the array index, not this field.
       const last = await db.sets
         .where('[sessionExerciseId+order]')
         .between([block.id, MIN_NUMBER_KEY], [block.id, MAX_NUMBER_KEY])
@@ -105,7 +105,7 @@ export async function createSet(input: NewSetInput): Promise<SetEntry> {
         id: newId(),
         sessionExerciseId: block.id,
 
-        // Dénormalisations, dérivées des parents — jamais fournies par l'appelant.
+        // Denormalisations derived from the parents — never supplied by the caller.
         sessionId: block.sessionId,
         exerciseId: block.exerciseId,
         performedAt: session.startedAt,
@@ -130,21 +130,21 @@ export async function createSet(input: NewSetInput): Promise<SetEntry> {
 }
 
 /**
- * Modifie une série existante. La série résultante est validée **avant**
- * écriture : une correction de frappe ne peut pas rendre l'historique incohérent.
+ * Edits an existing set. The resulting set is validated **before** writing: a
+ * typo correction cannot leave the history inconsistent.
  *
- * @throws {SetValidationError} si le résultat du patch est invalide.
+ * @throws {SetValidationError} when the patched set would be invalid.
  */
 export async function updateSet(id: Id, patch: SetPatch): Promise<SetEntry> {
   return db.transaction('rw', db.sets, db.exercises, async () => {
     const existing = await db.sets.get(id);
-    if (!existing) throw new Error(`Série introuvable : ${id}`);
+    if (!existing) throw new Error(`Set not found: ${id}`);
 
     const exercise = await db.exercises.get(existing.exerciseId);
-    if (!exercise) throw new Error(`Exercice introuvable : ${existing.exerciseId}`);
+    if (!exercise) throw new Error(`Exercise not found: ${existing.exerciseId}`);
 
-    // Merge aligné sur la sémantique de `Table.update` : clé présente à
-    // `undefined` = suppression du champ, clé absente = inchangé.
+    // Merge aligned with `Table.update`: a key present and `undefined` clears
+    // the field, an absent key leaves it untouched.
     const next = { ...existing } as Record<string, unknown>;
     for (const key of Object.keys(patch)) {
       const value = patch[key as keyof SetPatch];
@@ -161,20 +161,20 @@ export async function updateSet(id: Id, patch: SetPatch): Promise<SetEntry> {
 }
 
 /**
- * Les `order` restant strictement croissants et non contigus, une suppression
- * n'a rien à renuméroter.
+ * Since `order` stays strictly increasing and non-contiguous, a deletion has
+ * nothing to renumber.
  */
 export async function deleteSet(id: Id): Promise<void> {
   await db.sets.delete(id);
 }
 
 /**
- * Nombre de séries jamais enregistrées pour un exercice, échauffements compris.
+ * How many sets were ever logged for an exercise, warm-ups included.
  *
- * Il n'existe **pas** d'index sur `exerciseId` seul : le composé
- * `[exerciseId+performedAt+order]` le couvre déjà, une plage sur son premier
- * élément suffit. Un index de plus serait un index de plus à maintenir à chaque
- * écriture de série.
+ * There is **no** index on `exerciseId` alone: the compound
+ * `[exerciseId+performedAt+order]` already covers it, and a range over its
+ * first element is enough. One more index would be one more index to maintain
+ * on every set write.
  */
 export async function countSetsForExercise(exerciseId: Id): Promise<number> {
   return db.sets
@@ -187,11 +187,11 @@ export async function countSetsForExercise(exerciseId: Id): Promise<number> {
 }
 
 /**
- * « Montre-moi mes N dernières séries de squat. »
+ * "Show me my last N squat sets."
  *
- * Sert autant de requête utile que de justification de l'index
- * `[exerciseId+performedAt+order]` : aucune jointure avec `sessions`, et le tri
- * intra-séance reste exact grâce à `order` en troisième position.
+ * As much a useful query as the justification for the
+ * `[exerciseId+performedAt+order]` index: no join with `sessions`, and ordering
+ * within a session stays exact thanks to `order` in third position.
  */
 export async function recentSetsForExercise(
   exerciseId: Id,
@@ -206,8 +206,8 @@ export async function recentSetsForExercise(
     )
     .reverse();
 
-  // Filtrer `kind` en mémoire plutôt que via un index dédié : la queue parcourue
-  // est minuscule, et c'est un index de moins à maintenir à chaque écriture.
+  // `kind` is filtered in memory rather than through a dedicated index: the
+  // tail walked is tiny, and it is one less index to maintain on every write.
   if (options.includeWarmups) return collection.limit(limit).toArray();
 
   return collection

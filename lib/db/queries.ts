@@ -1,15 +1,14 @@
 /**
- * Lectures assemblées, transverses aux entités.
+ * Assembled reads, cutting across entities.
  *
- * Deux projections, aucune écriture :
- *   getSessionDetail()      une séance complète, pour l'écran de séance
- *   listSessionSummaries()  la liste d'historique, paginée et légère
+ * Two projections, no writes:
+ *   getSessionDetail()      one complete session, for the session screen
+ *   listSessionSummaries()  the history list, paginated and light
  *
- * Règle commune : **aucune de ces lectures ne filtre sur `archivedAt`**.
- * L'archivage ne concerne que la sélection d'un exercice ; filtrer ici ferait
- * disparaître un bloc d'une séance passée alors que ses séries existent
- * toujours. Les exercices sont donc résolus par `bulkGet` sur les ids, jamais
- * via une liste filtrée.
+ * A rule they share: **neither read filters on `archivedAt`**. Archiving only
+ * concerns picking an exercise; filtering here would make a block vanish from a
+ * past session while its sets still exist. Exercises are therefore resolved by
+ * `bulkGet` on ids, never through a filtered list.
  */
 
 import { db } from './db';
@@ -26,19 +25,18 @@ import type {
 } from './types';
 
 /**
- * Un bloc désigne un exercice qui n'existe plus. Aucun chemin d'écriture ne
- * peut produire cet état — il n'y a pas de suppression d'exercice —, donc on
- * échoue bruyamment plutôt que d'escamoter silencieusement un exercice de
- * l'historique.
+ * A block points at an exercise that no longer exists. No write path can
+ * produce this state — there is no exercise deletion — so we fail loudly rather
+ * than quietly drop an exercise from the history.
  */
 function missingExercise(block: SessionExercise): Error {
   return new Error(
-    `Exercice ${block.exerciseId} introuvable, référencé par le bloc ${block.id}. ` +
-      'Base incohérente.',
+    `Exercise ${block.exerciseId} not found, referenced by block ${block.id}. ` +
+      'Inconsistent database.',
   );
 }
 
-/** Index des exercices désignés par une liste de blocs, en une seule requête. */
+/** Index of the exercises named by a list of blocks, in a single query. */
 async function loadExercisesFor(blocks: SessionExercise[]): Promise<Map<Id, Exercise>> {
   const ids = [...new Set(blocks.map((block) => block.exerciseId))];
   const exercises = await db.exercises.bulkGet(ids);
@@ -51,16 +49,15 @@ async function loadExercisesFor(blocks: SessionExercise[]): Promise<Map<Id, Exer
 }
 
 /**
- * Une séance, ses blocs, leurs exercices et leurs séries.
+ * A session, its blocks, their exercises and their sets.
  *
- * Quatre requêtes indexées, quel que soit le nombre de blocs : la séance, ses
- * blocs, un `bulkGet` des exercices dédupliqués, et **une seule** plage sur les
- * séries de la séance — pas de requête par bloc. Le regroupement se fait en
- * mémoire.
+ * Four indexed queries whatever the number of blocks: the session, its blocks, a
+ * `bulkGet` of the de-duplicated exercises, and **one** range over the session's
+ * sets — no per-block query. Grouping happens in memory.
  *
- * Le tout dans une transaction en lecture, pour que blocs et séries proviennent
- * du même instantané : sans elle, une série écrite entre les deux requêtes
- * donnerait une vue incohérente.
+ * All inside a read transaction, so blocks and sets come from the same snapshot:
+ * without it, a set written between the two queries would give an inconsistent
+ * view.
  */
 export async function getSessionDetail(sessionId: Id): Promise<SessionDetail | undefined> {
   return db.transaction(
@@ -73,13 +70,13 @@ export async function getSessionDetail(sessionId: Id): Promise<SessionDetail | u
       const session = await db.sessions.get(sessionId);
       if (!session) return undefined;
 
-      // Déjà triés par l'index `[sessionId+order]`.
+      // Already sorted by the `[sessionId+order]` index.
       const blocks = await listSessionExercises(sessionId);
 
       const [exerciseById, sets] = await Promise.all([
         loadExercisesFor(blocks),
-        // Tri global par `order` : chaque groupe est donc constitué dans le bon
-        // ordre au fil du remplissage, sans re-trier bloc par bloc.
+        // Sorted globally by `order`, so each group is built in the right order
+        // as it fills, with no per-block re-sort.
         db.sets.where('sessionId').equals(sessionId).sortBy('order'),
       ]);
 
@@ -107,28 +104,27 @@ export async function getSessionDetail(sessionId: Id): Promise<SessionDetail | u
 }
 
 export interface SessionHistoryPage {
-  /** Nombre de séances à retourner. */
+  /** How many sessions to return. */
   limit?: number;
   /**
-   * Curseur : ne retourne que les séances **strictement antérieures** à cet
-   * instant. Passer le `startedAt` de la dernière ligne affichée enchaîne la
-   * page suivante sans recouvrement.
+   * Cursor: return only sessions **strictly earlier** than this instant. Pass
+   * the `startedAt` of the last row shown to fetch the next page with no
+   * overlap.
    */
   before?: Timestamp;
 }
 
 /**
- * Liste d'historique, de la plus récente à la plus ancienne.
+ * History list, most recent first.
  *
- * Le coût d'une page ne dépend **pas** du nombre de séries des séances : le
- * comptage passe par `count()` sur une plage d'index, qui dénombre les entrées
- * d'index sans charger les enregistrements. Une séance de 40 séries coûte donc
- * autant qu'une séance de 5.
+ * A page's cost does **not** depend on how many sets its sessions hold: counting
+ * goes through `count()` over an index range, which tallies index entries
+ * without loading records. A 40-set session costs the same as a 5-set one.
  *
- * Le volume total est délibérément absent de `SessionSummary` : c'est le seul
- * chiffre qui casserait cette propriété. S'il devient nécessaire, il faudra le
- * calculer pour la seule page affichée — et surtout pas dénormaliser un
- * agrégat sur `Session`, qui dériverait à chaque écriture de série.
+ * Total volume is deliberately absent from `SessionSummary`: it is the one
+ * figure that would break that property. Should it become necessary, it must be
+ * computed for the displayed page only — and certainly not denormalised as an
+ * aggregate on `Session`, which would drift on every set write.
  */
 export async function listSessionSummaries(
   options: SessionHistoryPage = {},
@@ -142,8 +138,8 @@ export async function listSessionSummaries(
     db.sets,
     db.exercises,
     async () => {
-      // `below(Infinity)` unifie les deux cas : `startedAt` est toujours un
-      // nombre fini, la borne par défaut n'exclut donc rien.
+      // `below(Infinity)` unifies both cases: `startedAt` is always a finite
+      // number, so the default bound excludes nothing.
       const sessions = await db.sessions
         .where('startedAt')
         .below(before ?? Infinity)
@@ -163,7 +159,7 @@ export async function listSessionSummaries(
       const allBlocks = [...blocksBySession.values()].flat();
       const [exerciseById, setCounts] = await Promise.all([
         loadExercisesFor(allBlocks),
-        // Un `count()` indexé par séance — aucun enregistrement de série lu.
+        // One indexed `count()` per session — no set record is ever read.
         Promise.all(
           sessions.map((session) => db.sets.where('sessionId').equals(session.id).count()),
         ),

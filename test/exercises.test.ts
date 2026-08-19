@@ -21,11 +21,11 @@ import {
 import { referenceExercises, resetDatabase } from './helpers';
 
 let squat: Exercise;
-let pompes: Exercise;
+let pushUps: Exercise;
 
 beforeEach(async () => {
   await resetDatabase();
-  ({ squat, pompes } = await referenceExercises());
+  ({ squat, pushUps } = await referenceExercises());
 });
 
 describe('createExercise', () => {
@@ -132,7 +132,7 @@ describe('createExercise — conflit de nom', () => {
       () => expect.unreachable('la création aurait dû être refusée'),
       (err: ExerciseNameConflictError) => {
         expect(err.existing.archivedAt).toBeDefined();
-        expect(err.message).toContain('archivé');
+        expect(err.message).toContain('archived');
       },
     );
   });
@@ -196,7 +196,7 @@ describe('validation structurelle', () => {
     await expect(
       db.exercises.add({
         id: 'incoherent',
-        name: 'Développé couché',
+        name: 'Bench press',
         nameKey: 'autre chose',
         loadType: 'external',
         metric: 'reps',
@@ -229,7 +229,7 @@ describe('updateExercise — champs libres', () => {
   });
 
   it('refuse un renommage vers un nom déjà pris', async () => {
-    await expect(updateExercise(squat.id, { name: 'Pompes' })).rejects.toThrow(
+    await expect(updateExercise(squat.id, { name: 'Push-ups' })).rejects.toThrow(
       ExerciseNameConflictError,
     );
     expect((await db.exercises.get(squat.id))!.name).toBe('Squat');
@@ -269,7 +269,7 @@ describe('updateExercise — champs libres', () => {
   });
 
   it('lève sur un exercice inconnu', async () => {
-    await expect(updateExercise('inconnu', { notes: 'x' })).rejects.toThrow(/introuvable/);
+    await expect(updateExercise('inconnu', { notes: 'x' })).rejects.toThrow(/not found/);
   });
 });
 
@@ -327,7 +327,7 @@ describe('updateExercise — nature verrouillée par l’historique', () => {
       (err: ExerciseInUseError) => {
         expect(err.setCount).toBe(2);
         expect(err.lockedFields).toEqual(['loadType', 'perSide']);
-        expect(err.message).toContain('Archivez-le');
+        expect(err.message).toContain('Archive it');
       },
     );
   });
@@ -406,7 +406,7 @@ describe('archivage', () => {
   });
 
   it('lève sur un exercice inconnu', async () => {
-    await expect(archiveExercise('inconnu')).rejects.toThrow(/introuvable/);
+    await expect(archiveExercise('inconnu')).rejects.toThrow(/not found/);
   });
 });
 
@@ -456,7 +456,7 @@ describe('désarchivage', () => {
   });
 
   it('est idempotent sur un exercice non archivé', async () => {
-    const untouched = await unarchiveExercise(pompes.id);
+    const untouched = await unarchiveExercise(pushUps.id);
     expect(untouched.archivedAt).toBeUndefined();
   });
 

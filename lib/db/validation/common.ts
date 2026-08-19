@@ -1,21 +1,21 @@
-/** Socle partagé par les validateurs de chaque entité. */
+/** Shared foundation for every entity validator. */
 
 export interface ValidationIssue {
-  /** Champ concerné, ou `'*'` pour l'entité entière. */
+  /** The field concerned, or `'*'` for the whole entity. */
   field: string;
-  /** Code stable, pour du branchement dans l'UI. */
+  /** Stable code, for branching in the UI. */
   code: string;
-  /** Message en clair, affichable tel quel. */
+  /** Plain message, displayable as is. */
   message: string;
 }
 
 export type ValidatedEntity = 'set' | 'session' | 'sessionExercise' | 'exercise';
 
 const ENTITY_LABELS: Record<ValidatedEntity, string> = {
-  set: 'Série',
-  session: 'Séance',
-  sessionExercise: 'Exercice de la séance',
-  exercise: 'Exercice',
+  set: 'Set',
+  session: 'Session',
+  sessionExercise: 'Session exercise',
+  exercise: 'Exercise',
 };
 
 export class ValidationError extends Error {
@@ -23,7 +23,7 @@ export class ValidationError extends Error {
   readonly issues: readonly ValidationIssue[];
 
   constructor(entity: ValidatedEntity, issues: readonly ValidationIssue[]) {
-    super(`${ENTITY_LABELS[entity]} invalide — ${issues.map((i) => i.message).join(' ')}`);
+    super(`Invalid ${ENTITY_LABELS[entity].toLowerCase()}. ${issues.map((i) => i.message).join(' ')}`);
     this.name = 'ValidationError';
     this.entity = entity;
     this.issues = issues;
@@ -59,7 +59,7 @@ export class ExerciseValidationError extends ValidationError {
 }
 
 // ---------------------------------------------------------------------------
-// Prédicats
+// Predicates
 // ---------------------------------------------------------------------------
 
 export const isId = (v: unknown): v is string =>
@@ -74,8 +74,8 @@ export const isNonNegativeInteger = (v: unknown): v is number =>
   Number.isInteger(v) && (v as number) >= 0;
 
 /**
- * Garde-fou commun à toutes les entités : un objet, et rien d'autre.
- * Retourne `null` si la valeur est exploitable.
+ * Guard common to every entity: an object, and nothing else.
+ * Returns `null` when the value is usable.
  */
 export function asRecord(value: unknown): Record<string, unknown> | null {
   if (typeof value !== 'object' || value === null) return null;
@@ -85,5 +85,5 @@ export function asRecord(value: unknown): Record<string, unknown> | null {
 export const notAnObjectIssue = (label: string): ValidationIssue => ({
   field: '*',
   code: 'not_an_object',
-  message: `${label} doit être un objet.`,
+  message: `${label} must be an object.`,
 });

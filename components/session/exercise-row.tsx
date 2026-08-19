@@ -2,26 +2,28 @@
 
 import { describeSet } from '@/lib/format';
 import type { Exercise, SessionExerciseWithSets, SetEntry } from '@/lib/db/types';
+import type { WeightUnit } from '@/lib/units';
 
 interface ExerciseRowProps {
   entry: SessionExerciseWithSets;
   isActive: boolean;
   onSelect: () => void;
-  /** Série tout juste enregistrée, à faire apparaître. */
+  unit: WeightUnit;
+  /** The set just logged, to be brought in. */
   justLoggedSetId?: string;
 }
 
 /**
- * Un exercice de la séance et ses séries.
+ * One exercise of the session and its sets.
  *
- * Les séries sont posées en tuiles plutôt qu'en ligne de texte : la valeur qui
- * progresse est le contenu de cet écran, elle doit se lire d'un coup d'œil,
- * bras tendu, entre deux séries. L'échauffement est en retrait sans disparaître.
+ * Sets are laid out as tiles rather than a run of text: the value that
+ * progresses is the content of this screen, and it has to read at a glance, at
+ * arm's length, between two sets. Warm-ups sit back without disappearing.
  *
- * L'exercice actif se signale par une barre d'accent et un fond teinté, pas par
- * une inversion complète : inverser écrasait la lisibilité des chiffres.
+ * The active exercise is marked by an accent bar and a tinted background, not a
+ * full inversion: inverting crushed the legibility of the numbers.
  */
-export function ExerciseRow({ entry, isActive, onSelect, justLoggedSetId }: ExerciseRowProps) {
+export function ExerciseRow({ entry, isActive, onSelect, unit, justLoggedSetId }: ExerciseRowProps) {
   const { exercise, sets } = entry;
 
   return (
@@ -40,7 +42,7 @@ export function ExerciseRow({ entry, isActive, onSelect, justLoggedSetId }: Exer
       <div className="flex min-h-6 items-baseline justify-between gap-3">
         <span className="truncate text-[0.9375rem] font-semibold text-ink">{exercise.name}</span>
         <span className="shrink-0 font-mono text-xs text-muted tabular-nums">
-          {sets.length > 0 ? `${sets.length} ×` : 'à faire'}
+          {sets.length > 0 ? `${sets.length} ×` : 'to do'}
         </span>
       </div>
 
@@ -51,6 +53,7 @@ export function ExerciseRow({ entry, isActive, onSelect, justLoggedSetId }: Exer
               key={set.id}
               set={set}
               exercise={exercise}
+              unit={unit}
               isActive={isActive}
               justLogged={set.id === justLoggedSetId}
             />
@@ -64,19 +67,21 @@ export function ExerciseRow({ entry, isActive, onSelect, justLoggedSetId }: Exer
 function SetTile({
   set,
   exercise,
+  unit,
   isActive,
   justLogged,
 }: {
   set: SetEntry;
   exercise: Exercise;
+  unit: WeightUnit;
   isActive: boolean;
   justLogged: boolean;
 }) {
-  const { primary, secondary } = describeSet(set, exercise);
+  const { primary, secondary } = describeSet(set, exercise, unit);
   const isWarmup = set.kind === 'warmup';
 
-  // Sur la ligne active le fond est déjà teinté : les tuiles passent en blanc
-  // pour rester détachées, au lieu de se fondre dedans.
+  // On the active row the background is already tinted: tiles go white to stay
+  // detached rather than blending in.
   const background = isActive ? 'bg-raised' : 'bg-surface';
 
   return (
@@ -87,7 +92,7 @@ function SetTile({
     >
       <span className={isWarmup ? 'text-sm' : 'text-base font-semibold'}>{primary}</span>
       {secondary ? <span className="text-xs text-muted">{secondary}</span> : null}
-      {isWarmup ? <span className="sr-only">(échauffement)</span> : null}
+      {isWarmup ? <span className="sr-only">(warm-up)</span> : null}
     </li>
   );
 }

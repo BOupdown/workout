@@ -11,25 +11,25 @@ import {
   type SessionPoint,
 } from '@/lib/progression';
 
-/** Séances remontées. Au-delà, la courbe devient illisible sur 375 px. */
+/** How far back we read. Beyond this the curve is unreadable at 375px. */
 const MAX_SETS = 200;
 
 export interface ExerciseProgression {
   loading: boolean;
   points: SessionPoint[];
   metric: ProgressionMetric;
-  /** Écart avec la séance précédente, `null` s'il n'y a pas de quoi comparer. */
+  /** Gap with the previous session, `null` when there is nothing to compare. */
   delta: number | null;
-  /** Séries de travail les plus récentes, pour le tableau sous le graphique. */
+  /** The most recent work sets, for the table under the chart. */
   recentSets: SetEntry[];
 }
 
 /**
- * Progression d'un exercice, réactualisée automatiquement.
+ * An exercise's progression, kept up to date automatically.
  *
- * Une seule requête, sur l'index `[exerciseId+performedAt+order]` : c'est
- * exactement ce pour quoi il a été posé. Le regroupement par séance se fait en
- * mémoire, sur une queue bornée.
+ * A single query over the `[exerciseId+performedAt+order]` index: exactly what
+ * it was laid down for. Grouping by session happens in memory, over a bounded
+ * tail.
  */
 export function useExerciseProgression(exercise: Exercise | undefined): ExerciseProgression {
   const sets = useLiveQuery(
@@ -43,8 +43,8 @@ export function useExerciseProgression(exercise: Exercise | undefined): Exercise
     return { loading: true, points: [], metric, delta: null, recentSets: [] };
   }
 
-  // `recentSetsForExercise` rend l'ordre antéchronologique ; la progression se
-  // lit dans l'autre sens.
+  // `recentSetsForExercise` returns reverse-chronological order; progression
+  // reads the other way round.
   const points = buildProgression(sets, exercise);
 
   return {

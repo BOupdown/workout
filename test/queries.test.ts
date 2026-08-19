@@ -14,21 +14,21 @@ import type { Exercise } from '../lib/db/types';
 import { referenceExercises, resetDatabase } from './helpers';
 
 let squat: Exercise;
-let pompes: Exercise;
-let gainage: Exercise;
+let pushUps: Exercise;
+let plank: Exercise;
 
 beforeEach(async () => {
   await resetDatabase();
-  ({ squat, pompes, gainage } = await referenceExercises());
+  ({ squat, pushUps, plank } = await referenceExercises());
 });
 
-/** Séance complète : squat (échauffement + 2 séries), pompes (1), gainage (1). */
+/** Séance complète : squat (échauffement + 2 séries), pushUps (1), plank (1). */
 async function buildFullSession(startedAt = new Date(2026, 7, 16, 19, 0).getTime()) {
   const { session } = await startSession({ startedAt, title: 'Full body' });
 
   const squatBlock = await addExerciseToSession(session.id, squat.id);
-  const pompesBlock = await addExerciseToSession(session.id, pompes.id);
-  const gainageBlock = await addExerciseToSession(session.id, gainage.id);
+  const pompesBlock = await addExerciseToSession(session.id, pushUps.id);
+  const gainageBlock = await addExerciseToSession(session.id, plank.id);
 
   await createSet({ sessionExerciseId: squatBlock.id, kind: 'warmup', weightKg: 40, reps: 10 });
   await createSet({ sessionExerciseId: squatBlock.id, weightKg: 100, reps: 5 });
@@ -58,7 +58,7 @@ describe('getSessionDetail', () => {
     const { session } = await buildFullSession();
     const detail = (await getSessionDetail(session.id))!;
 
-    expect(detail.entries.map((e) => e.exercise.name)).toEqual(['Squat', 'Pompes', 'Gainage planche']);
+    expect(detail.entries.map((e) => e.exercise.name)).toEqual(['Squat', 'Push-ups', 'Plank']);
     expect(detail.entries.map((e) => e.order)).toEqual([0, 1, 2]);
   });
 
@@ -135,7 +135,7 @@ describe('getSessionDetail', () => {
     await reorderSessionExercises(session.id, [gainageBlock.id, squatBlock.id, pompesBlock.id]);
 
     const detail = (await getSessionDetail(session.id))!;
-    expect(detail.entries.map((e) => e.exercise.name)).toEqual(['Gainage planche', 'Squat', 'Pompes']);
+    expect(detail.entries.map((e) => e.exercise.name)).toEqual(['Plank', 'Squat', 'Push-ups']);
   });
 
   it('reflète le retrait d’un bloc', async () => {
@@ -143,7 +143,7 @@ describe('getSessionDetail', () => {
     await removeExerciseFromSession(pompesBlock.id, { force: true });
 
     const detail = (await getSessionDetail(session.id))!;
-    expect(detail.entries.map((e) => e.exercise.name)).toEqual(['Squat', 'Gainage planche']);
+    expect(detail.entries.map((e) => e.exercise.name)).toEqual(['Squat', 'Plank']);
     expect(detail.entries.flatMap((e) => e.sets)).toHaveLength(4);
   });
 
@@ -165,7 +165,7 @@ describe('getSessionDetail', () => {
     const { session } = await buildFullSession();
     await db.exercises.delete(squat.id);
 
-    await expect(getSessionDetail(session.id)).rejects.toThrow(/Base incohérente/);
+    await expect(getSessionDetail(session.id)).rejects.toThrow(/Inconsistent database/);
   });
 });
 
@@ -188,7 +188,7 @@ describe('listSessionSummaries', () => {
     const [summary] = await listSessionSummaries();
 
     expect(summary.exerciseCount).toBe(3);
-    // Échauffement compris : 3 séries de squat, 1 de pompes, 1 de gainage.
+    // Échauffement compris : 3 séries de squat, 1 de pushUps, 1 de plank.
     expect(summary.setCount).toBe(5);
   });
 
@@ -196,18 +196,18 @@ describe('listSessionSummaries', () => {
     await buildFullSession();
     const [summary] = await listSessionSummaries();
 
-    expect(summary.exerciseNames).toEqual(['Squat', 'Pompes', 'Gainage planche']);
+    expect(summary.exerciseNames).toEqual(['Squat', 'Push-ups', 'Plank']);
   });
 
   it('garde exerciseNames aligné sur exerciseCount, doublons compris', async () => {
     const { session } = await startSession();
     await addExerciseToSession(session.id, squat.id);
-    await addExerciseToSession(session.id, pompes.id);
+    await addExerciseToSession(session.id, pushUps.id);
     await addExerciseToSession(session.id, squat.id);
 
     const [summary] = await listSessionSummaries();
 
-    expect(summary.exerciseNames).toEqual(['Squat', 'Pompes', 'Squat']);
+    expect(summary.exerciseNames).toEqual(['Squat', 'Push-ups', 'Squat']);
     expect(summary.exerciseCount).toBe(summary.exerciseNames.length);
   });
 

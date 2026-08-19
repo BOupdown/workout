@@ -19,18 +19,18 @@ interface Tab {
 }
 
 const TABS: Tab[] = [
-  { href: '/', label: 'Séance', icon: Barbell },
-  { href: '/historique', label: 'Historique', icon: ClockCounterClockwise },
-  { href: '/progression', label: 'Progression', icon: ChartLineUp },
-  { href: '/reglages', label: 'Réglages', icon: SlidersHorizontal },
+  { href: '/', label: 'Session', icon: Barbell },
+  { href: '/history', label: 'History', icon: ClockCounterClockwise },
+  { href: '/progress', label: 'Progress', icon: ChartLineUp },
+  { href: '/settings', label: 'Settings', icon: SlidersHorizontal },
 ];
 
 /**
- * Navigation principale, en bas dans la portée du pouce.
+ * Main navigation, at the bottom within thumb reach.
  *
- * Quatre onglets, quatre destinations réelles : pas d'entrée décorative qui
- * mènerait à un écran vide. L'accent porte le glyphe de l'onglet actif au lieu
- * de le colorer — à sa luminance, une icône verte sur fond clair disparaîtrait.
+ * Four tabs, four real destinations: no decorative entry leading to an empty
+ * screen. The accent carries the active tab's glyph rather than colouring it -
+ * at that lightness, a green icon on a light background would vanish.
  */
 export function TabBar() {
   const pathname = usePathname();
@@ -38,14 +38,14 @@ export function TabBar() {
 
   return (
     <nav
-      aria-label="Navigation principale"
+      aria-label="Main navigation"
       className="shrink-0 border-t border-line bg-raised pb-[env(safe-area-inset-bottom)]"
     >
       <ul className="flex">
         {TABS.map(({ href, label, icon: TabIcon }) => {
           const isCurrent = href === '/' ? pathname === '/' : pathname.startsWith(href);
-          // Pastille sémantique : elle signale une séance réellement en cours,
-          // ce n'est pas une décoration.
+          // A semantic dot: it signals a session actually in progress, it is
+          // not decoration.
           const showDot = href === '/' && activeSession !== undefined && activeSession !== null;
 
           return (

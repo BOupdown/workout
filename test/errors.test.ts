@@ -93,7 +93,7 @@ describe('toFieldMessages — sur de vraies erreurs de la base', () => {
     await createSet({ sessionExerciseId: block.id, weightKg: 60, reps: 5.5 }).then(
       () => expect.unreachable('la série aurait dû être refusée'),
       (error: unknown) => {
-        expect(toFieldMessages(error, VISIBLE).fields.reps).toContain('entier');
+        expect(toFieldMessages(error, VISIBLE).fields.reps).toContain('whole number');
       },
     );
   });
@@ -104,7 +104,7 @@ describe('toFieldMessages — sur de vraies erreurs de la base', () => {
     await createSet({ sessionExerciseId: block.id, reps: 5 }).then(
       () => expect.unreachable('la série aurait dû être refusée'),
       (error: unknown) => {
-        expect(toFieldMessages(error, VISIBLE).fields.weightKg).toContain('attend une charge');
+        expect(toFieldMessages(error, VISIBLE).fields.weightKg).toContain('expects a load');
       },
     );
   });

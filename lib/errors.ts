@@ -1,29 +1,29 @@
 /**
- * Traduction des erreurs de la couche de données en messages affichables.
+ * Turns data-layer errors into displayable messages.
  *
- * Aucune exception brute ne doit atteindre l'écran. Les `ValidationError`
- * portent déjà des messages rédigés et un `field` ; il ne reste qu'à les router
- * vers le bon input.
+ * No raw exception should ever reach the screen. `ValidationError` already
+ * carries written messages and a `field`; all that remains is routing them to
+ * the right input.
  */
 
 import { ValidationError } from './db/validation';
 
 export interface FieldMessages {
-  /** Message à afficher sous chaque champ, au plus un par champ. */
+  /** Message shown under each field, at most one per field. */
   fields: Record<string, string>;
-  /** Ce qui ne se rattache à aucun champ visible — bandeau en tête de panneau. */
+  /** Anything tied to no visible field - a banner at the top of the panel. */
   general: string[];
 }
 
 export const NO_MESSAGES: FieldMessages = { fields: {}, general: [] };
 
-const UNEXPECTED = 'Impossible d’enregistrer la série. Réessayez.';
+const UNEXPECTED = 'Could not save the set. Try again.';
 
 /**
- * @param visibleFields champs réellement rendus par le formulaire. Une anomalie
- *   portant sur un champ absent de l'écran (`sessionId`, `loggedAt`…) est
- *   remontée en message général plutôt qu'attachée à un input invisible, où
- *   personne ne la verrait jamais.
+ * @param visibleFields the fields the form actually renders. An issue about a
+ *   field absent from the screen (`sessionId`, `loggedAt`…) is surfaced as a
+ *   general message rather than attached to an invisible input, where nobody
+ *   would ever see it.
  */
 export function toFieldMessages(
   error: unknown,
@@ -37,7 +37,7 @@ export function toFieldMessages(
       if (!visibleFields.includes(issue.field)) {
         general.push(issue.message);
       } else if (!(issue.field in fields)) {
-        // Premier message par champ : au-delà, on empile du bruit sous un input.
+        // First message per field: beyond that, it is just noise under an input.
         fields[issue.field] = issue.message;
       }
     }

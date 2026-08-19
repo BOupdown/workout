@@ -16,7 +16,7 @@ import {
 } from '@/lib/exercise-draft';
 
 interface ExerciseFormSheetProps {
-  /** Nom pré-rempli, quand la création part d'une recherche infructueuse. */
+  /** Pre-filled name, when creation starts from a fruitless search. */
   initialName?: string;
   onCreated: (exercise: Exercise) => void;
   onUseExisting: (existing: Exercise) => void;
@@ -24,15 +24,14 @@ interface ExerciseFormSheetProps {
 }
 
 /**
- * Création d'un exercice personnalisé.
+ * Creating a custom exercise.
  *
- * Le champ « pas de progression » n'apparaît que là où il a un sens : au poids
- * du corps il n'y a pas de charge à incrémenter, et la validation le refuse.
- * Le formulaire ne peut donc pas fabriquer un exercice que la base rejetterait.
+ * The "progression step" field only appears where it means something: on
+ * bodyweight there is no load to increment, and the validation refuses it. The
+ * form therefore cannot build an exercise the database would reject.
  *
- * Le conflit de nom n'est pas une impasse : l'erreur transporte l'exercice
- * existant, on propose donc de l'utiliser en un tap plutôt que de renvoyer
- * l'utilisateur à sa saisie.
+ * A name clash is not a dead end: the error carries the existing exercise, so we
+ * offer to use it in one tap rather than sending the user back to their typing.
  */
 export function ExerciseFormSheet({
   initialName = '',
@@ -65,7 +64,7 @@ export function ExerciseFormSheet({
       } else if (thrown instanceof ValidationError) {
         setError(thrown.issues[0]?.message ?? thrown.message);
       } else {
-        setError('Impossible de créer l’exercice. Réessayez.');
+        setError('Could not create the exercise. Try again.');
       }
     } finally {
       setSaving(false);
@@ -78,21 +77,21 @@ export function ExerciseFormSheet({
         <button
           type="button"
           onClick={onClose}
-          aria-label="Annuler la création"
+          aria-label="Cancel creation"
           className="flex h-11 w-11 shrink-0 items-center justify-center rounded-control text-ink transition-transform active:scale-95"
         >
           <ArrowLeft size={20} weight="bold" />
         </button>
-        <h2 className="text-[0.9375rem] font-semibold text-ink">Nouvel exercice</h2>
+        <h2 className="text-[0.9375rem] font-semibold text-ink">New exercise</h2>
       </header>
 
       <div className="flex-1 space-y-4 overflow-y-auto p-4">
-        <Field label="Nom">
+        <Field label="Name">
           <input
             type="text"
             autoComplete="off"
             autoFocus
-            aria-label="Nom de l’exercice"
+            aria-label="Exercise name"
             value={draft.name}
             onChange={(event) => patch({ name: event.target.value })}
             placeholder="Face pull"
@@ -103,14 +102,14 @@ export function ExerciseFormSheet({
         {conflict ? (
           <div role="alert" className="rounded-panel bg-raised px-4 py-3.5">
             <p className="text-sm text-ink">
-              « {conflict.name} » existe déjà{conflict.archivedAt !== undefined ? ' (archivé)' : ''}.
+              “{conflict.name}” already exists{conflict.archivedAt !== undefined ? ' (archived)' : ''}.
             </p>
             <button
               type="button"
               onClick={() => onUseExisting(conflict)}
               className="mt-2.5 h-12 w-full rounded-control bg-ink text-sm font-semibold text-surface transition-transform active:scale-[0.98]"
             >
-              Utiliser cet exercice
+              Use this exercise
             </button>
           </div>
         ) : null}
@@ -121,7 +120,7 @@ export function ExerciseFormSheet({
           </p>
         ) : null}
 
-        <Field label="Comment se fait la charge">
+        <Field label="How the load works">
           <div className="space-y-1.5">
             {LOAD_TYPE_OPTIONS.map((option) => (
               <button
@@ -142,7 +141,7 @@ export function ExerciseFormSheet({
           </div>
         </Field>
 
-        <Field label="Ce qu’on compte">
+        <Field label="What you count">
           <div className="flex gap-1.5">
             {METRIC_OPTIONS.map((option) => (
               <button
@@ -163,28 +162,28 @@ export function ExerciseFormSheet({
         </Field>
 
         {draftAllowsIncrement(draft) ? (
-          <Field label="Pas de progression" hint="valeur des boutons + et − pendant la saisie">
+          <Field label="Progression step" hint="what the + and − buttons add">
             <input
               type="text"
               inputMode="decimal"
               autoComplete="off"
-              aria-label="Pas de progression en kilogrammes"
+              aria-label="Progression step in kilograms"
               value={draft.defaultIncrementKg}
               onChange={(event) => patch({ defaultIncrementKg: event.target.value })}
-              placeholder="2,5"
+              placeholder="2.5"
               className="h-14 w-full rounded-control border-2 border-line bg-raised px-3.5 font-mono text-base text-ink tabular-nums outline-none placeholder:text-muted focus:border-ink"
             />
           </Field>
         ) : null}
 
-        <Field label="Groupe musculaire" hint="facultatif">
+        <Field label="Muscle group" hint="optional">
           <select
-            aria-label="Groupe musculaire"
+            aria-label="Muscle group"
             value={draft.muscleGroup}
             onChange={(event) => patch({ muscleGroup: event.target.value as MuscleGroup | '' })}
             className="h-14 w-full rounded-control border-2 border-line bg-raised px-3 text-base text-ink outline-none focus:border-ink"
           >
-            <option value="">Non précisé</option>
+            <option value="">Not specified</option>
             {Object.entries(MUSCLE_GROUP_LABELS).map(([value, label]) => (
               <option key={value} value={value}>
                 {label}
@@ -202,9 +201,9 @@ export function ExerciseFormSheet({
           }`}
         >
           <span>
-            <span className="block text-[0.9375rem] font-medium text-ink">Compté par côté</span>
+            <span className="block text-[0.9375rem] font-medium text-ink">Counted per side</span>
             <span className="block text-xs text-muted">
-              « 10 reps » veut dire 10 par bras ou par jambe
+              “10 reps” means 10 per arm or per leg
             </span>
           </span>
           <span
@@ -224,7 +223,7 @@ export function ExerciseFormSheet({
           disabled={saving || draft.name.trim() === ''}
           className="h-16 w-full rounded-control bg-accent text-[1.0625rem] font-semibold text-accent-ink transition-transform active:scale-[0.98] disabled:opacity-40"
         >
-          {saving ? 'Création…' : 'Créer l’exercice'}
+          {saving ? 'Creating…' : 'Create exercise'}
         </button>
       </div>
     </div>
@@ -242,7 +241,7 @@ function Field({
 }) {
   return (
     <div>
-      {/* Libellé au-dessus du champ, jamais un placeholder en guise d'étiquette. */}
+      {/* Label above the field, never a placeholder standing in for one. */}
       <p className="mb-1.5 text-[0.6875rem] font-semibold tracking-[0.08em] text-muted uppercase">
         {label}
         {hint ? <span className="normal-case"> · {hint}</span> : null}

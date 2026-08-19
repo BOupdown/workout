@@ -1,16 +1,15 @@
 /**
- * Sauvegarde et restauration de la base entière.
+ * Backup and restore of the whole database.
  *
- * Sans backend, c'est la **seule garantie réelle** contre la perte de données :
- * `navigator.storage.persist()` et l'installation réduisent le risque
- * d'éviction, ils ne l'éliminent pas. Vider les données du site reste
- * irréversible, et un fichier que l'utilisateur détient ne l'est pas.
+ * With no backend this is the **only real guarantee** against data loss:
+ * `navigator.storage.persist()` and installing reduce the risk of eviction,
+ * they do not remove it. Clearing site data stays irreversible, and a file the
+ * user holds does not.
  *
- * La restauration **remplace** tout, elle ne fusionne pas. Fusionner
- * buterait sur l'index unique `&nameKey` : le catalogue livré existe des deux
- * côtés avec des identifiants différents mais les mêmes noms normalisés.
- * Réconcilier deux appareils est un problème de synchronisation, pas de
- * sauvegarde, et il demande un serveur.
+ * Restoring **replaces** everything, it does not merge. Merging would collide
+ * with the unique `&nameKey` index: the shipped catalogue exists on both sides
+ * with different ids but the same normalised names. Reconciling two devices is
+ * a synchronisation problem, not a backup one, and it needs a server.
  */
 
 import { db } from './db';
@@ -43,7 +42,7 @@ export class BackupFormatError extends Error {
   }
 }
 
-/** Instantané complet de la base, sérialisable tel quel en JSON. */
+/** A complete snapshot of the database, serialisable to JSON as is. */
 export async function exportDatabase(): Promise<BackupFile> {
   return db.transaction(
     'r',
@@ -84,56 +83,56 @@ export function summarise(backup: BackupFile): BackupSummary {
 const TABLES = ['exercises', 'sessions', 'sessionExercises', 'sets'] as const;
 
 /**
- * Vérifie l'enveloppe **sans rien écrire**, pour pouvoir refuser un fichier
- * étranger avant d'avoir touché aux données existantes.
+ * Checks the envelope **without writing anything**, so a foreign file can be
+ * refused before touching existing data.
  *
- * Le contenu des lignes n'est pas contrôlé ici : les hooks structurels de Dexie
- * s'en chargent à l'écriture, avec les mêmes règles que la saisie. Une
- * sauvegarde ne peut donc pas réintroduire de données invalides.
+ * Row contents are not checked here: Dexie's structural hooks handle that on
+ * write, with the same rules as data entry. A backup therefore cannot
+ * reintroduce invalid data.
  */
 export function readBackup(value: unknown): BackupFile {
   if (typeof value !== 'object' || value === null) {
-    throw new BackupFormatError('Ce fichier n’est pas une sauvegarde Workout.');
+    throw new BackupFormatError('This file is not a Workout backup.');
   }
 
   const candidate = value as Record<string, unknown>;
 
   if (candidate.format !== BACKUP_FORMAT) {
-    throw new BackupFormatError('Ce fichier n’est pas une sauvegarde Workout.');
+    throw new BackupFormatError('This file is not a Workout backup.');
   }
 
   if (candidate.version !== BACKUP_VERSION) {
     throw new BackupFormatError(
-      `Sauvegarde en version ${String(candidate.version)}, cette app lit la version ${BACKUP_VERSION}.`,
+      `Backup is version ${String(candidate.version)}; this app reads version ${BACKUP_VERSION}.`,
     );
   }
 
   for (const table of TABLES) {
     if (!Array.isArray(candidate[table])) {
-      throw new BackupFormatError(`Sauvegarde incomplète : « ${table} » est absent ou illisible.`);
+      throw new BackupFormatError(`Incomplete backup: ${table} is missing or unreadable.`);
     }
   }
 
   return candidate as unknown as BackupFile;
 }
 
-/** Analyse une chaîne JSON et en vérifie l'enveloppe. */
+/** Parses a JSON string and checks its envelope. */
 export function parseBackup(json: string): BackupFile {
   let parsed: unknown;
   try {
     parsed = JSON.parse(json);
   } catch {
-    throw new BackupFormatError('Fichier illisible : ce n’est pas du JSON valide.');
+    throw new BackupFormatError('Unreadable file: this is not valid JSON.');
   }
   return readBackup(parsed);
 }
 
 /**
- * Remplace le contenu de la base par celui de la sauvegarde.
+ * Replaces the database contents with the backup's.
  *
- * Tout se joue dans **une seule transaction** : si une ligne est refusée par la
- * validation, rien n'est écrit et les données existantes sont intactes. Une
- * sauvegarde corrompue ne peut donc pas détruire ce qui est déjà là.
+ * Everything happens in **one transaction**: if a row is refused by the
+ * validation, nothing is written and existing data is untouched. A corrupted
+ * backup therefore cannot destroy what is already there.
  */
 export async function importDatabase(backup: BackupFile): Promise<BackupSummary> {
   await db.transaction('rw', db.exercises, db.sessions, db.sessionExercises, db.sets, async () => {
@@ -153,7 +152,7 @@ export async function importDatabase(backup: BackupFile): Promise<BackupSummary>
   return summarise(backup);
 }
 
-/** Nom de fichier daté, pour que plusieurs sauvegardes cohabitent. */
+/** Dated file name, so several backups can coexist. */
 export function backupFileName(exportedAt: Timestamp = Date.now()): string {
   const date = new Date(exportedAt);
   const pad = (n: number) => String(n).padStart(2, '0');

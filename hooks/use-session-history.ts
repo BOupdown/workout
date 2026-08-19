@@ -13,16 +13,15 @@ export interface SessionHistory {
 }
 
 /**
- * Historique paginé, réactualisé automatiquement.
+ * Paginated history, kept up to date automatically.
  *
- * Fenêtre **croissante** plutôt que curseur accumulé : sous `useLiveQuery`, une
- * liste accumulée page par page se désynchroniserait dès qu'une séance est
- * clôturée ou supprimée. On refait donc la fenêtre entière, ce qui reste
- * bon marché — `listSessionSummaries` ne lit aucune série, seulement des
- * comptages d'index.
+ * A **growing window** rather than an accumulated cursor: under `useLiveQuery`,
+ * a list accumulated page by page would drift out of sync the moment a session
+ * is closed or deleted. So the whole window is refetched, which stays cheap -
+ * `listSessionSummaries` reads no set, only index counts.
  *
- * On demande un élément de plus que nécessaire : sa présence dit s'il reste
- * quelque chose à charger, sans requête de comptage séparée.
+ * One more item than needed is requested: its presence says whether anything is
+ * left to load, with no separate count query.
  */
 export function useSessionHistory(step = 15): SessionHistory {
   const [limit, setLimit] = useState(step);

@@ -1,15 +1,15 @@
 /**
- * Construction de la progression d'un exercice : de la liste brute des séries
- * au tracé de la courbe.
+ * Building an exercise's progression: from the raw list of sets to the drawn
+ * curve.
  *
- * Tout est pur et sans dépendance au DOM — c'est ce qui rend ces règles
- * testables sans rendu.
+ * Everything is pure and DOM-free - which is what makes these rules testable
+ * without rendering.
  *
- * Décision structurante : **une seule grandeur en ordonnée**. Poids et
- * répétitions n'ont ni la même échelle ni la même unité ; les superposer sur
- * deux axes inventerait une corrélation absente des données. La grandeur
- * retenue est celle qui progresse pour cet exercice, exactement selon les mêmes
- * règles que la saisie ; les répétitions accompagnent la valeur en annotation.
+ * The structural decision: **one quantity on the y axis**. Load and reps share
+ * neither scale nor unit; laying them over two axes would invent a correlation
+ * absent from the data. The quantity plotted is the one that progresses for
+ * this exercise, by exactly the same rules as data entry; reps ride along as an
+ * annotation.
  */
 
 import type { Exercise, Id, SetEntry, Timestamp } from './db/types';
@@ -17,7 +17,7 @@ import { setFieldRequirements } from './db/validation';
 
 export type ProgressionMetric = 'weightKg' | 'reps' | 'durationSec';
 
-/** Grandeur suivie pour cet exercice, dérivée de sa nature. */
+/** The quantity tracked for this exercise, derived from its nature. */
 export function progressionMetric(
   exercise: Pick<Exercise, 'loadType' | 'metric'>,
 ): ProgressionMetric {
@@ -27,22 +27,22 @@ export function progressionMetric(
   return 'reps';
 }
 
-/** La meilleure série de travail d'une séance, pour la grandeur suivie. */
+/** A session's best work set, for the tracked quantity. */
 export interface SessionPoint {
   sessionId: Id;
   performedAt: Timestamp;
   value: number;
-  /** Répétitions de cette série, quand la valeur est une charge. */
+  /** Reps of that set, when the value is a load. */
   reps?: number;
-  /** Nombre de séries de travail de la séance. */
+  /** Number of work sets in the session. */
   setCount: number;
 }
 
 /**
- * Réduit les séries à un point par séance : la meilleure série de travail.
+ * Reduces sets to one point per session: the best work set.
  *
- * Les échauffements sont exclus — les inclure ferait plonger la courbe à chaque
- * séance où la montée en charge a été loggée.
+ * Warm-ups are excluded - including them would sink the curve on every session
+ * where the ramp-up was logged.
  */
 export function buildProgression(
   sets: SetEntry[],
@@ -71,7 +71,7 @@ export function buildProgression(
 
     existing.setCount += 1;
 
-    // À charge égale, la série qui a le plus de répétitions est la meilleure.
+    // At equal load, the set with more reps is the better one.
     const isBetter =
       value > existing.value ||
       (value === existing.value &&
@@ -87,14 +87,14 @@ export function buildProgression(
   return [...bySession.values()].sort((a, b) => a.performedAt - b.performedAt);
 }
 
-/** Écart entre les deux dernières séances, `null` s'il n'y a pas de quoi comparer. */
+/** Gap between the last two sessions, `null` when there is nothing to compare. */
 export function progressionDelta(points: SessionPoint[]): number | null {
   if (points.length < 2) return null;
   return points[points.length - 1].value - points[points.length - 2].value;
 }
 
 // ---------------------------------------------------------------------------
-// Géométrie du tracé
+// Curve geometry
 // ---------------------------------------------------------------------------
 
 export interface ChartBox {
@@ -111,16 +111,16 @@ export interface PlottedPoint {
 
 export interface ChartGeometry {
   plotted: PlottedPoint[];
-  /** Tracé de la ligne. */
+  /** The line path. */
   line: string;
-  /** Tracé de la nappe sous la ligne, refermé sur la base. */
+  /** The area path under the line, closed on the baseline. */
   area: string;
   ticks: { y: number; value: number }[];
-  /** Index du point le plus haut, à étiqueter directement. */
+  /** Index of the highest point, to be labelled directly. */
   peakIndex: number;
 }
 
-/** Graduations rondes : au plus `count`, sur un pas lisible. */
+/** Round ticks: at most `count`, on a readable step. */
 function niceTicks(min: number, max: number, count = 3): number[] {
   if (max === min) return [max];
 
@@ -136,11 +136,11 @@ function niceTicks(min: number, max: number, count = 3): number[] {
 }
 
 /**
- * Projette les points dans la boîte du SVG.
+ * Projects the points into the SVG box.
  *
- * L'axe des abscisses est **indexé par séance**, pas proportionnel au temps :
- * une graduation vaut une séance. C'est la lecture attendue pour un suivi
- * d'entraînement, et le libellé de l'axe le dit explicitement.
+ * The x axis is **indexed by session**, not proportional to time: one tick is
+ * one session. That is the expected reading for training tracking, and the axis
+ * caption says so explicitly.
  */
 export function buildChartGeometry(points: SessionPoint[], box: ChartBox): ChartGeometry {
   const { width, height, padding } = box;
@@ -151,9 +151,9 @@ export function buildChartGeometry(points: SessionPoint[], box: ChartBox): Chart
   const rawMin = Math.min(...values);
   const rawMax = Math.max(...values);
 
-  // Marge de 10 % pour que la ligne ne colle ni au plafond ni au plancher.
-  // Une série unique, ou plusieurs séries identiques, produirait une amplitude
-  // nulle et une division par zéro : on lui donne une amplitude arbitraire.
+  // A 10% margin so the line hugs neither ceiling nor floor. A single point,
+  // or several identical ones, would give a zero span and divide by zero: it
+  // gets an arbitrary span instead.
   const span = rawMax - rawMin || Math.max(rawMax * 0.2, 1);
   const min = rawMin - span * 0.1;
   const max = rawMax + span * 0.1;

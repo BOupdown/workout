@@ -4,12 +4,11 @@ export const size = { width: 180, height: 180 };
 export const contentType = 'image/png';
 
 /**
- * Icône iOS (écran d'accueil), même composition à l'échelle 180 px.
- * Icône d'application : une haltère composée de rectangles, sur le vert
- * d'accent. Formes géométriques uniquement, pas de tracé dessiné à la main.
+ * iOS home-screen icon, same composition at 180px.
  *
- * Le glyphe est sombre sur le vert, comme partout ailleurs dans l'app : à cette
- * luminance, l'accent ne peut porter que de l'encre foncée.
+ * A barbell made of rectangles on the accent green, geometric shapes only. The
+ * glyph is dark on the green: at this lightness the accent can only carry dark
+ * ink.
  */
 export default function AppleIcon() {
   const bar = { background: '#111113', borderRadius: 4 };

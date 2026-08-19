@@ -1,9 +1,9 @@
 /**
- * Validation des invariants d'`Exercise`.
+ * Validation of `Exercise` invariants.
  *
- * Tout y est structurel : un exercice ne dépend d'aucune autre entité. Les
- * règles qui, elles, dépendent de la base — unicité de `nameKey`, présence de
- * séries déjà saisies — vivent dans la couche transactionnelle `../exercises`.
+ * Everything here is structural: an exercise depends on no other entity. The
+ * rules that do depend on the database - uniqueness of `nameKey`, sets already
+ * logged - live in the transactional layer `../exercises`.
  */
 
 import { toNameKey } from '../keys';
@@ -24,9 +24,9 @@ export const EXERCISE_LIMITS = {
 } as const;
 
 /**
- * Tables d'appartenance déclarées en `Record<Union, true>` plutôt qu'en tableau :
- * ajouter un membre à l'union sans l'ajouter ici devient une erreur de
- * compilation. Un simple tableau ne détecterait que les valeurs en trop.
+ * Membership tables declared as `Record<Union, true>` rather than arrays: adding
+ * a member to the union without adding it here becomes a compile error. A plain
+ * array would only catch values that do not belong.
  */
 const LOAD_TYPES: Record<LoadType, true> = {
   external: true,
@@ -65,7 +65,7 @@ export const isMuscleGroup = (v: unknown): v is MuscleGroup => isMember(MUSCLE_G
 
 export function checkExerciseShape(value: unknown): ValidationIssue[] {
   const e = asRecord(value);
-  if (!e) return [notAnObjectIssue('L’exercice')];
+  if (!e) return [notAnObjectIssue('An exercise')];
 
   const issues: ValidationIssue[] = [];
 
@@ -73,7 +73,7 @@ export function checkExerciseShape(value: unknown): ValidationIssue[] {
     issues.push({
       field: 'id',
       code: 'invalid_id',
-      message: '« id » doit être un identifiant non vide.',
+      message: 'Exercise id must be a non-empty identifier.',
     });
   }
 
@@ -82,34 +82,34 @@ export function checkExerciseShape(value: unknown): ValidationIssue[] {
     issues.push({
       field: 'name',
       code: 'invalid_name',
-      message: 'Le nom de l’exercice ne peut pas être vide.',
+      message: 'The exercise name cannot be empty.',
     });
   } else if ((e.name as string).length > EXERCISE_LIMITS.maxNameLength) {
     issues.push({
       field: 'name',
       code: 'name_too_long',
-      message: `Le nom ne peut pas dépasser ${EXERCISE_LIMITS.maxNameLength} caractères.`,
+      message: `The name cannot exceed ${EXERCISE_LIMITS.maxNameLength} characters.`,
     });
   }
 
-  // Invariant fort, et vérifiable sans lecture puisque les deux champs sont sur
-  // la même ligne : `nameKey` est *toujours* la normalisation de `name`. C'est
-  // ce qui empêche de contourner l'index unique `&nameKey` avec un couple
-  // incohérent, et donc de fragmenter l'historique d'un même mouvement.
+  // A strong invariant, checkable without a read since both fields sit on the
+  // same row: `nameKey` is *always* the normalisation of `name`. This is what
+  // prevents bypassing the unique `&nameKey` index with an inconsistent pair,
+  // and so fragmenting a single movement's history.
   if (hasUsableName) {
     const expected = toNameKey(e.name as string);
     if (e.nameKey !== expected) {
       issues.push({
         field: 'nameKey',
         code: 'name_key_mismatch',
-        message: `« nameKey » doit valoir « ${expected} », dérivé de « ${e.name as string} ».`,
+        message: `The name key must be ${expected}, derived from ${e.name as string}.`,
       });
     }
   } else if (!isId(e.nameKey)) {
     issues.push({
       field: 'nameKey',
       code: 'invalid_name_key',
-      message: '« nameKey » doit être une clé non vide.',
+      message: 'The name key must be a non-empty key.',
     });
   }
 
@@ -117,7 +117,7 @@ export function checkExerciseShape(value: unknown): ValidationIssue[] {
     issues.push({
       field: 'loadType',
       code: 'invalid_load_type',
-      message: `« loadType » doit valoir ${Object.keys(LOAD_TYPES).join(', ')}.`,
+      message: `Load type must be one of ${Object.keys(LOAD_TYPES).join(', ')}.`,
     });
   }
 
@@ -125,7 +125,7 @@ export function checkExerciseShape(value: unknown): ValidationIssue[] {
     issues.push({
       field: 'metric',
       code: 'invalid_metric',
-      message: `« metric » doit valoir ${Object.keys(METRICS).join(' ou ')}.`,
+      message: `Metric must be ${Object.keys(METRICS).join(' or ')}.`,
     });
   }
 
@@ -134,7 +134,7 @@ export function checkExerciseShape(value: unknown): ValidationIssue[] {
       issues.push({
         field,
         code: 'invalid_flag',
-        message: `« ${field} » doit être un booléen.`,
+        message: `Field ${field} must be a boolean.`,
       });
     }
   }
@@ -143,7 +143,7 @@ export function checkExerciseShape(value: unknown): ValidationIssue[] {
     issues.push({
       field: 'createdAt',
       code: 'invalid_timestamp',
-      message: '« createdAt » doit être un timestamp positif.',
+      message: 'Creation time must be a positive timestamp.',
     });
   }
 
@@ -151,7 +151,7 @@ export function checkExerciseShape(value: unknown): ValidationIssue[] {
     issues.push({
       field: 'archivedAt',
       code: 'invalid_timestamp',
-      message: '« archivedAt » doit être un timestamp positif.',
+      message: 'Archive time must be a positive timestamp.',
     });
   }
 
@@ -159,7 +159,7 @@ export function checkExerciseShape(value: unknown): ValidationIssue[] {
     issues.push({
       field: 'muscleGroup',
       code: 'invalid_muscle_group',
-      message: '« muscleGroup » n’est pas un groupe musculaire connu.',
+      message: 'That is not a known muscle group.',
     });
   }
 
@@ -168,21 +168,21 @@ export function checkExerciseShape(value: unknown): ValidationIssue[] {
       issues.push({
         field: 'defaultIncrementKg',
         code: 'invalid_increment',
-        message: 'Le pas de progression doit être un nombre strictement positif, en kg.',
+        message: 'The progression step must be a positive number, in kilograms.',
       });
     } else if (e.defaultIncrementKg > EXERCISE_LIMITS.maxIncrementKg) {
       issues.push({
         field: 'defaultIncrementKg',
         code: 'increment_out_of_range',
-        message: `Le pas de progression ne peut pas dépasser ${EXERCISE_LIMITS.maxIncrementKg} kg.`,
+        message: `The progression step cannot exceed ${EXERCISE_LIMITS.maxIncrementKg} kg.`,
       });
     } else if (e.loadType === 'bodyweight') {
-      // Cohérence interne : un exercice au poids du corps n'a pas de champ de
-      // charge, donc pas de pas de progression à proposer.
+      // Internal consistency: a bodyweight exercise has no load field, so no
+      // progression step to offer.
       issues.push({
         field: 'defaultIncrementKg',
         code: 'increment_without_load',
-        message: 'Un exercice au poids du corps n’a pas de pas de progression.',
+        message: 'A bodyweight exercise has no progression step.',
       });
     }
   }
@@ -191,7 +191,7 @@ export function checkExerciseShape(value: unknown): ValidationIssue[] {
     issues.push({
       field: 'notes',
       code: 'invalid_notes',
-      message: 'Les notes doivent être du texte.',
+      message: 'Notes must be text.',
     });
   }
 
@@ -203,5 +203,5 @@ export function assertExerciseShape(value: unknown): void {
   if (issues.length > 0) throw new ExerciseValidationError(issues);
 }
 
-/** Vue réduite, pour l'UI qui construit un formulaire de création. */
+/** Reduced view, for the UI building a creation form. */
 export type ExerciseDraft = Pick<Exercise, 'name' | 'loadType' | 'metric'>;

@@ -1,25 +1,24 @@
 /**
- * Conversions entre valeurs numériques et texte affiché/saisi, en français.
+ * Conversions between numeric values and the text shown or typed.
  *
- * Le séparateur décimal français est la **virgule**. Un utilisateur qui tape
- * « 102,5 » doit être compris ; toute valeur affichée doit lui être rendue avec
- * une virgule. Le point reste accepté en entrée : les deux claviers existent.
+ * Input accepts both decimal separators. Someone on a French keyboard types
+ * "102,5" out of habit even in an English interface, and rejecting that would
+ * be pedantry. Output always uses the point.
  */
 
 import type { Exercise, SetEntry } from './db/types';
+import { toDisplayWeight, type WeightUnit } from './units';
 
 /**
- * Décimal simple, éventuellement signé. Volontairement plus strict que
- * `Number()`, qui accepterait « 0x10 » ou « 1e5 » — ni l'un ni l'autre n'a de
- * sens dans un champ de charge.
+ * A plain decimal, optionally signed. Deliberately stricter than `Number()`,
+ * which would accept "0x10" or "1e5" — neither means anything in a load field.
  */
 const DECIMAL_PATTERN = /^-?(\d+([.]\d*)?|[.]\d+)$/;
 
 /**
- * Lit un champ de saisie. Retourne `null` si le champ est vide ou illisible :
- * l'appelant omet alors la mesure, et c'est la validation de la base qui
- * produit le message précis (« « Squat » attend une charge »). Pas de règle
- * dupliquée côté écran.
+ * Reads an input field. Returns `null` when empty or unreadable: the caller
+ * then omits the measure, and the database validation produces the precise
+ * message ("Squat expects a load"). No rule is duplicated in the screen.
  */
 export function parseNumberInput(value: string): number | null {
   const normalised = value.trim().replace(',', '.');
@@ -29,16 +28,16 @@ export function parseNumberInput(value: string): number | null {
   return Number.isFinite(parsed) ? parsed : null;
 }
 
-/** Rend un nombre avec la virgule décimale, sans zéros inutiles. */
+/** Renders a number without trailing zeros. */
 export function formatNumber(value: number): string {
-  return String(Math.round(value * 1000) / 1000).replace('.', ',');
+  return String(Math.round(value * 1000) / 1000);
 }
 
-export function formatWeight(kilograms: number): string {
-  return `${formatNumber(kilograms)} kg`;
+export function formatWeight(kilograms: number, unit: WeightUnit = 'kg'): string {
+  return `${formatNumber(toDisplayWeight(kilograms, unit))} ${unit}`;
 }
 
-/** Durée en `m:ss`, ou `h:mm:ss` au-delà de l'heure. */
+/** Duration as `m:ss`, or `h:mm:ss` past the hour. */
 export function formatDuration(totalSeconds: number): string {
   const total = Math.max(0, Math.round(totalSeconds));
   const hours = Math.floor(total / 3600);
@@ -50,33 +49,34 @@ export function formatDuration(totalSeconds: number): string {
 }
 
 /**
- * Temps écoulé depuis le début d'une séance, en langage de salle : on pense en
- * minutes sous l'heure, en heures au-delà. Les secondes n'intéressent personne.
+ * Time since a session started, in gym language: minutes below the hour, hours
+ * above. Nobody cares about the seconds.
  */
 export function formatElapsed(milliseconds: number): string {
   const minutes = Math.max(0, Math.floor(milliseconds / 60_000));
   if (minutes < 60) return `${minutes} min`;
 
-  return `${Math.floor(minutes / 60)} h ${String(minutes % 60).padStart(2, '0')}`;
+  return `${Math.floor(minutes / 60)}h ${String(minutes % 60).padStart(2, '0')}m`;
 }
 
 /**
- * Série décomposée en deux parties, pour que l'affichage puisse donner à la
- * valeur mesurée le poids visuel qu'elle mérite et reléguer l'unité.
+ * A set split in two, so the display can give the measured value the weight it
+ * deserves and demote the qualifier.
  *
- * C'est la seule source des règles de présentation d'une série : la forme
- * dépend de la nature de l'exercice, exactement comme la saisie.
+ * This is the single source of the rules for presenting a set: the shape
+ * follows the exercise's nature, exactly as data entry does.
  */
 export interface SetDescription {
-  /** La grandeur qui progresse, mise en avant. */
+  /** The quantity that progresses, brought forward. */
   primary: string;
-  /** Ce qui la qualifie, en retrait. */
+  /** What qualifies it, kept back. */
   secondary?: string;
 }
 
 export function describeSet(
   set: Pick<SetEntry, 'weightKg' | 'reps' | 'durationSec'>,
   exercise: Pick<Exercise, 'loadType' | 'metric'>,
+  unit: WeightUnit = 'kg',
 ): SetDescription {
   if (exercise.metric === 'time') {
     return { primary: set.durationSec !== undefined ? formatDuration(set.durationSec) : '?' };
@@ -84,21 +84,23 @@ export function describeSet(
 
   if (set.reps === undefined) return { primary: '?' };
 
-  // Poids du corps, ou lest/assistance à zéro : afficher « 0 × 8 » n'apprendrait
-  // rien, les répétitions sont toute l'information.
+  // Bodyweight, or zero added/assisted load: showing "0 × 8" teaches nothing,
+  // the reps carry all the information.
   if (exercise.loadType === 'bodyweight' || !set.weightKg) {
     return { primary: String(set.reps), secondary: 'reps' };
   }
 
   const sign = exercise.loadType === 'assisted' ? '-' : '';
-  return { primary: `${sign}${formatNumber(set.weightKg)}`, secondary: `× ${set.reps}` };
+  const weight = formatNumber(toDisplayWeight(set.weightKg, unit));
+  return { primary: `${sign}${weight}`, secondary: `× ${set.reps}` };
 }
 
-/** Forme compacte sur une ligne, dérivée des mêmes règles. */
+/** One-line compact form, derived from the same rules. */
 export function formatSetSummary(
   set: Pick<SetEntry, 'weightKg' | 'reps' | 'durationSec'>,
   exercise: Pick<Exercise, 'loadType' | 'metric'>,
+  unit: WeightUnit = 'kg',
 ): string {
-  const { primary, secondary } = describeSet(set, exercise);
+  const { primary, secondary } = describeSet(set, exercise, unit);
   return secondary ? `${primary} ${secondary}` : primary;
 }

@@ -1,11 +1,7 @@
 import Dexie, { type Table } from 'dexie';
-import { buildSeedExercises } from './seed';
-import type {
-  Exercise,
-  Session,
-  SessionExercise,
-  SetEntry,
-} from './types';
+import { toNameKey } from './keys';
+import { buildSeedExercises, CATALOGUE_RENAMES } from './seed';
+import type { Exercise, Session, SessionExercise, SetEntry } from './types';
 import {
   assertExerciseShape,
   assertSessionExerciseShape,
@@ -14,20 +10,20 @@ import {
 } from './validation';
 
 /**
- * Base IndexedDB de l'app.
+ * The app's IndexedDB database.
  *
- * ⚠️ Module **client uniquement** : à n'importer que depuis des composants
- * `'use client'`. `indexedDB` n'existe pas côté serveur.
+ * ⚠️ **Client-only module**: import it from `'use client'` components only.
+ * `indexedDB` does not exist on the server.
  *
- * Rappels IndexedDB qui expliquent la forme du schéma ci-dessous :
- *   • un booléen n'est pas une clé valide → `archivedAt?: number`, `kind: string`
- *   • `undefined` n'est jamais indexé → une ligne dont le champ indexé est absent
- *     est *invisible* dans cet index (d'où l'absence d'index sur `endedAt`)
- *   • un index composé ne se requête que par préfixe, dans l'ordre déclaré
+ * IndexedDB facts that explain the shape of the schema below:
+ *   • a boolean is not a valid key → `archivedAt?: number`, `kind: string`
+ *   • `undefined` is never indexed → a row whose indexed field is absent is
+ *     *invisible* in that index (hence no index on `endedAt`)
+ *   • a compound index can only be queried by prefix, in declaration order
  */
 export class WorkoutDB extends Dexie {
-  // `Table` et non `EntityTable` : les `id` sont fournis par `newId()`, pas
-  // auto-générés — `add()` doit donc les exiger.
+  // `Table` rather than `EntityTable`: ids come from `newId()`, they are not
+  // auto-generated, so `add()` must require them.
   exercises!: Table<Exercise, string>;
   sessions!: Table<Session, string>;
   sessionExercises!: Table<SessionExercise, string>;
@@ -37,25 +33,25 @@ export class WorkoutDB extends Dexie {
     super('workout');
 
     this.version(1).stores({
-      // `&nameKey` : unicité du nom normalisé, garde-fou contre les doublons
-      // d'exercice qui fragmenteraient l'historique.
-      // `archivedAt` : seules les lignes archivées y figurent (undefined non indexé),
-      // ce qui en fait directement la liste des archives.
+      // `&nameKey`: uniqueness of the normalised name, the guard against
+      // duplicate exercises that would fragment a movement's history.
+      // `archivedAt`: only archived rows appear there (undefined is not
+      // indexed), which makes the index itself the archive list.
       exercises: 'id, &nameKey, name, muscleGroup, archivedAt',
 
-      // `startedAt` : liste antéchronologique + reprise de la séance en cours
-      // (dernière ligne, puis test de `endedAt` en mémoire).
-      // `date` : regroupement par jour / calendrier, sans dérive de fuseau.
+      // `startedAt`: reverse-chronological list, and resuming the session in
+      // progress (last row, then test `endedAt` in memory).
+      // `date`: grouping by day, with no timezone drift.
       sessions: 'id, startedAt, date',
 
-      // `[sessionId+order]` : rendu d'une séance, blocs déjà triés.
-      // `exerciseId` : « dans quelles séances ai-je fait cet exercice ? ».
+      // `[sessionId+order]`: rendering a session, blocks already sorted.
+      // `exerciseId`: "which sessions included this exercise?".
       sessionExercises: 'id, sessionId, exerciseId, [sessionId+order]',
 
-      // `[sessionExerciseId+order]` : les séries d'un bloc, déjà triées.
+      // `[sessionExerciseId+order]`: a block's sets, already sorted.
       //
-      // `[exerciseId+performedAt+order]` : l'index qui porte toute la feature de
-      // progression. « Mes 5 dernières séries de squat » =
+      // `[exerciseId+performedAt+order]`: the index the whole progression
+      // feature rests on. "My last 5 squat sets" =
       //
       //   db.sets
       //     .where('[exerciseId+performedAt+order]')
@@ -64,33 +60,57 @@ export class WorkoutDB extends Dexie {
       //     .limit(5)
       //     .toArray()
       //
-      // (bornes numériques explicites et non `Dexie.maxKey` : voir le
-      // commentaire de `MIN_NUMBER_KEY` dans `./sets`)
+      // (explicit numeric bounds rather than `Dexie.maxKey`: see the comment on
+      // `MIN_NUMBER_KEY` in `./sets`)
       //
-      // → O(log n) + 5 lectures, aucune jointure avec `sessions`, et le tri
-      // intra-séance est exact grâce à `order` en 3ᵉ position. Filtrer `kind`
-      // ('work' vs 'warmup') se fait en mémoire sur cette queue minuscule plutôt
-      // qu'avec un index supplémentaire à maintenir à chaque écriture.
+      // → O(log n) plus 5 reads, no join with `sessions`, and ordering within a
+      // session is exact thanks to `order` in third position. Filtering `kind`
+      // ('work' vs 'warmup') happens in memory over that tiny tail rather than
+      // through one more index to maintain on every write.
       //
-      // `sessionId` : suppression en cascade d'une séance.
-      sets:
-        'id, sessionId, sessionExerciseId, [sessionExerciseId+order], [exerciseId+performedAt+order]',
+      // `sessionId`: cascading delete of a session.
+      sets: 'id, sessionId, sessionExerciseId, [sessionExerciseId+order], [exerciseId+performedAt+order]',
     });
 
-    // Catalogue de départ, une seule fois à la création de la base.
-    this.on('populate', (tx) => {
-      tx.table<Exercise, string>('exercises').bulkAdd(buildSeedExercises());
+    /**
+     * Databases seeded while the app was in French keep their French exercise
+     * names: the catalogue is **data**, not interface, so translating the seed
+     * file alone would leave existing devices untouched.
+     *
+     * Only shipped exercises are renamed; anything the user created is left
+     * alone. A rename is skipped when its target name is already taken, since
+     * `&nameKey` is unique and a collision would abort the upgrade and leave
+     * the database unopenable.
+     */
+    this.version(2).upgrade(async (transaction) => {
+      const exercises = transaction.table<Exercise, string>('exercises');
+
+      for (const [previousKey, englishName] of Object.entries(CATALOGUE_RENAMES)) {
+        const existing = await exercises.where('nameKey').equals(previousKey).first();
+        if (!existing || existing.isCustom) continue;
+
+        const nameKey = toNameKey(englishName);
+        const taken = await exercises.where('nameKey').equals(nameKey).first();
+        if (taken) continue;
+
+        await exercises.update(existing.id, { name: englishName, nameKey });
+      }
     });
 
-    // Dernier rempart sur les invariants structurels. Les hooks Dexie sont
-    // **synchrones** : ils ne peuvent donc vérifier que ce qui ne demande
-    // aucune lecture (types, bornes, énumérations, cohérence entre deux champs
-    // d'une même ligne). Les invariants qui dépendent d'une autre entité —
-    // charge attendue ou non selon l'`Exercise`, exercice archivé — sont
-    // traités dans `./sets` et `./sessions`, qui peuvent lire dans la
+    // Starting catalogue, once, when the database is created.
+    this.on('populate', (transaction) => {
+      transaction.table<Exercise, string>('exercises').bulkAdd(buildSeedExercises());
+    });
+
+    // Last line of defence on structural invariants. Dexie hooks are
+    // **synchronous**: they can only check what needs no read (types, bounds,
+    // enumerations, consistency between two fields of the same row).
+    // Invariants that depend on another entity — whether a load is expected for
+    // a given exercise, an archived exercise, editing an exercise already in
+    // use — live in `./sets` and `./sessions`, which can read inside the
     // transaction.
     //
-    // Lever ici abandonne la transaction : rien n'est écrit à moitié.
+    // Throwing here aborts the transaction: nothing is written by halves.
     installShapeGuard(this.exercises, assertExerciseShape);
     installShapeGuard(this.sets, assertSetShape);
     installShapeGuard(this.sessions, assertSessionShape);
@@ -99,12 +119,11 @@ export class WorkoutDB extends Dexie {
 }
 
 /**
- * Branche un validateur structurel sur les écritures d'une table.
+ * Attaches a structural validator to a table's writes.
  *
- * Le hook `updating` reçoit des chemins de propriétés ; le modèle étant
- * entièrement plat, un merge de surface reconstitue fidèlement la ligne
- * résultante (une clé présente à `undefined` vaut suppression, exactement comme
- * pour `Table.update`).
+ * The `updating` hook receives property paths; the model being entirely flat, a
+ * shallow merge faithfully reconstitutes the resulting row (a key present and
+ * `undefined` means deletion, exactly as for `Table.update`).
  */
 function installShapeGuard<T>(table: Table<T, string>, assertShape: (value: unknown) => void) {
   table.hook('creating', (_primaryKey, entity) => {

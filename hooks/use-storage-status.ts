@@ -3,9 +3,9 @@
 import { useCallback, useEffect, useState } from 'react';
 
 export interface StorageStatus {
-  /** L'API Storage est disponible dans ce navigateur. */
+  /** The Storage API is available in this browser. */
   supported: boolean;
-  /** `null` tant que la réponse n'est pas connue. */
+  /** `null` until the answer is known. */
   persisted: boolean | null;
   usageBytes: number | null;
   requestPersist: () => Promise<void>;
@@ -15,30 +15,30 @@ const supportsStorageApi = () =>
   typeof navigator !== 'undefined' && typeof navigator.storage?.persisted === 'function';
 
 /**
- * État du stockage durable.
+ * Durable storage state.
  *
- * `navigator.storage.persist()` demande au navigateur de **ne pas évincer** les
- * données sous pression de stockage. Sans cette demande, IndexedDB fait partie
- * de ce qui est nettoyé en premier quand l'appareil manque de place.
+ * `navigator.storage.persist()` asks the browser **not to evict** the data under
+ * storage pressure. Without that request, IndexedDB is among the first things
+ * cleared when the device runs short of space.
  *
- * Chrome répond selon ses propres heuristiques (app installée, site visité
- * régulièrement), Firefox demande à l'utilisateur. Un refus n'est pas une
- * erreur : il faut juste le dire honnêtement, et proposer une sauvegarde.
+ * Chrome answers on its own heuristics (app installed, site visited regularly),
+ * Firefox asks the user. A refusal is not an error: it just has to be stated
+ * honestly, with a backup offered instead.
  */
 export function useStorageStatus(): StorageStatus {
   const supported = supportsStorageApi();
 
   const [persisted, setPersisted] = useState<boolean | null>(null);
   const [usageBytes, setUsageBytes] = useState<number | null>(null);
-  // Incrémenté après une demande, pour relire l'état auprès du navigateur.
+  // Bumped after a request, to re-read the state from the browser.
   const [reading, setReading] = useState(0);
 
   useEffect(() => {
     if (!supported) return;
     let cancelled = false;
 
-    // Les valeurs sont posées dans les callbacks des promesses, jamais
-    // synchroniquement dans le corps de l'effet.
+    // Values are set inside promise callbacks, never synchronously in the
+    // body of the effect.
     navigator.storage.persisted().then(
       (value) => {
         if (!cancelled) setPersisted(value);
