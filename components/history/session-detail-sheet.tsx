@@ -1,8 +1,10 @@
 'use client';
 
-import { ArrowLeft } from '@phosphor-icons/react';
+import { ArrowLeft, Trash } from '@phosphor-icons/react';
 import { useLiveQuery } from 'dexie-react-hooks';
+import { useState } from 'react';
 import { getSessionDetail } from '@/lib/db/queries';
+import { deleteSession } from '@/lib/db/sessions';
 import type { Id } from '@/lib/db/types';
 import { describeSet, formatElapsed } from '@/lib/format';
 
@@ -19,9 +21,11 @@ const DATE_FORMAT = new Intl.DateTimeFormat('fr-FR', {
 
 const TIME_FORMAT = new Intl.DateTimeFormat('fr-FR', { hour: '2-digit', minute: '2-digit' });
 
-/** Une séance passée, en lecture seule. */
+/** Une séance passée, en lecture seule, avec sa suppression. */
 export function SessionDetailSheet({ sessionId, onClose }: SessionDetailSheetProps) {
   const detail = useLiveQuery(() => getSessionDetail(sessionId), [sessionId]);
+  const [confirming, setConfirming] = useState(false);
+  const [deleting, setDeleting] = useState(false);
 
   const day = detail ? DATE_FORMAT.format(detail.startedAt) : '';
   const setCount = detail?.entries.reduce((total, entry) => total + entry.sets.length, 0) ?? 0;
@@ -108,6 +112,60 @@ export function SessionDetailSheet({ sessionId, onClose }: SessionDetailSheetPro
         {detail?.notes ? (
           <section className="rounded-panel bg-raised px-4 py-3.5 text-sm text-muted">
             {detail.notes}
+          </section>
+        ) : null}
+
+        {/* Suppression en bas du contenu, jamais dans l'en-tete a cote du bouton
+            de fermeture : deux cibles voisines dont l'une detruit tout, c'est
+            une erreur de tap qui attend de se produire. */}
+        {detail ? (
+          <section className="pt-2 pb-2">
+            {confirming ? (
+              <div className="rounded-panel bg-raised px-4 py-3.5">
+                {/* Le compte est detache de la phrase : « ses 1 exercice »
+                    ne s'accorde pas, alors que cette forme reste juste au
+                    singulier comme au pluriel. */}
+                <p className="text-sm text-ink">Supprimer définitivement cette séance ?</p>
+                <p className="mt-1 text-sm text-muted">
+                  {detail.entries.length} exercice{detail.entries.length > 1 ? 's' : ''} et{' '}
+                  {setCount} série{setCount > 1 ? 's' : ''} seront perdus.
+                </p>
+                <div className="mt-3 flex gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setConfirming(false)}
+                    className="h-14 flex-1 rounded-control bg-surface text-[0.9375rem] font-medium text-muted transition-transform active:scale-[0.98]"
+                  >
+                    Annuler
+                  </button>
+                  <button
+                    type="button"
+                    disabled={deleting}
+                    onClick={async () => {
+                      setDeleting(true);
+                      try {
+                        await deleteSession(sessionId);
+                        onClose();
+                      } finally {
+                        setDeleting(false);
+                      }
+                    }}
+                    className="h-14 flex-1 rounded-control bg-danger text-[0.9375rem] font-semibold text-raised transition-transform active:scale-[0.98] disabled:opacity-50"
+                  >
+                    {deleting ? 'Suppression…' : 'Supprimer'}
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <button
+                type="button"
+                onClick={() => setConfirming(true)}
+                className="flex min-h-14 w-full items-center justify-center gap-2 rounded-panel text-[0.9375rem] font-medium text-danger transition-transform active:scale-[0.99]"
+              >
+                <Trash size={17} weight="bold" />
+                Supprimer la séance
+              </button>
+            )}
           </section>
         ) : null}
       </div>
