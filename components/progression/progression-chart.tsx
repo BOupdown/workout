@@ -3,50 +3,53 @@
 import { useState } from 'react';
 import { buildChartGeometry, type ProgressionMetric, type SessionPoint } from '@/lib/progression';
 import { formatDuration, formatNumber } from '@/lib/format';
+import { toDisplayWeight, type WeightUnit } from '@/lib/units';
 
 interface ProgressionChartProps {
   points: SessionPoint[];
   metric: ProgressionMetric;
-  unit: string;
+  unit: WeightUnit;
+  label: string;
 }
 
 const BOX = {
   width: 327,
   height: 168,
-  // La boîte inclut la bande des abscisses : sans elle, les libellés de dates
-  // débordent et la carte se met à défiler verticalement sur quelques pixels.
+  // The box includes the x-axis band: without it the date labels overflow and
+  // the card grows a few pixels of nested vertical scroll.
   padding: { top: 18, right: 14, bottom: 26, left: 14 },
 };
 
-const DATE_FORMAT = new Intl.DateTimeFormat('fr-FR', { day: 'numeric', month: 'short' });
-
-function formatValue(value: number, metric: ProgressionMetric): string {
-  return metric === 'durationSec' ? formatDuration(value) : formatNumber(value);
-}
+const DATE_FORMAT = new Intl.DateTimeFormat('en-GB', { day: 'numeric', month: 'short' });
 
 /**
- * Courbe de progression d'un exercice.
+ * An exercise's progression curve.
  *
- * **Une seule grandeur en ordonnée**, jamais deux échelles : superposer charge
- * et répétitions inventerait une corrélation absente des données. Les
- * répétitions accompagnent la valeur en annotation, dans l'infobulle et dans le
- * tableau sous le graphique.
+ * **One quantity on the y axis**, never two scales: laying load over reps would
+ * invent a correlation absent from the data. Reps ride along as an annotation,
+ * in the tooltip and in the table below the chart.
  *
- * Série unique, donc pas de boîte de légende : le titre dit déjà ce qui est
- * tracé. Étiquetage direct **sélectif** — le maximum et le dernier point — et
- * l'axe porte le reste. Aucune valeur n'est enfermée dans l'infobulle : le
- * tableau qui suit reste la source complète.
+ * A single series, so no legend box: the title already says what is plotted.
+ * Direct labelling is **selective** - the maximum and the last point - and the
+ * axis carries the rest. No value is locked inside the tooltip: the table that
+ * follows stays the complete source.
  */
-export function ProgressionChart({ points, metric, unit }: ProgressionChartProps) {
+export function ProgressionChart({ points, metric, unit, label }: ProgressionChartProps) {
   const [selected, setSelected] = useState<number | null>(null);
+
+  const format = (value: number) =>
+    metric === 'durationSec'
+      ? formatDuration(value)
+      : formatNumber(metric === 'weightKg' ? toDisplayWeight(value, unit) : value);
+
   const geometry = buildChartGeometry(points, BOX);
   const { plotted, line, area, ticks, peakIndex } = geometry;
 
   const lastIndex = plotted.length - 1;
   const active = selected !== null ? plotted[selected] : undefined;
 
-  // Étiquettes directes : le sommet et le dernier point. Les confondre ferait
-  // deux étiquettes superposées quand le record est aussi la dernière séance.
+  // Direct labels: the peak and the last point. Merging them avoids two labels
+  // stacked on top of each other when the record is also the latest session.
   const labelled = new Set([peakIndex, lastIndex]);
 
   return (
@@ -55,9 +58,9 @@ export function ProgressionChart({ points, metric, unit }: ProgressionChartProps
         viewBox={`0 0 ${BOX.width} ${BOX.height}`}
         className="w-full"
         role="img"
-        aria-label={`Progression sur ${points.length} séance${points.length > 1 ? 's' : ''}, de ${formatValue(points[0].value, metric)} à ${formatValue(points[lastIndex].value, metric)} ${unit}`}
+        aria-label={`Progression over ${points.length} session${points.length > 1 ? 's' : ''}, from ${format(points[0].value)} to ${format(points[lastIndex].value)} ${label}`}
       >
-        {/* Grille : filet plein d'un pas au-dessus de la surface, jamais tireté. */}
+        {/* Grid: a solid hairline one step off the surface, never dashed. */}
         {ticks.map((tick) => (
           <g key={tick.value}>
             <line
@@ -73,7 +76,7 @@ export function ProgressionChart({ points, metric, unit }: ProgressionChartProps
               y={tick.y - 4}
               className="fill-muted font-mono text-[9px] tabular-nums"
             >
-              {formatValue(tick.value, metric)}
+              {format(tick.value)}
             </text>
           </g>
         ))}
@@ -95,8 +98,8 @@ export function ProgressionChart({ points, metric, unit }: ProgressionChartProps
             cy={p.y}
             r={index === lastIndex || index === selected ? 5 : 4}
             className="fill-chart stroke-raised"
-            /* Anneau de 2px dans la couleur de surface : c'est lui qui détache
-               le point de la ligne, pas un contour dessiné autour de la marque. */
+            /* A 2px ring in the surface colour: that is what detaches the dot
+               from the line, not a border drawn around the mark. */
             strokeWidth={2}
           />
         ))}
@@ -112,13 +115,13 @@ export function ProgressionChart({ points, metric, unit }: ProgressionChartProps
               textAnchor={nudgeLeft ? 'end' : index === 0 ? 'start' : 'middle'}
               className="fill-ink font-mono text-[10px] font-semibold tabular-nums"
             >
-              {formatValue(p.point.value, metric)}
+              {format(p.point.value)}
             </text>
           );
         })}
 
-        {/* Zones de touche larges : la cible dépasse la marque, un point de 8px
-            ne se vise pas au doigt. */}
+        {/* Wide hit areas: the target is bigger than the mark, an 8px dot
+            cannot be aimed at with a finger. */}
         {plotted.map((p, index) => (
           <rect
             key={`hit-${p.point.sessionId}`}
@@ -129,18 +132,14 @@ export function ProgressionChart({ points, metric, unit }: ProgressionChartProps
             fill="transparent"
             tabIndex={0}
             role="button"
-            aria-label={`${DATE_FORMAT.format(p.point.performedAt)} : ${formatValue(p.point.value, metric)} ${unit}`}
+            aria-label={`${DATE_FORMAT.format(p.point.performedAt)}: ${format(p.point.value)} ${label}`}
             onClick={() => setSelected(index === selected ? null : index)}
             onFocus={() => setSelected(index)}
             className="cursor-pointer outline-none"
           />
         ))}
 
-        <text
-          x={BOX.padding.left}
-          y={BOX.height - 8}
-          className="fill-muted font-mono text-[9px]"
-        >
+        <text x={BOX.padding.left} y={BOX.height - 8} className="fill-muted font-mono text-[9px]">
           {DATE_FORMAT.format(points[0].performedAt)}
         </text>
         {plotted.length > 1 ? (
@@ -156,10 +155,10 @@ export function ProgressionChart({ points, metric, unit }: ProgressionChartProps
       </svg>
 
       <figcaption className="mt-1 flex items-baseline justify-between gap-2 text-[0.6875rem] text-muted">
-        <span>Une graduation par séance, meilleure série de travail.</span>
+        <span>One tick per session, best work set.</span>
         {active ? (
           <span className="shrink-0 font-mono text-ink tabular-nums">
-            {DATE_FORMAT.format(active.point.performedAt)} · {formatValue(active.point.value, metric)}
+            {DATE_FORMAT.format(active.point.performedAt)} · {format(active.point.value)}
             {active.point.reps !== undefined ? ` × ${active.point.reps}` : ''}
           </span>
         ) : null}

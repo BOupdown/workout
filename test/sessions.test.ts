@@ -21,12 +21,12 @@ import {
 import { referenceExercises, resetDatabase } from './helpers';
 
 let squat: Exercise;
-let pompes: Exercise;
-let gainage: Exercise;
+let pushUps: Exercise;
+let plank: Exercise;
 
 beforeEach(async () => {
   await resetDatabase();
-  ({ squat, pompes, gainage } = await referenceExercises());
+  ({ squat, pushUps, plank } = await referenceExercises());
 });
 
 describe('startSession', () => {
@@ -154,7 +154,7 @@ describe('endSession', () => {
   });
 
   it('lève sur une séance inconnue', async () => {
-    await expect(endSession('inconnue')).rejects.toThrow(/introuvable/);
+    await expect(endSession('inconnue')).rejects.toThrow(/not found/);
   });
 });
 
@@ -213,7 +213,7 @@ describe('addExerciseToSession', () => {
   it('numérote les blocs dans l’ordre d’ajout', async () => {
     const { session } = await startSession();
     const a = await addExerciseToSession(session.id, squat.id);
-    const b = await addExerciseToSession(session.id, pompes.id);
+    const b = await addExerciseToSession(session.id, pushUps.id);
 
     expect([a.order, b.order]).toEqual([0, 1]);
   });
@@ -227,18 +227,18 @@ describe('addExerciseToSession', () => {
   });
 
   it('refuse un exercice archivé', async () => {
-    await db.exercises.update(gainage.id, { archivedAt: Date.now() });
+    await db.exercises.update(plank.id, { archivedAt: Date.now() });
     const { session } = await startSession();
 
-    await expect(addExerciseToSession(session.id, gainage.id)).rejects.toThrow(
+    await expect(addExerciseToSession(session.id, plank.id)).rejects.toThrow(
       SessionExerciseValidationError,
     );
   });
 
   it('lève sur une séance ou un exercice inconnu', async () => {
     const { session } = await startSession();
-    await expect(addExerciseToSession('inconnue', squat.id)).rejects.toThrow(/introuvable/);
-    await expect(addExerciseToSession(session.id, 'inconnu')).rejects.toThrow(/introuvable/);
+    await expect(addExerciseToSession('inconnue', squat.id)).rejects.toThrow(/not found/);
+    await expect(addExerciseToSession(session.id, 'inconnu')).rejects.toThrow(/not found/);
   });
 });
 
@@ -295,7 +295,7 @@ describe('removeExerciseFromSession', () => {
   it('ne touche pas aux autres blocs de la séance', async () => {
     const { session } = await startSession();
     const a = await addExerciseToSession(session.id, squat.id);
-    const b = await addExerciseToSession(session.id, pompes.id);
+    const b = await addExerciseToSession(session.id, pushUps.id);
     await createSet({ sessionExerciseId: b.id, reps: 25 });
 
     await removeExerciseFromSession(a.id);
@@ -312,8 +312,8 @@ describe('reorderSessionExercises', () => {
     ({ session } = await startSession());
     const blocks = [
       await addExerciseToSession(session.id, squat.id),
-      await addExerciseToSession(session.id, pompes.id),
-      await addExerciseToSession(session.id, gainage.id),
+      await addExerciseToSession(session.id, pushUps.id),
+      await addExerciseToSession(session.id, plank.id),
     ];
     ids = blocks.map((b) => b.id);
   });
@@ -327,7 +327,7 @@ describe('reorderSessionExercises', () => {
 
   it('refuse un ordre partiel', async () => {
     await expect(reorderSessionExercises(session.id, [ids[0], ids[1]])).rejects.toThrow(
-      /Réordonnancement invalide/,
+      /Invalid reorder/,
     );
   });
 
@@ -337,13 +337,13 @@ describe('reorderSessionExercises', () => {
 
     await expect(
       reorderSessionExercises(session.id, [ids[0], ids[1], foreign.id]),
-    ).rejects.toThrow(/Réordonnancement invalide/);
+    ).rejects.toThrow(/Invalid reorder/);
   });
 
   it('refuse un doublon', async () => {
     await expect(
       reorderSessionExercises(session.id, [ids[0], ids[0], ids[1]]),
-    ).rejects.toThrow(/Réordonnancement invalide/);
+    ).rejects.toThrow(/Invalid reorder/);
   });
 
   it('laisse l’ordre intact quand le réordonnancement est refusé', async () => {
@@ -358,7 +358,7 @@ describe('deleteSession — cascade', () => {
   it('supprime la séance, ses blocs et ses séries', async () => {
     const { session } = await startSession();
     const a = await addExerciseToSession(session.id, squat.id);
-    const b = await addExerciseToSession(session.id, pompes.id);
+    const b = await addExerciseToSession(session.id, pushUps.id);
     await createSet({ sessionExerciseId: a.id, weightKg: 100, reps: 5 });
     await createSet({ sessionExerciseId: a.id, weightKg: 100, reps: 5 });
     await createSet({ sessionExerciseId: b.id, reps: 25 });

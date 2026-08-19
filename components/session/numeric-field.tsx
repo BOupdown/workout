@@ -8,7 +8,7 @@ interface NumericFieldProps {
   value: string;
   onChange: (value: string) => void;
   onStep: (direction: 1 | -1) => void;
-  /** `decimal` autorise la virgule, `numeric` non. */
+  /** `decimal` allows a comma, `numeric` does not. */
   mode: 'decimal' | 'numeric';
   unit?: string;
   error?: string;
@@ -20,12 +20,12 @@ const STEP_BUTTON =
   'transition-transform active:scale-95 disabled:opacity-40';
 
 /**
- * Champ chiffré et ses boutons de pas.
+ * A numeric field and its step buttons.
  *
- * `type="text"` + `inputMode`, jamais `type="number"` : ce dernier laisse la
- * molette modifier la valeur, gère mal le séparateur décimal selon la locale et
- * avale silencieusement les saisies qu'il juge invalides. `inputMode` suffit à
- * ouvrir le clavier chiffré sur mobile.
+ * `type="text"` plus `inputMode`, never `type="number"`: the latter lets the
+ * scroll wheel change the value, handles the decimal separator badly depending
+ * on locale, and silently swallows entries it deems invalid. `inputMode` is
+ * enough to bring up the numeric keypad on mobile.
  */
 export function NumericField({
   label,
@@ -39,22 +39,22 @@ export function NumericField({
 }: NumericFieldProps) {
   const errorId = error ? `error-${label}` : undefined;
 
-  // Le champ est pré-rempli : sans sélection à la prise de focus, il faudrait
-  // effacer avant de taper. C'est ce qui garde la saisie à deux taps.
+  // The field is pre-filled: without selecting on focus you would have to clear
+  // it before typing. This is what keeps entry down to two taps.
   const selectAll = (event: FocusEvent<HTMLInputElement>) => event.currentTarget.select();
 
   return (
     <div className="flex min-w-0 flex-1 flex-col gap-2">
       <span className="text-[0.6875rem] font-semibold tracking-[0.08em] text-muted uppercase">
         {label}
-        {/* `normal-case` sinon l'unité hérite du `uppercase` : « DURÉE S ». */}
+        {/* `normal-case`, otherwise the unit inherits `uppercase`: "TIME (S)". */}
         {unit ? <span className="normal-case"> ({unit})</span> : null}
       </span>
 
       <div className="flex items-stretch gap-1.5">
         <button
           type="button"
-          aria-label={`Diminuer ${label}`}
+          aria-label={`Decrease ${label}`}
           onClick={() => onStep(-1)}
           disabled={disabled}
           className={STEP_BUTTON}
@@ -81,7 +81,7 @@ export function NumericField({
 
         <button
           type="button"
-          aria-label={`Augmenter ${label}`}
+          aria-label={`Increase ${label}`}
           onClick={() => onStep(1)}
           disabled={disabled}
           className={STEP_BUTTON}

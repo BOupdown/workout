@@ -1,20 +1,20 @@
 /**
- * Brouillon de saisie d'une série.
+ * Draft state for entering a set.
  *
- * Les valeurs sont des **chaînes**, pas des nombres : un champ en cours de
- * frappe vaut « 102, » ou « », qu'aucun `number` ne peut représenter. La
- * conversion n'a lieu qu'à l'enregistrement.
+ * Values are **strings**, not numbers: a field mid-typing holds "102." or "",
+ * which no `number` can represent. Conversion happens only on save.
  *
- * Les champs présents sont dictés par `setFieldRequirements()`, la même
- * fonction que celle dont dépend la validation. C'est ce qui rend
- * structurellement impossible de saisir une série que la base refuserait :
- * l'écran ne rend pas un champ interdit, et n'en fabrique donc jamais la valeur.
+ * Which fields exist is dictated by `setFieldRequirements()`, the same function
+ * the validation depends on. That is what makes it structurally impossible to
+ * enter a set the database would reject: the screen does not render a forbidden
+ * field, so it never produces its value.
  */
 
 import type { NewSetInput } from './db/sets';
 import type { Exercise, Id, SetKind } from './db/types';
 import { setFieldRequirements, type SetFieldRequirements } from './db/validation';
 import { formatNumber, parseNumberInput } from './format';
+import { toDisplayWeight, fromDisplayWeight, weightIncrement, type WeightUnit } from './units';
 
 export interface SetDraft {
   weightKg: string;
@@ -28,74 +28,23 @@ export const EMPTY_DRAFT: SetDraft = { weightKg: '', reps: '', durationSec: '' }
 
 const DRAFT_FIELDS: readonly DraftField[] = ['weightKg', 'reps', 'durationSec'];
 
-/** Exercice réduit à ce dont le brouillon a besoin. */
+/** An exercise reduced to what the draft needs. */
 export type DraftExercise = Pick<Exercise, 'loadType' | 'metric' | 'defaultIncrementKg'>;
 
-/** Champs à afficher, dans l'ordre, pour cet exercice. */
+/** Fields to show, in order, for this exercise. */
 export function visibleDraftFields(requirements: SetFieldRequirements): DraftField[] {
   return DRAFT_FIELDS.filter((field) => requirements[field] === 'required');
 }
 
-/**
- * Pré-remplit le brouillon depuis une série de référence — la précédente du
- * bloc, ou à défaut la dernière de cet exercice toutes séances confondues.
- * Un champ non requis reste vide : il ne sera pas affiché.
- */
-export function draftFromSet(
-  set: Partial<Record<DraftField, number>> | undefined,
-  exercise: DraftExercise | undefined,
-): SetDraft {
-  if (!exercise) return EMPTY_DRAFT;
-
-  const requirements = setFieldRequirements(exercise);
-  const read = (field: DraftField): string => {
-    const value = set?.[field];
-    return requirements[field] === 'required' && value !== undefined ? formatNumber(value) : '';
-  };
-
-  return {
-    weightKg: read('weightKg'),
-    reps: read('reps'),
-    durationSec: read('durationSec'),
-  };
-}
-
-/**
- * Convertit le brouillon en entrée de `createSet`.
- *
- * Un champ requis mais vide ou illisible est **omis**, pas deviné : la
- * validation de la base produit alors son message typé, seule source de vérité.
- */
-export function draftToSetInput(
-  sessionExerciseId: Id,
-  draft: SetDraft,
-  exercise: DraftExercise,
-  options: { kind?: SetKind } = {},
-): NewSetInput {
-  const requirements = setFieldRequirements(exercise);
-  const input: NewSetInput = { sessionExerciseId };
-
-  if (options.kind !== undefined) input.kind = options.kind;
-
-  for (const field of DRAFT_FIELDS) {
-    if (requirements[field] !== 'required') continue;
-
-    const parsed = parseNumberInput(draft[field]);
-    if (parsed !== null) input[field] = parsed;
-  }
-
-  return input;
-}
-
-/** D'où viennent les valeurs pré-remplies. */
+/** Where the pre-filled values come from. */
 export type DraftReferenceOrigin =
-  /** Aucune valeur de référence disponible. */
+  /** No reference value available. */
   | 'none'
-  /** La série précédente de ce bloc — « je refais la même ». */
+  /** The previous set of this block — "same again". */
   | 'block'
-  /** Un autre bloc du même exercice, dans la séance en cours. */
+  /** Another block of the same exercise, in the current session. */
   | 'session'
-  /** Une séance antérieure — « je reprends où j'en étais ». */
+  /** An earlier session — "pick up where I left off". */
   | 'history';
 
 export interface DraftReference {
@@ -106,13 +55,12 @@ export interface DraftReference {
 type SetReference = Partial<Record<DraftField, number>> & { sessionId: Id };
 
 /**
- * Choisit la série qui sert de valeurs par défaut.
+ * Picks the set that supplies the default values.
  *
- * L'ordre compte : la dernière série du bloc l'emporte toujours ; à défaut on
- * remonte à la dernière série de travail de cet exercice, qui peut venir d'un
- * autre bloc de la séance en cours aussi bien que d'une séance passée. On
- * distingue les deux pour ne pas annoncer « dernière séance » à propos d'une
- * série enregistrée dix minutes plus tôt.
+ * Order matters: the block's last set always wins; failing that we go back to
+ * the last work set of this exercise, which may come from another block of the
+ * current session as easily as from a past one. The two are told apart so we
+ * never announce "last session" about a set logged ten minutes ago.
  */
 export function resolveDraftReference(
   block: { sessionId: Id; sets: SetReference[] } | undefined,
@@ -132,17 +80,81 @@ export function resolveDraftReference(
   };
 }
 
-/** Pas des boutons +/- : la charge suit l'exercice, le reste a un pas naturel. */
-export function stepForField(field: DraftField, exercise: DraftExercise): number {
-  if (field === 'weightKg') return exercise.defaultIncrementKg ?? 2.5;
+/**
+ * Pre-fills the draft from a reference set — the block's previous one, or
+ * failing that the exercise's last across all sessions. A field that is not
+ * required stays empty: it will not be displayed.
+ *
+ * The load is converted to the display unit, since that is what the user types.
+ */
+export function draftFromSet(
+  set: Partial<Record<DraftField, number>> | undefined,
+  exercise: DraftExercise | undefined,
+  unit: WeightUnit = 'kg',
+): SetDraft {
+  if (!exercise) return EMPTY_DRAFT;
+
+  const requirements = setFieldRequirements(exercise);
+  const read = (field: DraftField): string => {
+    const value = set?.[field];
+    if (requirements[field] !== 'required' || value === undefined) return '';
+
+    return formatNumber(field === 'weightKg' ? toDisplayWeight(value, unit) : value);
+  };
+
+  return {
+    weightKg: read('weightKg'),
+    reps: read('reps'),
+    durationSec: read('durationSec'),
+  };
+}
+
+/**
+ * Converts the draft into a `createSet` input.
+ *
+ * A required but empty or unreadable field is **omitted**, never guessed: the
+ * database validation then produces its typed message, the single source of
+ * truth. The load goes back to kilograms, the canonical unit.
+ */
+export function draftToSetInput(
+  sessionExerciseId: Id,
+  draft: SetDraft,
+  exercise: DraftExercise,
+  options: { kind?: SetKind; unit?: WeightUnit } = {},
+): NewSetInput {
+  const requirements = setFieldRequirements(exercise);
+  const unit = options.unit ?? 'kg';
+  const input: NewSetInput = { sessionExerciseId };
+
+  if (options.kind !== undefined) input.kind = options.kind;
+
+  for (const field of DRAFT_FIELDS) {
+    if (requirements[field] !== 'required') continue;
+
+    const parsed = parseNumberInput(draft[field]);
+    if (parsed === null) continue;
+
+    input[field] = field === 'weightKg' ? fromDisplayWeight(parsed, unit) : parsed;
+  }
+
+  return input;
+}
+
+/** Step for the +/- buttons: the load follows the exercise and the unit. */
+export function stepForField(
+  field: DraftField,
+  exercise: DraftExercise,
+  unit: WeightUnit = 'kg',
+): number {
+  if (field === 'weightKg') return weightIncrement(unit, exercise.defaultIncrementKg ?? 2.5);
   if (field === 'durationSec') return 5;
   return 1;
 }
 
-/** Applique un pas à un champ, jamais en dessous de zéro. */
+/** Applies a step to a field, never below zero. */
 export function stepDraftValue(current: string, step: number): string {
   const base = parseNumberInput(current) ?? 0;
-  // Réarrondi : 0,1 + 0,2 ne doit pas produire 0,30000000000000004 dans un champ.
+  // Re-rounded: 0.1 + 0.2 must not put 0.30000000000000004 in a field.
   const next = Math.max(0, Math.round((base + step) * 1000) / 1000);
   return formatNumber(next);
 }

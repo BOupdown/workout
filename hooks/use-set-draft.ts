@@ -20,20 +20,20 @@ export interface SetDraftController {
   setField: (field: DraftField, value: string) => void;
   requirements: SetFieldRequirements | undefined;
   visibleFields: DraftField[];
-  /** D'où viennent les valeurs pré-remplies, pour l'annoncer justement. */
+  /** Where the pre-filled values come from, so we can say so accurately. */
   referenceOrigin: DraftReferenceOrigin;
 }
 
 /**
- * Brouillon de saisie du bloc actif, pré-rempli.
+ * Pre-filled entry draft for the active block.
  *
- * Deux sources de valeurs par défaut, dans cet ordre :
- *   1. la dernière série **de ce bloc** — « je refais la même » ;
- *   2. à défaut, la dernière série de travail de cet exercice, toutes séances
- *      confondues — « je reprends où j'en étais la semaine dernière ».
+ * Two sources of default values, in this order:
+ *   1. the last set **of this block** - "same again";
+ *   2. failing that, the last work set of this exercise across every session -
+ *      "pick up where I left off last week".
  *
- * La seconde est exactement ce pour quoi l'index `[exerciseId+performedAt+order]`
- * existe.
+ * The second is exactly what the `[exerciseId+performedAt+order]` index exists
+ * for.
  */
 export function useSetDraft(block: SessionExerciseWithSets | undefined): SetDraftController {
   const lastInBlock = block?.sets.at(-1);
@@ -46,12 +46,11 @@ export function useSetDraft(block: SessionExerciseWithSets | undefined): SetDraf
 
   const { set: reference, origin } = resolveDraftReference(block, history);
 
-  // État conservé uniquement à partir du moment où l'utilisateur saisit quelque
-  // chose. Tant qu'il n'a rien tapé, le brouillon est *dérivé* de la référence,
-  // ce qui le laisse se compléter quand la requête d'historique arrive — sans
-  // écraser une frappe en cours. La clé est l'identifiant du bloc : changer de
-  // bloc repart des valeurs de ce bloc, mais enregistrer une série **conserve**
-  // le brouillon, ce qui donne la répétition en un seul tap.
+  // State is kept only from the moment the user types something. Until then the
+  // draft is *derived* from the reference, which lets it fill in when the
+  // history query lands - without overwriting a keystroke in progress. The key
+  // is the block id: switching blocks restarts from that block's values, but
+  // saving a set **keeps** the draft, which is what gives the one-tap repeat.
   const [typed, setTyped] = useState<{ blockId: string; draft: SetDraft } | null>(null);
 
   const draft =

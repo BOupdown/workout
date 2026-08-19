@@ -10,18 +10,17 @@ const geistSans = Geist({
   subsets: ["latin"],
 });
 
-// Les chiffres sont le contenu de cette app : ils sont composés en monospace,
-// ce qui les aligne verticalement d'une série à l'autre et les rend comparables
-// d'un coup d'œil.
+// Numbers are the content of this app: setting them in monospace aligns them
+// vertically from one set to the next and makes them comparable at a glance.
 const geistMono = Geist_Mono({
   variable: "--font-geist-mono",
   subsets: ["latin"],
 });
 
 /**
- * Base des URL absolues des metadonnees. Vercel renseigne
- * `VERCEL_PROJECT_PRODUCTION_URL` ; en local on retombe sur le serveur de dev,
- * ce qui evite de coder en dur une URL de production pas encore connue.
+ * Base for absolute metadata URLs. Vercel supplies
+ * `VERCEL_PROJECT_PRODUCTION_URL`; locally we fall back to the dev server, which
+ * avoids hard-coding a production URL that is not known yet.
  */
 const siteUrl = process.env.VERCEL_PROJECT_PRODUCTION_URL
   ? `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}`
@@ -30,10 +29,10 @@ const siteUrl = process.env.VERCEL_PROJECT_PRODUCTION_URL
 export const metadata: Metadata = {
   metadataBase: new URL(siteUrl),
   title: "Workout",
-  description: "Suivi de séances : poids et répétitions, série par série.",
+  description: "Training log: weights and reps, set by set.",
   applicationName: "Workout",
-  // iOS ignore le manifeste pour le mode plein ecran : il lui faut ses propres
-  // meta, que Next emet a partir de ce bloc.
+  // iOS ignores the manifest for full-screen mode: it needs its own meta tags,
+  // which Next emits from this block.
   appleWebApp: {
     capable: true,
     title: "Workout",
@@ -41,20 +40,20 @@ export const metadata: Metadata = {
   },
   openGraph: {
     type: "website",
-    locale: "fr_FR",
+    locale: "en_US",
     siteName: "Workout",
     title: "Workout",
-    description: "Suivi de séances : poids et répétitions, série par série.",
+    description: "Training log: weights and reps, set by set.",
   },
   twitter: { card: "summary_large_image" },
 };
 
 export const viewport: Viewport = {
-  // `viewportFit: cover` est ce qui rend `env(safe-area-inset-*)` non nul :
-  // sans lui, le bouton principal passerait sous l'indicateur d'accueil iPhone.
+  // `viewportFit: cover` is what makes `env(safe-area-inset-*)` non-zero:
+  // without it the primary button would slide under the iPhone home indicator.
   viewportFit: "cover",
-  // Doivent suivre `--surface` dans globals.css et `theme_color` du manifeste :
-  // c'est la couleur que le systeme peint derriere la barre d'etat.
+  // Must follow `--surface` in globals.css and the manifest's `theme_color`:
+  // this is the colour the system paints behind the status bar.
   themeColor: [
     { media: "(prefers-color-scheme: light)", color: "#f2f2f5" },
     { media: "(prefers-color-scheme: dark)", color: "#0e0e10" },
@@ -64,12 +63,12 @@ export const viewport: Viewport = {
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
     <html
-      lang="fr"
+      lang="en"
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
       <body className="min-h-full">
-        {/* La coquille tient la hauteur ; chaque ecran remplit `main` en h-full
-            et gere son propre defilement. */}
+        {/* The shell owns the height; each screen fills `main` with h-full and
+            handles its own scrolling. */}
         <div className="flex h-[100dvh] flex-col">
           <main className="min-h-0 flex-1">
             <StorageGuard>{children}</StorageGuard>

@@ -29,7 +29,7 @@ describe('parseNumberInput', () => {
   });
 
   it('accepte un zéro', () => {
-    // Une traction sans lest vaut 0, ce n'est pas une absence de valeur.
+    // Une pullUp sans lest vaut 0, ce n'est pas une absence de valeur.
     expect(parseNumberInput('0')).toBe(0);
   });
 
@@ -53,7 +53,7 @@ describe('parseNumberInput', () => {
 
 describe('formatNumber', () => {
   it('rend la virgule décimale', () => {
-    expect(formatNumber(102.5)).toBe('102,5');
+    expect(formatNumber(102.5)).toBe('102.5');
   });
 
   it('n’ajoute pas de décimale inutile', () => {
@@ -61,7 +61,7 @@ describe('formatNumber', () => {
   });
 
   it('absorbe les erreurs de flottant', () => {
-    expect(formatNumber(0.1 + 0.2)).toBe('0,3');
+    expect(formatNumber(0.1 + 0.2)).toBe('0.3');
   });
 
   it('fait l’aller-retour avec parseNumberInput', () => {
@@ -71,7 +71,7 @@ describe('formatNumber', () => {
 
 describe('formatWeight', () => {
   it('suffixe en kilogrammes', () => {
-    expect(formatWeight(102.5)).toBe('102,5 kg');
+    expect(formatWeight(102.5)).toBe('102.5 kg');
   });
 });
 
@@ -93,9 +93,9 @@ describe('formatElapsed', () => {
     [59_000, '0 min'],
     [12 * 60_000, '12 min'],
     [59 * 60_000, '59 min'],
-    [60 * 60_000, '1 h 00'],
-    [72 * 60_000, '1 h 12'],
-    [125 * 60_000, '2 h 05'],
+    [60 * 60_000, '1h 00m'],
+    [72 * 60_000, '1h 12m'],
+    [125 * 60_000, '2h 05m'],
   ])('rend %i ms en « %s »', (ms, expected) => {
     expect(formatElapsed(ms)).toBe(expected);
   });
@@ -108,7 +108,7 @@ describe('formatElapsed', () => {
 describe('describeSet', () => {
   it('met la charge en avant et les répétitions en retrait', () => {
     expect(describeSet({ weightKg: 102.5, reps: 5 }, rules('external', 'reps'))).toEqual({
-      primary: '102,5',
+      primary: '102.5',
       secondary: '× 5',
     });
   });
@@ -144,7 +144,7 @@ describe('formatSetSummary', () => {
   });
 
   it('n’affiche que les répétitions quand le lest est nul', () => {
-    // « 0 × 8 » n'apprendrait rien : c'est une traction à vide.
+    // « 0 × 8 » n'apprendrait rien : c'est une pullUp à vide.
     expect(
       formatSetSummary({ weightKg: 0, reps: 8 }, rules('weighted_bodyweight', 'reps')),
     ).toBe('8 reps');

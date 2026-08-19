@@ -15,13 +15,13 @@ import {
 import { referenceExercises, resetDatabase } from './helpers';
 
 let squat: Exercise;
-let pompes: Exercise;
-let gainage: Exercise;
-let traction: Exercise;
+let pushUps: Exercise;
+let plank: Exercise;
+let pullUp: Exercise;
 
 beforeEach(async () => {
   await resetDatabase();
-  ({ squat, pompes, gainage, traction } = await referenceExercises());
+  ({ squat, pushUps, plank, pullUp } = await referenceExercises());
 });
 
 describe('visibleDraftFields', () => {
@@ -30,18 +30,18 @@ describe('visibleDraftFields', () => {
   });
 
   it('masque la charge au poids du corps', () => {
-    expect(visibleDraftFields(setFieldRequirements(pompes))).toEqual(['reps']);
+    expect(visibleDraftFields(setFieldRequirements(pushUps))).toEqual(['reps']);
   });
 
   it('remplace les répétitions par la durée', () => {
-    expect(visibleDraftFields(setFieldRequirements(gainage))).toEqual(['durationSec']);
+    expect(visibleDraftFields(setFieldRequirements(plank))).toEqual(['durationSec']);
   });
 });
 
 describe('draftFromSet', () => {
   it('reprend les valeurs de la série de référence', () => {
     expect(draftFromSet({ weightKg: 102.5, reps: 5 }, squat)).toEqual({
-      weightKg: '102,5',
+      weightKg: '102.5',
       reps: '5',
       durationSec: '',
     });
@@ -50,7 +50,7 @@ describe('draftFromSet', () => {
   it('laisse vide un champ interdit, même si la série en porte la valeur', () => {
     // Garde-fou : une donnée héritée ne doit pas réintroduire un champ que la
     // validation refuserait.
-    expect(draftFromSet({ weightKg: 20, reps: 25 }, pompes)).toEqual({
+    expect(draftFromSet({ weightKg: 20, reps: 25 }, pushUps)).toEqual({
       weightKg: '',
       reps: '25',
       durationSec: '',
@@ -58,7 +58,7 @@ describe('draftFromSet', () => {
   });
 
   it('remplit la durée pour un exercice au temps', () => {
-    expect(draftFromSet({ durationSec: 90 }, gainage).durationSec).toBe('90');
+    expect(draftFromSet({ durationSec: 90 }, plank).durationSec).toBe('90');
   });
 
   it('rend un brouillon vide sans série de référence', () => {
@@ -70,7 +70,7 @@ describe('draftFromSet', () => {
   });
 
   it('conserve un lest nul plutôt que de le traiter comme absent', () => {
-    expect(draftFromSet({ weightKg: 0, reps: 8 }, traction).weightKg).toBe('0');
+    expect(draftFromSet({ weightKg: 0, reps: 8 }, pullUp).weightKg).toBe('0');
   });
 });
 
@@ -83,13 +83,13 @@ describe('draftToSetInput', () => {
 
   it('n’émet aucune charge pour un exercice au poids du corps', () => {
     expect(
-      draftToSetInput('bloc', { weightKg: '20', reps: '25', durationSec: '' }, pompes),
+      draftToSetInput('bloc', { weightKg: '20', reps: '25', durationSec: '' }, pushUps),
     ).toEqual({ sessionExerciseId: 'bloc', reps: 25 });
   });
 
   it('n’émet aucune répétition pour un exercice au temps', () => {
     expect(
-      draftToSetInput('bloc', { weightKg: '', reps: '10', durationSec: '90' }, gainage),
+      draftToSetInput('bloc', { weightKg: '', reps: '10', durationSec: '90' }, plank),
     ).toEqual({ sessionExerciseId: 'bloc', durationSec: 90 });
   });
 
@@ -122,9 +122,9 @@ describe('draftToSetInput — accord avec la validation', () => {
 
   it.each([
     ['charge externe', () => squat, { weightKg: '102,5', reps: '5', durationSec: '' }],
-    ['poids du corps', () => pompes, { weightKg: '', reps: '25', durationSec: '' }],
-    ['au temps', () => gainage, { weightKg: '', reps: '', durationSec: '90' }],
-    ['lest nul', () => traction, { weightKg: '0', reps: '8', durationSec: '' }],
+    ['poids du corps', () => pushUps, { weightKg: '', reps: '25', durationSec: '' }],
+    ['au temps', () => plank, { weightKg: '', reps: '', durationSec: '90' }],
+    ['lest nul', () => pullUp, { weightKg: '0', reps: '8', durationSec: '' }],
   ])('un brouillon rempli est accepté — %s', async (_label, pick, draft) => {
     const exercise = pick();
     const block = await blockFor(exercise);
@@ -137,9 +137,9 @@ describe('draftToSetInput — accord avec la validation', () => {
     // L'utilisateur a saisi une charge sur un exercice à charge, puis a
     // sélectionné un exercice au poids du corps : le champ interdit est filtré
     // à la conversion, pas refusé par la base.
-    const block = await blockFor(pompes);
+    const block = await blockFor(pushUps);
     const set = await createSet(
-      draftToSetInput(block.id, { weightKg: '60', reps: '25', durationSec: '' }, pompes),
+      draftToSetInput(block.id, { weightKg: '60', reps: '25', durationSec: '' }, pushUps),
     );
 
     expect(set.weightKg).toBeUndefined();
@@ -151,7 +151,7 @@ describe('draftToSetInput — accord avec la validation', () => {
 
     await expect(
       createSet(draftToSetInput(block.id, { weightKg: '', reps: '5', durationSec: '' }, squat)),
-    ).rejects.toThrow(/attend une charge/);
+    ).rejects.toThrow(/expects a load/);
   });
 });
 
@@ -200,18 +200,18 @@ describe('stepForField', () => {
 
   it('avance d’une répétition et de cinq secondes', () => {
     expect(stepForField('reps', squat)).toBe(1);
-    expect(stepForField('durationSec', gainage)).toBe(5);
+    expect(stepForField('durationSec', plank)).toBe(5);
   });
 });
 
 describe('stepDraftValue', () => {
   it('ajoute et retranche le pas', () => {
-    expect(stepDraftValue('100', 2.5)).toBe('102,5');
-    expect(stepDraftValue('102,5', -2.5)).toBe('100');
+    expect(stepDraftValue('100', 2.5)).toBe('102.5');
+    expect(stepDraftValue('102.5', -2.5)).toBe('100');
   });
 
   it('part de zéro sur un champ vide', () => {
-    expect(stepDraftValue('', 2.5)).toBe('2,5');
+    expect(stepDraftValue('', 2.5)).toBe('2.5');
   });
 
   it('ne descend jamais sous zéro', () => {
@@ -219,6 +219,6 @@ describe('stepDraftValue', () => {
   });
 
   it('n’introduit pas d’erreur de flottant', () => {
-    expect(stepDraftValue('0,1', 0.2)).toBe('0,3');
+    expect(stepDraftValue('0.1', 0.2)).toBe('0.3');
   });
 });

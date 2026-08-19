@@ -7,7 +7,7 @@ import type { Id, SessionSummary } from '@/lib/db/types';
 import { formatElapsed } from '@/lib/format';
 import { SessionDetailSheet } from './session-detail-sheet';
 
-const DATE_FORMAT = new Intl.DateTimeFormat('fr-FR', {
+const DATE_FORMAT = new Intl.DateTimeFormat('en-GB', {
   weekday: 'short',
   day: 'numeric',
   month: 'short',
@@ -20,9 +20,9 @@ export function HistoryScreen() {
   return (
     <div className="flex h-full flex-col">
       <header className="shrink-0 border-b border-line bg-raised px-4 pt-[calc(env(safe-area-inset-top)+0.875rem)] pb-3.5">
-        <h1 className="text-[0.9375rem] font-semibold text-ink">Historique</h1>
+        <h1 className="text-[0.9375rem] font-semibold text-ink">History</h1>
         <p className="mt-0.5 text-xs text-muted">
-          {loading ? 'Chargement…' : `${summaries.length}${hasMore ? '+' : ''} séance${summaries.length > 1 ? 's' : ''}`}
+          {loading ? 'Loading…' : `${summaries.length}${hasMore ? '+' : ''} session${summaries.length > 1 ? 's' : ''}`}
         </p>
       </header>
 
@@ -32,9 +32,9 @@ export function HistoryScreen() {
         ) : summaries.length === 0 ? (
           <div className="rounded-panel bg-raised px-4 py-12 text-center">
             <ClockCounterClockwise size={28} weight="duotone" className="mx-auto text-muted" />
-            <p className="mt-3 text-sm font-medium text-ink">Aucune séance terminée</p>
+            <p className="mt-3 text-sm font-medium text-ink">No finished sessions yet</p>
             <p className="mt-1 text-sm text-muted">
-              Tes séances passées apparaîtront ici, la plus récente en tête.
+              Your past sessions will show up here, most recent first.
             </p>
           </div>
         ) : (
@@ -53,7 +53,7 @@ export function HistoryScreen() {
                 onClick={loadMore}
                 className="min-h-14 w-full rounded-panel border border-dashed border-line text-[0.9375rem] font-medium text-muted transition-transform active:scale-[0.99]"
               >
-                Charger plus
+                Load more
               </button>
             ) : null}
           </>
@@ -78,17 +78,17 @@ function SummaryRow({ summary, onOpen }: { summary: SessionSummary; onOpen: () =
     >
       <div className="flex items-baseline justify-between gap-3">
         <span className="truncate text-[0.9375rem] font-semibold text-ink">
-          {summary.title ?? day.charAt(0).toUpperCase() + day.slice(1)}
+          {summary.title ?? day}
         </span>
         <span className="shrink-0 font-mono text-xs text-muted tabular-nums">
-          {summary.durationMs !== undefined ? formatElapsed(summary.durationMs) : 'en cours'}
+          {summary.durationMs !== undefined ? formatElapsed(summary.durationMs) : 'in progress'}
         </span>
       </div>
 
       <p className="mt-1 font-mono text-xs text-muted tabular-nums">
-        {summary.exerciseCount} exercice{summary.exerciseCount > 1 ? 's' : ''}
+        {summary.exerciseCount} exercise{summary.exerciseCount > 1 ? 's' : ''}
         {' · '}
-        {summary.setCount} série{summary.setCount > 1 ? 's' : ''}
+        {summary.setCount} set{summary.setCount > 1 ? 's' : ''}
       </p>
 
       {summary.exerciseNames.length > 0 ? (

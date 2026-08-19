@@ -2,15 +2,15 @@
 
 import { useEffect, useState, useSyncExternalStore } from 'react';
 
-/** `beforeinstallprompt` n'est pas dans les types du DOM : il n'est pas standard. */
+/** `beforeinstallprompt` is not in the DOM types: it is not standard. */
 interface BeforeInstallPromptEvent extends Event {
   prompt: () => Promise<void>;
 }
 
 export interface InstallState {
-  /** L'app tourne déjà depuis l'écran d'accueil. */
+  /** The app is already running from the home screen. */
   installed: boolean;
-  /** Le navigateur propose une installation en un tap. */
+  /** The browser offers a one-tap install. */
   canPrompt: boolean;
   promptInstall: () => Promise<void>;
 }
@@ -18,9 +18,9 @@ export interface InstallState {
 const STANDALONE_QUERY = '(display-mode: standalone)';
 
 /**
- * Le mode d'affichage est un état du navigateur, pas de React : il se lit avec
- * `useSyncExternalStore`, qui fournit aussi l'instantané serveur et évite le
- * `setState` dans un effet.
+ * Display mode is browser state, not React state: it is read with
+ * `useSyncExternalStore`, which also supplies the server snapshot and avoids
+ * `setState` inside an effect.
  */
 function subscribeToDisplayMode(onChange: () => void): () => void {
   const media = window.matchMedia(STANDALONE_QUERY);
@@ -36,28 +36,28 @@ function subscribeToDisplayMode(onChange: () => void): () => void {
 function isStandalone(): boolean {
   return (
     window.matchMedia(STANDALONE_QUERY).matches ||
-    // Safari iOS, qui n'implémente pas `display-mode`.
+    // iOS Safari, which does not implement `display-mode`.
     (window.navigator as Navigator & { standalone?: boolean }).standalone === true
   );
 }
 
 /**
- * Installation sur l'écran d'accueil.
+ * Installing to the home screen.
  *
- * Ce n'est pas du confort. Safari plafonne à sept jours le stockage écrit par
- * script des sites sans interaction régulière ; une app installée échappe à ce
- * traitement. Installer, c'est donc d'abord protéger ses données.
+ * This is not a convenience. Safari caps script-writable storage at seven days
+ * for sites without regular interaction; an installed app escapes that
+ * treatment. Installing is therefore first and foremost about protecting data.
  *
- * `beforeinstallprompt` n'existe que sur les navigateurs Chromium. Sur iOS il
- * n'y a pas d'API : l'écran affiche la marche à suivre manuelle.
+ * `beforeinstallprompt` only exists on Chromium browsers. On iOS there is no
+ * API: the screen spells out the manual steps instead.
  */
 export function useInstallPrompt(): InstallState {
   const installed = useSyncExternalStore(subscribeToDisplayMode, isStandalone, () => false);
   const [deferred, setDeferred] = useState<BeforeInstallPromptEvent | null>(null);
 
   useEffect(() => {
-    // `setState` dans un abonnement à un système externe : c'est l'usage prévu
-    // d'un effet, contrairement à un appel synchrone dans son corps.
+    // `setState` inside a subscription to an external system: the intended use
+    // of an effect, unlike a synchronous call in its body.
     const onBeforeInstall = (event: Event) => {
       event.preventDefault();
       setDeferred(event as BeforeInstallPromptEvent);

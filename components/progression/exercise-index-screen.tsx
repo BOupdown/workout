@@ -11,10 +11,10 @@ import { ExerciseFormSheet } from '@/components/exercises/exercise-form-sheet';
 import { ProgressionSheet } from './progression-sheet';
 
 /**
- * Point d'entrée de la progression hors séance.
+ * The way into progression outside a session.
  *
- * C'est ce qui manquait : la progression n'était atteignable que depuis une
- * séance en cours, alors qu'on la consulte surtout **avant** de s'entraîner.
+ * This is what was missing: progression could only be reached from a session in
+ * progress, whereas you mostly look at it **before** training.
  */
 export function ExerciseIndexScreen() {
   const [search, setSearch] = useState('');
@@ -23,8 +23,8 @@ export function ExerciseIndexScreen() {
 
   const exercises = useLiveQuery(() => listSelectableExercises(), []);
 
-  // Un exercice jamais pratiqué n'a rien à montrer : on le range en fin de liste
-  // plutôt que de le masquer, pour que le catalogue reste complet.
+  // An exercise never trained has nothing to show: it goes to the end of the
+  // list rather than being hidden, so the catalogue stays complete.
   const counts = useLiveQuery(async () => {
     if (!exercises) return undefined;
     const entries = await Promise.all(
@@ -45,11 +45,11 @@ export function ExerciseIndexScreen() {
     <div className="flex h-full flex-col">
       <header className="shrink-0 border-b border-line bg-raised px-4 pt-[calc(env(safe-area-inset-top)+0.875rem)] pb-3">
         <div className="flex items-center justify-between gap-3">
-          <h1 className="text-[0.9375rem] font-semibold text-ink">Progression</h1>
+          <h1 className="text-[0.9375rem] font-semibold text-ink">Progress</h1>
           <button
             type="button"
             onClick={() => setCreating(true)}
-            aria-label="Créer un exercice"
+            aria-label="Create an exercise"
             className="flex h-11 w-11 shrink-0 items-center justify-center rounded-control bg-accent text-accent-ink transition-transform active:scale-95"
           >
             <Plus size={18} weight="bold" />
@@ -63,8 +63,8 @@ export function ExerciseIndexScreen() {
           <input
             type="search"
             autoComplete="off"
-            placeholder="Rechercher un exercice"
-            aria-label="Rechercher un exercice"
+            placeholder="Search exercises"
+            aria-label="Search exercises"
             value={search}
             onChange={(event) => setSearch(event.target.value)}
             className="h-12 w-full rounded-control border border-line bg-surface pr-3 pl-9 text-base text-ink outline-none placeholder:text-muted focus:border-ink"
@@ -81,7 +81,7 @@ export function ExerciseIndexScreen() {
           </li>
         ) : matches.length === 0 ? (
           <li className="py-10 text-center text-sm text-muted">
-            Aucun exercice ne correspond à « {search.trim()} ».
+            No exercise matches “{search.trim()}”.
           </li>
         ) : (
           matches.map((exercise) => {
@@ -99,8 +99,8 @@ export function ExerciseIndexScreen() {
                     </span>
                     <span className="mt-0.5 block font-mono text-xs text-muted tabular-nums">
                       {setCount > 0
-                        ? `${setCount} série${setCount > 1 ? 's' : ''}`
-                        : 'jamais pratiqué'}
+                        ? `${setCount} set${setCount > 1 ? 's' : ''}`
+                        : 'never trained'}
                     </span>
                   </span>
                   <CaretRight size={16} className="shrink-0 text-muted" />

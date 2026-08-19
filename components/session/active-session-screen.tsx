@@ -5,6 +5,7 @@ import { useLiveQuery } from 'dexie-react-hooks';
 import { useState } from 'react';
 import { useActiveSession } from '@/hooks/use-active-session';
 import { useSetDraft } from '@/hooks/use-set-draft';
+import { useWeightUnit } from '@/hooks/use-weight-unit';
 import { addExerciseToSession, endSession, startSession } from '@/lib/db/sessions';
 import { listSessionSummaries } from '@/lib/db/queries';
 import { createSet } from '@/lib/db/sets';
@@ -21,12 +22,12 @@ import { SessionSkeleton } from './session-skeleton';
 import { SetEntryPanel } from './set-entry-panel';
 
 /**
- * Écran de saisie d'une séance en cours.
+ * Entry screen for a session in progress.
  *
- * Objectif tenu : une série en deux taps quand l'exercice est déjà dans la
- * séance — un tap sur sa ligne (qui l'active *et* recharge le brouillon), un tap
- * sur « Enregistrer ». Le bloc déjà actif se répète en un seul tap, le brouillon
- * n'étant pas vidé après enregistrement.
+ * The goal it holds: one set in two taps when the exercise is already in the
+ * session - one tap on its row (which activates it *and* reloads the draft),
+ * one tap on "Save set". The already-active block repeats in a single tap,
+ * since the draft is not cleared after saving.
  */
 export function ActiveSessionScreen() {
   const state = useActiveSession();
@@ -42,14 +43,16 @@ export function ActiveSessionScreen() {
   const detail = state.status === 'ready' ? state.detail : undefined;
   const entries = detail?.entries ?? [];
 
-  // Dérivé plutôt que synchronisé par un effet : si la sélection ne désigne plus
-  // rien (bloc retiré, séance changée), on retombe sur le dernier ajouté.
+  // Derived rather than synchronised by an effect: if the selection no longer
+  // points at anything (block removed, session changed), we fall back to the
+  // last one added.
   const activeEntry = entries.find((entry) => entry.id === selectedBlockId) ?? entries.at(-1);
 
   const controller = useSetDraft(activeEntry);
+  const [unit] = useWeightUnit();
 
-  // Resolu depuis la seance chargee : pas de requete supplementaire, et la
-  // feuille se ferme d'elle-meme si le bloc disparait.
+  // Resolved from the loaded session: no extra query, and the sheet closes by
+  // itself if the block disappears.
   const progressionExercise = entries.find((e) => e.exercise.id === progressionFor)?.exercise;
 
   const handleStart = async () => {
@@ -87,7 +90,7 @@ export function ActiveSessionScreen() {
     setSaving(true);
     try {
       const set = await createSet(
-        draftToSetInput(activeEntry.id, controller.draft, activeEntry.exercise, { kind }),
+        draftToSetInput(activeEntry.id, controller.draft, activeEntry.exercise, { kind, unit }),
       );
       setMessages(NO_MESSAGES);
       setJustLoggedSetId(set.id);
@@ -104,22 +107,22 @@ export function ActiveSessionScreen() {
     return (
       <main className="flex h-full flex-col px-5 pb-[calc(env(safe-area-inset-bottom)+1.25rem)]">
         <div className="flex flex-1 flex-col items-center justify-center text-center">
-          {/* L'accent porte le glyphe, il ne le colore pas : à cette luminance
-              une icône verte sur fond clair serait invisible. */}
+          {/* The accent carries the glyph, it does not colour it: at this
+              lightness a green icon on a light background would be invisible. */}
           <span className="flex h-16 w-16 items-center justify-center rounded-full bg-accent">
             <Barbell size={30} weight="fill" className="text-accent-ink" />
           </span>
           <h1 className="mt-5 text-[1.75rem] leading-tight font-semibold tracking-tight text-ink">
-            Prêt à t’entraîner
+            Ready to train
           </h1>
           <p className="mt-2 max-w-[26ch] text-sm text-muted">
-            Démarre une séance, puis enregistre tes séries au fil de l’entraînement.
+            Start a session, then log your sets as you go.
           </p>
         </div>
 
-        {/* Sans ce rappel, l'ecran d'accueil serait un cul-de-sac : un bouton et
-            rien d'autre. La derniere seance repond a « qu'est-ce que j'ai fait
-            la derniere fois ? » et ouvre l'historique. */}
+        {/* Without this reminder the home screen would be a dead end: one
+            button and nothing else. The last session answers "what did I do
+            last time?" and opens straight into it. */}
         <LastSessionCard />
 
         <button
@@ -128,7 +131,7 @@ export function ActiveSessionScreen() {
           disabled={busy}
           className="mt-3 h-16 w-full rounded-control bg-accent text-[1.0625rem] font-semibold text-accent-ink transition-transform active:scale-[0.98] disabled:opacity-50"
         >
-          {busy ? 'Démarrage…' : 'Commencer une séance'}
+          {busy ? 'Starting…' : 'Start a session'}
         </button>
       </main>
     );
@@ -149,13 +152,14 @@ export function ActiveSessionScreen() {
               setMessages(NO_MESSAGES);
               setKind('work');
             }}
+            unit={unit}
             justLoggedSetId={justLoggedSetId}
           />
         ))}
 
         {entries.length === 0 ? (
           <p className="px-2 py-10 text-center text-sm text-muted">
-            Ajoute un exercice pour commencer.
+            Add an exercise to get started.
           </p>
         ) : null}
 
@@ -165,7 +169,7 @@ export function ActiveSessionScreen() {
           className="flex min-h-14 w-full items-center justify-center gap-2 rounded-panel border border-dashed border-line text-[0.9375rem] font-medium text-muted transition-transform active:scale-[0.99]"
         >
           <Plus size={18} weight="bold" />
-          Ajouter un exercice
+          Add exercise
         </button>
       </div>
 
@@ -177,6 +181,7 @@ export function ActiveSessionScreen() {
           saving={saving}
           onSave={handleSave}
           onShowProgression={() => setProgressionFor(activeEntry.exercise.id)}
+          unit={unit}
           kind={kind}
           onKindChange={setKind}
         />
@@ -196,15 +201,14 @@ export function ActiveSessionScreen() {
   );
 }
 
-const DAY_FORMAT = new Intl.DateTimeFormat('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' });
+const DAY_FORMAT = new Intl.DateTimeFormat('en-GB', { weekday: 'long', day: 'numeric', month: 'long' });
 
 /**
- * Rappel de la derniere seance, qui l'ouvre directement.
+ * A reminder of the last session, which opens it directly.
  *
- * Elle ouvre le detail sur place plutot que de renvoyer vers l'historique :
- * la question posee est « qu'est-ce que j'ai fait la derniere fois ? », pas
- * « montre-moi la liste ». Fermer le detail ramene donc ici, et non sur un
- * autre onglet.
+ * It opens the detail in place rather than routing to the history: the question
+ * being asked is "what did I do last time?", not "show me the list". Closing
+ * the detail therefore comes back here, not to another tab.
  */
 function LastSessionCard() {
   const summaries = useLiveQuery(() => listSessionSummaries({ limit: 1 }), []);
@@ -224,12 +228,12 @@ function LastSessionCard() {
     >
       <div className="flex items-center justify-between gap-3">
         <div className="min-w-0">
-          <p className="text-xs text-muted">Dernière séance</p>
+          <p className="text-xs text-muted">Last session</p>
           <p className="mt-0.5 truncate text-[0.9375rem] font-semibold text-ink">
-            {last.title ?? day.charAt(0).toUpperCase() + day.slice(1)}
+            {last.title ?? day}
           </p>
           <p className="mt-1 truncate font-mono text-xs text-muted tabular-nums">
-            {last.exerciseCount} exercice{last.exerciseCount > 1 ? 's' : ''} · {last.setCount} série
+            {last.exerciseCount} exercise{last.exerciseCount > 1 ? 's' : ''} · {last.setCount} set
             {last.setCount > 1 ? 's' : ''}
             {last.durationMs !== undefined ? ` · ${formatElapsed(last.durationMs)}` : ''}
           </p>

@@ -1,53 +1,53 @@
 /**
- * Modèle de données de l'app.
+ * The app's data model.
  *
- * Hiérarchie :
- *   Exercise            le mouvement, réutilisable d'une séance à l'autre (catalogue)
- *   Session             une séance datée
- *   └─ SessionExercise  un exercice *dans* une séance (le « bloc »), porte l'ordre
- *      └─ SetEntry      une série exécutée : poids / reps / temps
+ * Hierarchy:
+ *   Exercise            the movement itself, reusable across sessions (catalogue)
+ *   Session             one dated training session
+ *   └─ SessionExercise  an exercise *within* a session (the "block"), holds order
+ *      └─ SetEntry      one performed set: load / reps / time
  *
- * Toutes les charges sont en **kilogrammes**, stockage et affichage. L'app est
- * en kg, sans option d'unité : c'est un choix produit, pas une limitation
- * technique à lever plus tard.
+ * All loads are in **kilograms**, stored and displayed. The app is metric with
+ * an optional pounds display, but kilograms remain the canonical unit: the unit
+ * preference never rewrites a row.
  */
 
-/** Identifiant opaque (UUID v4). Voir `newId()` dans `./db`. */
+/** Opaque identifier (UUID v4). See `newId()` in `./keys`. */
 export type Id = string;
 
-/** Instant absolu, en millisecondes depuis l'epoch (UTC). */
+/** Absolute instant, in milliseconds since the epoch (UTC). */
 export type Timestamp = number;
 
 /**
- * Date locale au format `YYYY-MM-DD`, telle que l'utilisateur la perçoit.
- * Doublonne volontairement `Session.startedAt` : c'est elle qui sert à regrouper
- * (« mes séances de mars »), sans dérive de fuseau horaire.
+ * Local date as `YYYY-MM-DD`, the way the user perceives it.
+ * Deliberately duplicates `Session.startedAt`: this is what groups sessions
+ * ("my March sessions") with no timezone drift.
  */
 export type LocalDate = string;
 
 // ---------------------------------------------------------------------------
-// Exercice
+// Exercise
 // ---------------------------------------------------------------------------
 
 /**
- * D'où vient la charge — détermine comment lire `SetEntry.weightKg` et ce que
- * l'UI doit demander à l'utilisateur.
+ * Where the load comes from — determines how to read `SetEntry.weightKg` and
+ * what the UI must ask for.
  */
 export type LoadType =
-  /** Barre, haltères, machine. `weightKg` = la charge soulevée. */
+  /** Barbell, dumbbells, machine. `weightKg` = the load lifted. */
   | 'external'
-  /** Poids du corps seul (pompes, tractions). `weightKg` absent. */
+  /** Bodyweight alone (push-ups, pull-ups). `weightKg` absent. */
   | 'bodyweight'
-  /** Poids du corps + lest (ceinture). `weightKg` = la charge *ajoutée*. */
+  /** Bodyweight plus added load (belt). `weightKg` = the *added* load. */
   | 'weighted_bodyweight'
-  /** Machine assistée / élastique. `weightKg` = l'assistance *retirée*. */
+  /** Assisted machine / band. `weightKg` = the assistance *removed*. */
   | 'assisted';
 
-/** Ce qu'on compte pour mesurer l'effort d'une série. */
+/** What is counted to measure a set's effort. */
 export type EffortMetric =
-  /** Répétitions → `SetEntry.reps` requis. */
+  /** Repetitions → `SetEntry.reps` required. */
   | 'reps'
-  /** Durée (gainage, suspension) → `SetEntry.durationSec` requis. */
+  /** Duration (plank, dead hang) → `SetEntry.durationSec` required. */
   | 'time';
 
 export type MuscleGroup =
@@ -66,18 +66,18 @@ export type MuscleGroup =
   | 'cardio';
 
 /**
- * Le mouvement lui-même. Entité de premier ordre : c'est la clé de voûte de la
- * progression dans le temps, donc jamais un simple nom recopié dans la série.
+ * The movement itself. A first-class entity: it is the keystone of progression
+ * over time, so never a name copied into a set.
  */
 export interface Exercise {
   id: Id;
 
-  /** Libellé affiché, tel que saisi. Ex. : « Développé couché ». */
+  /** Display name, as typed. e.g. "Bench press". */
   name: string;
   /**
-   * `name` normalisé (minuscules, accents et ponctuation retirés, espaces
-   * compressés). Unique en base : empêche « Développé couché » et
-   * « developpe couche » de devenir deux historiques distincts.
+   * `name` normalised (lowercase, accents and punctuation removed, whitespace
+   * collapsed). Unique in the database: prevents "Bench press" and "bench-press"
+   * from becoming two separate histories.
    */
   nameKey: string;
 
@@ -85,22 +85,23 @@ export interface Exercise {
   metric: EffortMetric;
 
   /**
-   * `true` si les répétitions se comptent par côté (haltère unilatéral, fentes).
-   * Lève l'ambiguïté « 10 reps = 10 ou 20 ? » au moment de comparer deux séances.
+   * `true` when reps are counted per side (single-arm dumbbell work, lunges).
+   * Settles the "10 reps: 10 or 20?" ambiguity when comparing two sessions.
    */
   perSide: boolean;
 
   muscleGroup?: MuscleGroup;
 
-  /** Pas des boutons +/- de l'UI, en kg (2.5 pour une barre, 1 pour une poulie). */
+  /** Step for the UI's +/- buttons, in kg (2.5 for a bar, 1 for a cable). */
   defaultIncrementKg?: number;
 
-  /** `false` = livré avec l'app, `true` = créé par l'utilisateur. */
+  /** `false` = shipped with the app, `true` = created by the user. */
   isCustom: boolean;
 
   /**
-   * Masqué du sélecteur sans être supprimé — l'historique des séries doit rester
-   * lisible. Champ *date* et non booléen : IndexedDB n'indexe pas les booléens.
+   * Hidden from the picker without being deleted — the set history must stay
+   * readable. A *date* field rather than a boolean: IndexedDB does not index
+   * booleans.
    */
   archivedAt?: Timestamp;
 
@@ -109,26 +110,26 @@ export interface Exercise {
 }
 
 // ---------------------------------------------------------------------------
-// Séance
+// Session
 // ---------------------------------------------------------------------------
 
-/** Une session datée. `endedAt` absent ⇒ séance en cours. */
+/** One dated session. `endedAt` absent ⇒ still in progress. */
 export interface Session {
   id: Id;
 
   startedAt: Timestamp;
-  /** Absent tant que la séance n'est pas clôturée. */
+  /** Absent until the session is closed. */
   endedAt?: Timestamp;
 
-  /** Jour local de `startedAt`, dénormalisé pour le regroupement et le calendrier. */
+  /** Local day of `startedAt`, denormalised for grouping and the calendar. */
   date: LocalDate;
 
-  /** Ex. : « Push A ». Optionnel : en salle, on ne nomme pas sa séance. */
+  /** e.g. "Push A". Optional: in the gym, nobody names their session. */
   title?: string;
 
   /**
-   * Poids de corps du jour, en kg. Sans lui, aucune progression n'est mesurable
-   * sur les exercices `bodyweight` / `weighted_bodyweight` / `assisted`.
+   * Bodyweight on the day, in kg. Without it, no progression is measurable on
+   * `bodyweight` / `weighted_bodyweight` / `assisted` exercises.
    */
   bodyweightKg?: number;
 
@@ -137,127 +138,126 @@ export interface Session {
 }
 
 // ---------------------------------------------------------------------------
-// Exercice dans une séance (le « bloc »)
+// Exercise within a session (the "block")
 // ---------------------------------------------------------------------------
 
 /**
- * Rattache un exercice à une séance et porte son rang. Existe indépendamment des
- * séries : on ajoute l'exercice à la séance *puis* on saisit les séries, ce qui
- * correspond au geste réel (téléphone en main, entre deux séries).
+ * Ties an exercise to a session and carries its rank. Exists independently of
+ * any set: you add the exercise to the session *then* log the sets, which
+ * matches the real gesture (phone in hand, between two sets).
  */
 export interface SessionExercise {
   id: Id;
   sessionId: Id;
   exerciseId: Id;
 
-  /** Rang dans la séance. Strictement croissant, pas nécessairement contigu. */
+  /** Rank within the session. Strictly increasing, not necessarily contiguous. */
   order: number;
 
   /**
-   * Blocs partageant le même numéro = supersérie. Non exploité pour l'instant,
-   * la place est réservée pour ne pas avoir à migrer l'historique plus tard.
+   * Blocks sharing a number form a superset. Unused for now; the room is
+   * reserved so the history never needs migrating later.
    */
   supersetGroup?: number;
 
-  /** Notes du jour sur cet exercice (« banc trop haut », « douleur épaule »). */
+  /** Notes for the day on this exercise ("bench too high", "shoulder ache"). */
   notes?: string;
 }
 
 // ---------------------------------------------------------------------------
-// Série
+// Set
 // ---------------------------------------------------------------------------
 
 export type SetKind =
-  /** Série comptée dans la progression et les records. */
+  /** A set counted in progression and records. */
   | 'work'
   /**
-   * Échauffement : exclue des courbes et des PR. Sans cette distinction, les
-   * montées en charge écrasent la lecture de la progression.
+   * Warm-up: excluded from charts and PRs. Without this distinction, ramping
+   * loads bury the progression signal.
    */
   | 'warmup';
 
 /**
- * Une exécution. Champs de mesure volontairement **plats et optionnels** plutôt
- * qu'union discriminée : c'est l'`Exercise` parent qui dit lesquels sont
- * pertinents, et les agrégats de progression restent triviaux à écrire.
+ * One performed set. The measure fields are deliberately **flat and optional**
+ * rather than a discriminated union: the parent `Exercise` says which ones are
+ * relevant, and progression aggregates stay trivial to write.
  *
- * Invariants, appliqués par `./validation` et `./sets` :
- *   metric 'reps' → `reps` défini, `durationSec` absent
- *   metric 'time' → `durationSec` défini, `reps` absent
- *   loadType 'bodyweight' → `weightKg` absent ; sinon `weightKg` défini (≥ 0)
+ * Invariants, enforced by `./validation` and `./sets`:
+ *   metric 'reps' → `reps` set, `durationSec` absent
+ *   metric 'time' → `durationSec` set, `reps` absent
+ *   loadType 'bodyweight' → `weightKg` absent; otherwise `weightKg` set (≥ 0)
  */
 export interface SetEntry {
   id: Id;
 
-  /** Bloc auquel la série appartient. */
+  /** The block this set belongs to. */
   sessionExerciseId: Id;
 
   /**
-   * Dénormalisés depuis le bloc et la séance parents, uniquement pour permettre
-   * l'index `[exerciseId+performedAt+order]` (historique d'un exercice sans
-   * jointure). À réécrire si la date de la séance est modifiée.
+   * Denormalised from the parent block and session, purely to enable the
+   * `[exerciseId+performedAt+order]` index (an exercise's history with no
+   * join). Must be rewritten if the session's date changes.
    */
   sessionId: Id;
   exerciseId: Id;
-  /** Copie de `Session.startedAt`. */
+  /** Copy of `Session.startedAt`. */
   performedAt: Timestamp;
 
   /**
-   * Instant réel d'écriture de la série, dérivé à la création.
+   * The real instant the set was written, derived at creation.
    *
-   * Distinct de `performedAt`, qui est l'heure de *la séance* : c'est le seul
-   * champ qui dit quand une série a effectivement été saisie. Il permet de
-   * clôturer honnêtement une séance qu'on a oublié de terminer, en la ramenant
-   * à sa dernière série plutôt qu'à « maintenant ».
+   * Distinct from `performedAt`, which is the *session's* time: this is the only
+   * field saying when a set was actually logged. It allows closing a forgotten
+   * session honestly, back at its last set rather than at "now".
    */
   loggedAt: Timestamp;
 
   /**
-   * Rang dans le bloc. Strictement croissant, pas nécessairement contigu :
-   * supprimer une série n'oblige pas à renuméroter les suivantes. L'affichage
-   * « Série 1, 2, 3 » se fait sur l'index du tableau, pas sur ce champ.
+   * Rank within the block. Strictly increasing, not necessarily contiguous:
+   * deleting a set does not force renumbering the rest. The "Set 1, 2, 3"
+   * display uses the array index, not this field.
    */
   order: number;
 
   kind: SetKind;
 
-  /** Charge en kg. Sens déterminé par `Exercise.loadType`. */
+  /** Load in kg. Meaning determined by `Exercise.loadType`. */
   weightKg?: number;
-  /** Répétitions. Par côté si `Exercise.perSide`. */
+  /** Reps. Per side when `Exercise.perSide`. */
   reps?: number;
-  /** Durée en secondes, pour les exercices au temps. */
+  /** Duration in seconds, for timed exercises. */
   durationSec?: number;
 
-  /** Difficulté ressentie, 1–10. */
+  /** Rate of perceived exertion, 1–10. */
   rpe?: number;
-  /** Série menée jusqu'à l'échec musculaire. */
+  /** Set taken to muscular failure. */
   isFailure?: boolean;
 
   notes?: string;
 }
 
 // ---------------------------------------------------------------------------
-// Vues assemblées (jamais persistées)
+// Assembled views (never persisted)
 // ---------------------------------------------------------------------------
 
-/** Un bloc résolu avec son exercice et ses séries triées. */
+/** A block resolved with its exercise and its sorted sets. */
 export interface SessionExerciseWithSets extends SessionExercise {
   exercise: Exercise;
   sets: SetEntry[];
 }
 
-/** Une séance complète, prête à l'affichage. */
+/** A complete session, ready to display. */
 export interface SessionDetail extends Session {
   entries: SessionExerciseWithSets[];
 }
 
 /**
- * Ligne de la liste d'historique.
+ * A row of the history list.
  *
- * Ne contient **que** ce qui s'obtient sans lire les séries : les champs de la
- * séance, les blocs (quelques lignes minuscules) et un comptage d'index. Le
- * volume total (Σ poids × reps) en est volontairement absent — c'est le seul
- * chiffre qui obligerait à charger chaque série de chaque séance.
+ * Contains **only** what can be obtained without reading any set: the session's
+ * own fields, its blocks (a few tiny rows) and an index count. Total volume
+ * (Σ load × reps) is deliberately absent — it is the one figure that would
+ * force loading every set of every session.
  */
 export interface SessionSummary {
   id: Id;
@@ -266,23 +266,22 @@ export interface SessionSummary {
   date: LocalDate;
   title?: string;
 
-  /** Durée en millisecondes. Absente tant que la séance n'est pas clôturée. */
+  /** Duration in milliseconds. Absent until the session is closed. */
   durationMs?: number;
 
-  /** Nombre de blocs. Toujours égal à `exerciseNames.length`. */
+  /** Number of blocks. Always equal to `exerciseNames.length`. */
   exerciseCount: number;
 
   /**
-   * Nom de chaque bloc, dans l'ordre de la séance. Un exercice fait deux fois
-   * y figure deux fois : c'est une projection fidèle, dédupliquer est un choix
-   * d'affichage.
+   * Each block's name, in session order. An exercise done twice appears twice:
+   * this is a faithful projection, and de-duplicating is a display choice.
    */
   exerciseNames: string[];
 
   /**
-   * Toutes séries confondues, échauffements compris. Ne compter que les séries
-   * de travail obligerait à lire chaque enregistrement — `kind` n'est pas
-   * indexé —, soit exactement ce que ce résumé évite.
+   * All sets, warm-ups included. Counting work sets only would require reading
+   * every record — `kind` is not indexed — which is exactly what this summary
+   * avoids.
    */
   setCount: number;
 }

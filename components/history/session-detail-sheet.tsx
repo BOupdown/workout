@@ -3,6 +3,7 @@
 import { ArrowLeft, Trash } from '@phosphor-icons/react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { useState } from 'react';
+import { useWeightUnit } from '@/hooks/use-weight-unit';
 import { getSessionDetail } from '@/lib/db/queries';
 import { deleteSession } from '@/lib/db/sessions';
 import type { Id } from '@/lib/db/types';
@@ -13,21 +14,21 @@ interface SessionDetailSheetProps {
   onClose: () => void;
 }
 
-const DATE_FORMAT = new Intl.DateTimeFormat('fr-FR', {
+const DATE_FORMAT = new Intl.DateTimeFormat('en-GB', {
   weekday: 'long',
   day: 'numeric',
   month: 'long',
 });
 
-const TIME_FORMAT = new Intl.DateTimeFormat('fr-FR', { hour: '2-digit', minute: '2-digit' });
+const TIME_FORMAT = new Intl.DateTimeFormat('en-GB', { hour: '2-digit', minute: '2-digit' });
 
-/** Une séance passée, en lecture seule, avec sa suppression. */
+/** A past session, read-only, with its deletion. */
 export function SessionDetailSheet({ sessionId, onClose }: SessionDetailSheetProps) {
   const detail = useLiveQuery(() => getSessionDetail(sessionId), [sessionId]);
+  const [unit] = useWeightUnit();
   const [confirming, setConfirming] = useState(false);
   const [deleting, setDeleting] = useState(false);
 
-  const day = detail ? DATE_FORMAT.format(detail.startedAt) : '';
   const setCount = detail?.entries.reduce((total, entry) => total + entry.sets.length, 0) ?? 0;
 
   return (
@@ -36,22 +37,22 @@ export function SessionDetailSheet({ sessionId, onClose }: SessionDetailSheetPro
         <button
           type="button"
           onClick={onClose}
-          aria-label="Fermer la séance"
+          aria-label="Close session"
           className="flex h-11 w-11 shrink-0 items-center justify-center rounded-control text-ink transition-transform active:scale-95"
         >
           <ArrowLeft size={20} weight="bold" />
         </button>
         <div className="min-w-0">
           <h2 className="truncate text-[0.9375rem] font-semibold text-ink">
-            {detail?.title ?? (day ? day.charAt(0).toUpperCase() + day.slice(1) : 'Séance')}
+            {detail?.title ?? (detail ? DATE_FORMAT.format(detail.startedAt) : 'Session')}
           </h2>
           {detail ? (
             <p className="font-mono text-xs text-muted tabular-nums">
               {TIME_FORMAT.format(detail.startedAt)}
               {detail.endedAt !== undefined
                 ? ` · ${formatElapsed(detail.endedAt - detail.startedAt)}`
-                : ' · en cours'}
-              {` · ${setCount} série${setCount > 1 ? 's' : ''}`}
+                : ' · in progress'}
+              {` · ${setCount} set${setCount > 1 ? 's' : ''}`}
             </p>
           ) : null}
         </div>
@@ -64,7 +65,7 @@ export function SessionDetailSheet({ sessionId, onClose }: SessionDetailSheetPro
             <div className="h-24 rounded-panel bg-line" />
           </>
         ) : detail.entries.length === 0 ? (
-          <p className="py-10 text-center text-sm text-muted">Cette séance ne contient aucun exercice.</p>
+          <p className="py-10 text-center text-sm text-muted">This session has no exercises.</p>
         ) : (
           detail.entries.map((entry) => (
             <section key={entry.id} className="rounded-panel bg-raised px-4 py-3.5">
@@ -80,7 +81,7 @@ export function SessionDetailSheet({ sessionId, onClose }: SessionDetailSheetPro
               {entry.sets.length > 0 ? (
                 <ul className="mt-2.5 flex flex-wrap gap-1.5">
                   {entry.sets.map((set) => {
-                    const { primary, secondary } = describeSet(set, entry.exercise);
+                    const { primary, secondary } = describeSet(set, entry.exercise, unit);
                     const isWarmup = set.kind === 'warmup';
                     return (
                       <li
@@ -93,13 +94,13 @@ export function SessionDetailSheet({ sessionId, onClose }: SessionDetailSheetPro
                           {primary}
                         </span>
                         {secondary ? <span className="text-xs text-muted">{secondary}</span> : null}
-                        {isWarmup ? <span className="sr-only">(échauffement)</span> : null}
+                        {isWarmup ? <span className="sr-only">(warm-up)</span> : null}
                       </li>
                     );
                   })}
                 </ul>
               ) : (
-                <p className="mt-1 text-sm text-muted">Aucune série</p>
+                <p className="mt-1 text-sm text-muted">No sets</p>
               )}
 
               {entry.notes ? (
@@ -115,20 +116,17 @@ export function SessionDetailSheet({ sessionId, onClose }: SessionDetailSheetPro
           </section>
         ) : null}
 
-        {/* Suppression en bas du contenu, jamais dans l'en-tete a cote du bouton
-            de fermeture : deux cibles voisines dont l'une detruit tout, c'est
-            une erreur de tap qui attend de se produire. */}
+        {/* Deletion sits at the bottom of the content, never in the header next
+            to the close button: two neighbouring targets where one destroys
+            everything is a mis-tap waiting to happen. */}
         {detail ? (
           <section className="pt-2 pb-2">
             {confirming ? (
               <div className="rounded-panel bg-raised px-4 py-3.5">
-                {/* Le compte est detache de la phrase : « ses 1 exercice »
-                    ne s'accorde pas, alors que cette forme reste juste au
-                    singulier comme au pluriel. */}
-                <p className="text-sm text-ink">Supprimer définitivement cette séance ?</p>
+                <p className="text-sm text-ink">Delete this session permanently?</p>
                 <p className="mt-1 text-sm text-muted">
-                  {detail.entries.length} exercice{detail.entries.length > 1 ? 's' : ''} et{' '}
-                  {setCount} série{setCount > 1 ? 's' : ''} seront perdus.
+                  {detail.entries.length} exercise{detail.entries.length > 1 ? 's' : ''} and{' '}
+                  {setCount} set{setCount > 1 ? 's' : ''} will be lost.
                 </p>
                 <div className="mt-3 flex gap-2">
                   <button
@@ -136,7 +134,7 @@ export function SessionDetailSheet({ sessionId, onClose }: SessionDetailSheetPro
                     onClick={() => setConfirming(false)}
                     className="h-14 flex-1 rounded-control bg-surface text-[0.9375rem] font-medium text-muted transition-transform active:scale-[0.98]"
                   >
-                    Annuler
+                    Cancel
                   </button>
                   <button
                     type="button"
@@ -152,7 +150,7 @@ export function SessionDetailSheet({ sessionId, onClose }: SessionDetailSheetPro
                     }}
                     className="h-14 flex-1 rounded-control bg-danger text-[0.9375rem] font-semibold text-raised transition-transform active:scale-[0.98] disabled:opacity-50"
                   >
-                    {deleting ? 'Suppression…' : 'Supprimer'}
+                    {deleting ? 'Deleting…' : 'Delete'}
                   </button>
                 </div>
               </div>
@@ -163,7 +161,7 @@ export function SessionDetailSheet({ sessionId, onClose }: SessionDetailSheetPro
                 className="flex min-h-14 w-full items-center justify-center gap-2 rounded-panel text-[0.9375rem] font-medium text-danger transition-transform active:scale-[0.99]"
               >
                 <Trash size={17} weight="bold" />
-                Supprimer la séance
+                Delete session
               </button>
             )}
           </section>

@@ -2,14 +2,14 @@ import { ImageResponse } from 'next/og';
 
 export const size = { width: 1200, height: 630 };
 export const contentType = 'image/png';
-export const alt = 'Workout — suivi de séances, poids et répétitions série par série';
+export const alt = 'Workout - training log, weights and reps set by set';
 
 /**
- * Carte d'aperçu des réseaux sociaux.
+ * Social preview card.
  *
- * Sans elle, un lien partagé s'affiche sans vignette et passe pour mort. Même
- * langage que l'app : fond vert d'accent, encre sombre dessus — cet accent ne
- * peut pas porter de texte clair.
+ * Without it a shared link renders with no thumbnail and reads as dead. Same
+ * language as the app: accent-green background, dark ink on top - that accent
+ * cannot carry light text.
  */
 export default function OpengraphImage() {
   const bar = { background: '#111113', borderRadius: 10 };
@@ -39,10 +39,10 @@ export default function OpengraphImage() {
         <div style={{ display: 'flex', flexDirection: 'column' }}>
           <div style={{ fontSize: 108, fontWeight: 700, letterSpacing: -3 }}>Workout</div>
           <div style={{ fontSize: 40, marginTop: 8, opacity: 0.72 }}>
-            Poids et répétitions, série par série.
+            Weights and reps, set by set.
           </div>
           <div style={{ fontSize: 30, marginTop: 28, opacity: 0.55 }}>
-            Vos données restent sur votre téléphone.
+            Your data stays on your phone.
           </div>
         </div>
       </div>

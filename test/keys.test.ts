@@ -3,16 +3,16 @@ import { isLocalDate, localMidnight, newId, toLocalDate, toNameKey } from '../li
 
 describe('toNameKey', () => {
   it('retire les accents', () => {
-    expect(toNameKey('Développé couché')).toBe('developpe couche');
+    expect(toNameKey('Bench press')).toBe('bench press');
   });
 
   it('fait converger les variantes d’un même mouvement', () => {
-    expect(toNameKey('Développé-Couché  ')).toBe(toNameKey('developpe couche'));
-    expect(toNameKey('DÉVELOPPÉ   COUCHÉ')).toBe(toNameKey('developpe couche'));
+    expect(toNameKey('Bench-Press  ')).toBe(toNameKey('bench press'));
+    expect(toNameKey('BENCH   PRESS')).toBe(toNameKey('bench press'));
   });
 
   it('neutralise ponctuation et casse', () => {
-    expect(toNameKey('Rowing haltère unilatéral')).toBe('rowing haltere unilateral');
+    expect(toNameKey('One-arm dumbbell row')).toBe('one arm dumbbell row');
     expect(toNameKey("Curl 'biceps' !")).toBe('curl biceps');
   });
 });

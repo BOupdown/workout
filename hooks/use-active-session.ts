@@ -6,10 +6,10 @@ import { getActiveSession } from '@/lib/db/sessions';
 import type { SessionDetail } from '@/lib/db/types';
 
 /**
- * `useLiveQuery` rend `undefined` tant que la requête n'a pas abouti — ce qui
- * serait ambigu avec « aucune séance en cours ». La requête renvoie donc
- * toujours un objet : `undefined` signifie alors sans ambiguïté « en cours de
- * chargement », y compris au rendu serveur.
+ * `useLiveQuery` returns `undefined` until the query resolves - which would be
+ * ambiguous with "no session in progress". The query therefore always returns
+ * an object, so `undefined` unambiguously means "still loading", including
+ * during server rendering.
  */
 export type ActiveSessionState =
   | { status: 'loading' }
@@ -17,11 +17,11 @@ export type ActiveSessionState =
   | { status: 'ready'; detail: SessionDetail };
 
 /**
- * Séance en cours, réactualisée automatiquement.
+ * The session in progress, kept up to date automatically.
  *
- * IndexedDB reste la seule source de vérité : après un `createSet` ou un
- * `addExerciseToSession`, Dexie rejoue cette requête et l'écran se met à jour
- * seul. Aucun état à invalider, aucune copie côté React à resynchroniser.
+ * IndexedDB stays the single source of truth: after a `createSet` or an
+ * `addExerciseToSession`, Dexie replays this query and the screen updates by
+ * itself. No state to invalidate, no React-side copy to resynchronise.
  */
 export function useActiveSession(): ActiveSessionState {
   const state = useLiveQuery<ActiveSessionState>(async () => {

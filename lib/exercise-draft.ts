@@ -1,10 +1,10 @@
 /**
- * Brouillon de création d'un exercice personnalisé.
+ * Draft state for creating a custom exercise.
  *
- * Même doctrine que `./set-draft` : les valeurs sont des chaînes tant que
- * l'utilisateur tape, et le formulaire ne peut pas produire un exercice que la
- * base refuserait — un champ dépourvu de sens pour la nature choisie n'est pas
- * affiché, donc sa valeur n'est jamais émise.
+ * Same doctrine as `./set-draft`: values stay strings while the user types, and
+ * the form cannot produce an exercise the database would reject — a field that
+ * makes no sense for the chosen nature is not displayed, so its value is never
+ * emitted.
  */
 
 import type { NewExerciseInput } from './db/exercises';
@@ -16,7 +16,7 @@ export interface ExerciseDraft {
   loadType: LoadType;
   metric: EffortMetric;
   perSide: boolean;
-  /** Chaîne vide = non renseigné. */
+  /** Empty string = not set. */
   muscleGroup: MuscleGroup | '';
   defaultIncrementKg: string;
 }
@@ -31,51 +31,51 @@ export const EMPTY_EXERCISE_DRAFT: ExerciseDraft = {
 };
 
 /**
- * Libellés en langage de salle. « loadType » et « metric » sont du jargon de
- * modèle de données : personne ne choisit un « weighted_bodyweight ».
+ * Labels in gym language. "loadType" and "metric" are data-model jargon: nobody
+ * picks a "weighted_bodyweight".
  */
 export const LOAD_TYPE_OPTIONS: { value: LoadType; label: string; hint: string }[] = [
-  { value: 'external', label: 'Avec une charge', hint: 'barre, haltères, machine' },
-  { value: 'bodyweight', label: 'Poids du corps', hint: 'sans charge à saisir' },
-  { value: 'weighted_bodyweight', label: 'Poids du corps + lest', hint: 'ceinture, gilet' },
-  { value: 'assisted', label: 'Assisté', hint: 'machine ou élastique qui allège' },
+  { value: 'external', label: 'With a load', hint: 'barbell, dumbbells, machine' },
+  { value: 'bodyweight', label: 'Bodyweight', hint: 'no load to enter' },
+  { value: 'weighted_bodyweight', label: 'Bodyweight + added', hint: 'belt, weight vest' },
+  { value: 'assisted', label: 'Assisted', hint: 'machine or band that lightens you' },
 ];
 
 export const METRIC_OPTIONS: { value: EffortMetric; label: string }[] = [
-  { value: 'reps', label: 'Répétitions' },
-  { value: 'time', label: 'Durée' },
+  { value: 'reps', label: 'Reps' },
+  { value: 'time', label: 'Time' },
 ];
 
-/** `Record` et non tableau : ajouter un groupe sans le nommer ne compile pas. */
+/** A `Record`, not an array: adding a group without naming it will not compile. */
 export const MUSCLE_GROUP_LABELS: Record<MuscleGroup, string> = {
-  chest: 'Pectoraux',
-  back: 'Dos',
-  shoulders: 'Épaules',
+  chest: 'Chest',
+  back: 'Back',
+  shoulders: 'Shoulders',
   biceps: 'Biceps',
   triceps: 'Triceps',
-  forearms: 'Avant-bras',
-  quads: 'Quadriceps',
-  hamstrings: 'Ischio-jambiers',
-  glutes: 'Fessiers',
-  calves: 'Mollets',
-  core: 'Gainage',
-  fullbody: 'Corps entier',
+  forearms: 'Forearms',
+  quads: 'Quads',
+  hamstrings: 'Hamstrings',
+  glutes: 'Glutes',
+  calves: 'Calves',
+  core: 'Core',
+  fullbody: 'Full body',
   cardio: 'Cardio',
 };
 
 /**
- * Le pas de progression n'existe que s'il y a une charge à incrémenter. La
- * validation le refuse au poids du corps ; le formulaire ne l'affiche donc pas.
+ * A progression step only exists when there is a load to increment. The
+ * validation refuses it for bodyweight, so the form does not show it.
  */
 export function draftAllowsIncrement(draft: Pick<ExerciseDraft, 'loadType'>): boolean {
   return draft.loadType !== 'bodyweight';
 }
 
 /**
- * Convertit le brouillon en entrée de `createExercise`.
+ * Converts the draft into a `createExercise` input.
  *
- * Un champ vide ou illisible est **omis**, jamais deviné : la validation de la
- * base produit alors son message typé, seule source de vérité.
+ * An empty or unreadable field is **omitted**, never guessed: the database
+ * validation then produces its typed message, the single source of truth.
  */
 export function exerciseDraftToInput(draft: ExerciseDraft): NewExerciseInput {
   const input: NewExerciseInput = {
@@ -95,5 +95,5 @@ export function exerciseDraftToInput(draft: ExerciseDraft): NewExerciseInput {
   return input;
 }
 
-/** Vue réduite d'un exercice existant, pour proposer de le réutiliser. */
+/** Reduced view of an existing exercise, to offer reusing it. */
 export type ConflictingExercise = Pick<Exercise, 'id' | 'name' | 'archivedAt'>;

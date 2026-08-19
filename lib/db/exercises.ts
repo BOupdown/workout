@@ -1,17 +1,17 @@
 /**
- * Couche d'écriture du catalogue d'exercices.
+ * Write layer for the exercise catalogue.
  *
- * Même doctrine que `./sets` et `./sessions` :
- *   1. **Dériver plutôt que valider** — `id`, `nameKey`, `isCustom`, `createdAt`
- *      et `archivedAt` n'apparaissent dans aucun type d'entrée.
- *   2. **Valider ce qui reste** dans la transaction : unicité du nom normalisé
- *      et présence de séries déjà saisies, deux règles qui exigent une lecture
- *      et sont donc hors de portée des hooks Dexie synchrones.
+ * Same doctrine as `./sets` and `./sessions`:
+ *   1. **Derive rather than validate** — `id`, `nameKey`, `isCustom`,
+ *      `createdAt` and `archivedAt` appear in no input type.
+ *   2. **Validate what remains** inside the transaction: uniqueness of the
+ *      normalised name, and whether sets already exist — two rules that need a
+ *      read and are therefore out of reach of the synchronous Dexie hooks.
  *
- * Pas de suppression définitive, volontairement : supprimer un exercice
- * orphelinerait chaque `SetEntry.exerciseId` de l'historique, et une cascade
- * détruirait des années de données depuis un écran de réglages. L'archivage
- * couvre le besoin réel (désencombrer le sélecteur) sans rien perdre.
+ * There is deliberately no hard delete: removing an exercise would orphan every
+ * `SetEntry.exerciseId` in the history, and a cascade would destroy years of
+ * data from a settings screen. Archiving covers the real need (decluttering the
+ * picker) without losing anything.
  */
 
 import { db } from './db';
@@ -27,39 +27,39 @@ import type {
 } from './types';
 
 // ---------------------------------------------------------------------------
-// Erreurs métier
+// Domain errors
 // ---------------------------------------------------------------------------
 
 /**
- * Levée quand le nom normalisé est déjà pris.
+ * Thrown when the normalised name is already taken.
  *
- * Porte l'exercice existant : l'UI peut proposer « « Développé couché » existe
- * déjà — l'utiliser ? » en un tap, sans second aller-retour. Le champ
- * `existing.archivedAt` lui dit s'il faut plutôt proposer un désarchivage.
+ * Carries the existing exercise: the UI can offer "Bench press already exists —
+ * use it?" in one tap, with no second round trip. Its `existing.archivedAt`
+ * field tells the UI whether to offer unarchiving instead.
  *
- * On ne retourne **jamais** silencieusement l'exercice existant à la place :
- * son `loadType` et sa `metric` ne sont pas ceux demandés, et l'appelant n'a
- * aucun moyen de s'en apercevoir.
+ * The existing exercise is **never** returned silently in place of the new one:
+ * its `loadType` and `metric` are not the ones requested, and the caller would
+ * have no way to notice.
  */
 export class ExerciseNameConflictError extends Error {
   readonly existing: Exercise;
 
   constructor(existing: Exercise) {
-    const state = existing.archivedAt !== undefined ? ' (archivé)' : '';
-    super(`Un exercice nommé « ${existing.name} » existe déjà${state}.`);
+    const state = existing.archivedAt !== undefined ? ' (archived)' : '';
+    super(`An exercise named "${existing.name}" already exists${state}.`);
     this.name = 'ExerciseNameConflictError';
     this.existing = existing;
   }
 }
 
 /**
- * Levée quand on tente de modifier la nature d'un exercice déjà utilisé.
+ * Thrown when changing the nature of an exercise that is already in use.
  *
- * Volontairement sans échappatoire `force` : basculer un exercice de
- * `weighted_bodyweight` à `bodyweight` rendrait invalides toutes les séries
- * déjà saisies, et fausserait la progression en comparant des tractions
- * lestées à des tractions à vide. La bonne manœuvre est d'archiver l'ancien et
- * d'en créer un nouveau — un mouvement différent mérite une identité différente.
+ * Deliberately without a `force` escape hatch: switching an exercise from
+ * `weighted_bodyweight` to `bodyweight` would invalidate every set already
+ * logged, and would distort progression by comparing weighted pull-ups to
+ * bodyweight ones. The right move is to archive the old one and create a new
+ * one — a different movement deserves a different identity.
  */
 export class ExerciseInUseError extends Error {
   readonly exerciseId: Id;
@@ -68,9 +68,9 @@ export class ExerciseInUseError extends Error {
 
   constructor(exerciseId: Id, setCount: number, lockedFields: readonly string[]) {
     super(
-      `Cet exercice compte ${setCount} série${setCount > 1 ? 's' : ''} : ` +
-        `${lockedFields.join(', ')} ne ${lockedFields.length > 1 ? 'sont' : 'est'} ` +
-        'plus modifiable. Archivez-le et créez-en un nouveau.',
+      `This exercise has ${setCount} set${setCount > 1 ? 's' : ''}: ` +
+        `${lockedFields.join(', ')} can no longer be changed. ` +
+        'Archive it and create a new one.',
     );
     this.name = 'ExerciseInUseError';
     this.exerciseId = exerciseId;
@@ -80,14 +80,14 @@ export class ExerciseInUseError extends Error {
 }
 
 // ---------------------------------------------------------------------------
-// Entrées
+// Inputs
 // ---------------------------------------------------------------------------
 
 export interface NewExerciseInput {
   name: string;
   loadType: LoadType;
   metric: EffortMetric;
-  /** Répétitions comptées par côté. Par défaut `false`. */
+  /** Reps counted per side. Defaults to `false`. */
   perSide?: boolean;
   muscleGroup?: MuscleGroup;
   defaultIncrementKg?: number;
@@ -95,12 +95,11 @@ export interface NewExerciseInput {
 }
 
 /**
- * Champs modifiables. `archivedAt` en est absent — l'archivage passe par ses
- * propres fonctions ; `isCustom`, `id`, `nameKey` et `createdAt` aussi, ils
- * sont dérivés.
+ * Editable fields. `archivedAt` is absent — archiving has its own functions;
+ * so are `isCustom`, `id`, `nameKey` and `createdAt`, which are derived.
  *
- * Une clé présente valant `undefined` efface le champ, une clé absente le
- * laisse tel quel — même sémantique que `Table.update`.
+ * A key present with `undefined` clears the field, an absent key leaves it as
+ * is — the same semantics as `Table.update`.
  */
 export type ExerciseUpdate = Partial<
   Pick<
@@ -110,28 +109,25 @@ export type ExerciseUpdate = Partial<
 >;
 
 /**
- * Champs qui redéfinissent la **nature** de l'exercice, et donc le sens des
- * séries déjà enregistrées. Verrouillés dès qu'une série existe.
+ * Fields that redefine the **nature** of an exercise, and therefore the meaning
+ * of the sets already recorded. Locked as soon as one set exists.
  *
- * `perSide` en fait partie bien qu'il ne casse aucune validation : passer de
- * `false` à `true` réécrit silencieusement le sens des répétitions passées
- * (« 10 » devient 10 par bras). Même dégât, moins visible.
+ * `perSide` belongs here even though it breaks no validation: switching it from
+ * `false` to `true` silently rewrites what past reps meant ("10" becomes 10 per
+ * arm). Same damage, less visible.
  */
 const NATURE_FIELDS = ['loadType', 'metric', 'perSide'] as const;
 
 // ---------------------------------------------------------------------------
-// Lectures
+// Reads
 // ---------------------------------------------------------------------------
 
-/** Retrouve un exercice par son nom, à la normalisation près. */
+/** Finds an exercise by name, up to normalisation. */
 export async function findExerciseByName(name: string): Promise<Exercise | undefined> {
   return db.exercises.where('nameKey').equals(toNameKey(name)).first();
 }
 
-/**
- * Exercices proposables dans le sélecteur : tout sauf les archivés, par ordre
- * alphabétique.
- */
+/** Exercises offerable in the picker: everything but the archived, A to Z. */
 export async function listSelectableExercises(): Promise<Exercise[]> {
   return db.exercises
     .orderBy('name')
@@ -140,32 +136,32 @@ export async function listSelectableExercises(): Promise<Exercise[]> {
 }
 
 /**
- * Exercices archivés.
+ * Archived exercises.
  *
- * `undefined` n'étant jamais indexé, l'index `archivedAt` ne contient *que* les
- * lignes archivées : la plage suffit, aucun filtre en mémoire.
+ * Since `undefined` is never indexed, the `archivedAt` index contains *only*
+ * archived rows: the range is enough, with no in-memory filter.
  */
 export async function listArchivedExercises(): Promise<Exercise[]> {
   return db.exercises.where('archivedAt').above(0).sortBy('name');
 }
 
 // ---------------------------------------------------------------------------
-// Écritures
+// Writes
 // ---------------------------------------------------------------------------
 
 /**
- * Crée un exercice personnalisé.
+ * Creates a custom exercise.
  *
- * @throws {ExerciseNameConflictError} si le nom normalisé est déjà pris.
+ * @throws {ExerciseNameConflictError} when the normalised name is taken.
  */
 export async function createExercise(input: NewExerciseInput): Promise<Exercise> {
   return db.transaction('rw', db.exercises, async () => {
     const nameKey = toNameKey(input.name);
 
-    // Le contrôle et l'insertion partagent la transaction : IndexedDB sérialise
-    // les opérations d'un même store, aucune fenêtre entre les deux. L'index
-    // `&nameKey` reste le garde-fou ultime, ce test n'existe que pour produire
-    // une erreur exploitable plutôt qu'un `ConstraintError` opaque.
+    // The check and the insert share the transaction: IndexedDB serialises
+    // operations on a single store, so there is no window between them. The
+    // `&nameKey` index remains the ultimate guard; this check exists only to
+    // produce a usable error rather than an opaque `ConstraintError`.
     const existing = await db.exercises.where('nameKey').equals(nameKey).first();
     if (existing) throw new ExerciseNameConflictError(existing);
 
@@ -191,19 +187,19 @@ export async function createExercise(input: NewExerciseInput): Promise<Exercise>
 }
 
 /**
- * Modifie un exercice. `nameKey` est redérivé dès que `name` change.
+ * Edits an exercise. `nameKey` is re-derived whenever `name` changes.
  *
- * @throws {ExerciseNameConflictError} si le nouveau nom est déjà pris.
- * @throws {ExerciseInUseError} si la nature de l'exercice change alors que des
- *   séries existent déjà.
+ * @throws {ExerciseNameConflictError} when the new name is already taken.
+ * @throws {ExerciseInUseError} when the exercise's nature changes while sets
+ *   already exist.
  */
 export async function updateExercise(id: Id, patch: ExerciseUpdate): Promise<Exercise> {
   return db.transaction('rw', db.exercises, db.sets, async () => {
     const existing = await db.exercises.get(id);
-    if (!existing) throw new Error(`Exercice introuvable : ${id}`);
+    if (!existing) throw new Error(`Exercise not found: ${id}`);
 
-    // Seuls les changements *effectifs* comptent : renvoyer la valeur courante
-    // d'un champ verrouillé doit rester un no-op, pas une erreur.
+    // Only *effective* changes count: sending back a locked field's current
+    // value must stay a no-op, not an error.
     const changedNature = NATURE_FIELDS.filter(
       (field) => field in patch && patch[field] !== existing[field],
     );
@@ -224,16 +220,16 @@ export async function updateExercise(id: Id, patch: ExerciseUpdate): Promise<Exe
       changes.nameKey = nameKey;
     }
 
-    // Conséquence dérivée, pas une erreur à remonter : un exercice au poids du
-    // corps n'a pas de champ de charge, donc pas de pas de progression. Exiger
-    // de l'appelant qu'il pense à l'effacer lui-même ne produirait qu'un refus
-    // incompréhensible — et la valeur effacée n'a, par définition, plus de sens.
+    // A derived consequence, not an error to report: a bodyweight exercise has
+    // no load field, so no progression step. Requiring the caller to clear it
+    // themselves would only produce a baffling rejection — and the cleared
+    // value has, by definition, stopped meaning anything.
     const nextLoadType = patch.loadType ?? existing.loadType;
     if (nextLoadType === 'bodyweight' && !('defaultIncrementKg' in changes)) {
       changes.defaultIncrementKg = undefined;
     }
 
-    // Merge aligné sur `Table.update` : clé présente à `undefined` = suppression.
+    // Merge aligned with `Table.update`: a key present and `undefined` clears it.
     const next = { ...existing } as Record<string, unknown>;
     for (const key of Object.keys(changes)) {
       const value = changes[key as keyof typeof changes];
@@ -247,10 +243,10 @@ export async function updateExercise(id: Id, patch: ExerciseUpdate): Promise<Exe
 }
 
 /**
- * Archive un exercice : il quitte le sélecteur, **l'historique reste intact**.
- * Aucune `SetEntry` n'est touchée, la progression passée reste consultable.
+ * Archives an exercise: it leaves the picker, **the history stays intact**. No
+ * `SetEntry` is touched and past progression remains readable.
  *
- * Idempotent : réarchiver un exercice déjà archivé le retourne inchangé.
+ * Idempotent: re-archiving an archived exercise returns it unchanged.
  */
 export async function archiveExercise(
   id: Id,
@@ -258,7 +254,7 @@ export async function archiveExercise(
 ): Promise<Exercise> {
   return db.transaction('rw', db.exercises, async () => {
     const exercise = await db.exercises.get(id);
-    if (!exercise) throw new Error(`Exercice introuvable : ${id}`);
+    if (!exercise) throw new Error(`Exercise not found: ${id}`);
     if (exercise.archivedAt !== undefined) return exercise;
 
     await db.exercises.update(id, { archivedAt });
@@ -266,15 +262,15 @@ export async function archiveExercise(
   });
 }
 
-/** Remet un exercice dans le sélecteur. Idempotent. */
+/** Puts an exercise back in the picker. Idempotent. */
 export async function unarchiveExercise(id: Id): Promise<Exercise> {
   return db.transaction('rw', db.exercises, async () => {
     const exercise = await db.exercises.get(id);
-    if (!exercise) throw new Error(`Exercice introuvable : ${id}`);
+    if (!exercise) throw new Error(`Exercise not found: ${id}`);
     if (exercise.archivedAt === undefined) return exercise;
 
-    // `undefined` supprime la propriété, la ligne sort donc de l'index
-    // `archivedAt` — c'est ce qui la fait réapparaître dans le sélecteur.
+    // `undefined` deletes the property, so the row leaves the `archivedAt`
+    // index — which is what makes it reappear in the picker.
     await db.exercises.update(id, { archivedAt: undefined });
 
     const unarchived = { ...exercise };

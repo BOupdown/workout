@@ -12,13 +12,13 @@ import {
 import { referenceExercises, resetDatabase } from './helpers';
 
 let squat: Exercise;
-let pompes: Exercise;
-let gainage: Exercise;
-let traction: Exercise;
+let pushUps: Exercise;
+let plank: Exercise;
+let pullUp: Exercise;
 
 beforeEach(async () => {
   await resetDatabase();
-  ({ squat, pompes, gainage, traction } = await referenceExercises());
+  ({ squat, pushUps, plank, pullUp } = await referenceExercises());
 });
 
 /** Série minimale : seuls les champs lus par la progression sont renseignés. */
@@ -41,15 +41,15 @@ describe('progressionMetric', () => {
   });
 
   it('suit le lest pour un exercice lesté', () => {
-    expect(progressionMetric(traction)).toBe('weightKg');
+    expect(progressionMetric(pullUp)).toBe('weightKg');
   });
 
   it('suit les répétitions au poids du corps', () => {
-    expect(progressionMetric(pompes)).toBe('reps');
+    expect(progressionMetric(pushUps)).toBe('reps');
   });
 
   it('suit la durée pour un exercice au temps', () => {
-    expect(progressionMetric(gainage)).toBe('durationSec');
+    expect(progressionMetric(plank)).toBe('durationSec');
   });
 });
 
@@ -112,7 +112,7 @@ describe('buildProgression', () => {
   it('suit les répétitions au poids du corps, sans annotation de charge', () => {
     const points = buildProgression(
       [set({ performedAt: 100, reps: 25 }), set({ performedAt: 100, reps: 30 })],
-      pompes,
+      pushUps,
     );
 
     expect(points[0].value).toBe(30);
@@ -120,7 +120,7 @@ describe('buildProgression', () => {
   });
 
   it('suit la durée pour un exercice au temps', () => {
-    const points = buildProgression([set({ performedAt: 100, durationSec: 90 })], gainage);
+    const points = buildProgression([set({ performedAt: 100, durationSec: 90 })], plank);
     expect(points[0].value).toBe(90);
   });
 

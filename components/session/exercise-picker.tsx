@@ -14,10 +14,10 @@ interface ExercisePickerProps {
 }
 
 /**
- * Sélection d'un exercice à ajouter à la séance.
+ * Picking an exercise to add to the session.
  *
- * La recherche passe par `toNameKey`, la même normalisation que l'index unique :
- * taper « developpe » trouve « Développé couché ».
+ * Search goes through `toNameKey`, the same normalisation as the unique index:
+ * typing "bench" finds "Bench press".
  */
 export function ExercisePicker({ onPick, onClose }: ExercisePickerProps) {
   const [search, setSearch] = useState('');
@@ -38,8 +38,8 @@ export function ExercisePicker({ onPick, onClose }: ExercisePickerProps) {
           <input
             type="search"
             autoComplete="off"
-            placeholder="Rechercher"
-            aria-label="Rechercher un exercice"
+            placeholder="Search"
+            aria-label="Search exercises"
             value={search}
             onChange={(event) => setSearch(event.target.value)}
             className="h-12 w-full rounded-control border border-line bg-surface pr-3 pl-9 text-base text-ink outline-none placeholder:text-muted focus:border-ink"
@@ -50,7 +50,7 @@ export function ExercisePicker({ onPick, onClose }: ExercisePickerProps) {
           onClick={onClose}
           className="h-12 shrink-0 rounded-control px-2 text-[0.9375rem] font-medium text-muted transition-transform active:scale-95"
         >
-          Annuler
+          Cancel
         </button>
       </div>
 
@@ -64,17 +64,17 @@ export function ExercisePicker({ onPick, onClose }: ExercisePickerProps) {
         ) : matches.length === 0 ? (
           <li className="py-8 text-center">
             <p className="text-sm text-muted">
-              Aucun exercice ne correspond à « {search.trim()} ».
+              No exercise matches “{search.trim()}”.
             </p>
-            {/* Le moment ou l'exercice manque est celui ou on veut le creer :
-                le nom cherche part directement dans le formulaire. */}
+            {/* The moment an exercise is missing is the moment you want to
+                create it: the searched name goes straight into the form. */}
             <button
               type="button"
               onClick={() => setCreating(true)}
               className="mt-3 inline-flex min-h-12 items-center gap-2 rounded-control bg-accent px-4 text-sm font-semibold text-accent-ink transition-transform active:scale-95"
             >
               <Plus size={16} weight="bold" />
-              Créer « {search.trim()} »
+              Create “{search.trim()}”
             </button>
           </li>
         ) : (
@@ -103,7 +103,7 @@ export function ExercisePicker({ onPick, onClose }: ExercisePickerProps) {
               className="flex min-h-14 w-full items-center justify-center gap-2 rounded-panel border border-dashed border-line text-[0.9375rem] font-medium text-muted transition-transform active:scale-[0.99]"
             >
               <Plus size={18} weight="bold" />
-              Nouvel exercice
+              New exercise
             </button>
           </li>
         ) : null}

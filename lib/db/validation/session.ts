@@ -1,9 +1,9 @@
 /**
- * Validation des invariants de `Session` et `SessionExercise`.
+ * Validation of `Session` and `SessionExercise` invariants.
  *
- * Même découpage que pour les séries : ce qui se vérifie sans lecture part dans
- * les hooks Dexie, ce qui demande de lire une autre entité reste dans la couche
- * transactionnelle (`../sessions`).
+ * Same split as for sets: whatever needs no read goes to the Dexie hooks, and
+ * whatever requires reading another entity stays in the transactional layer
+ * (`../sessions`).
  */
 
 import { isLocalDate } from '../keys';
@@ -20,7 +20,7 @@ import {
   type ValidationIssue,
 } from './common';
 
-/** Garde-fous de saisie, même logique que `SET_LIMITS`. */
+/** Entry guards, same reasoning as `SET_LIMITS`. */
 export const SESSION_LIMITS = {
   maxBodyweightKg: 700,
 } as const;
@@ -30,16 +30,16 @@ export const SESSION_LIMITS = {
 // ---------------------------------------------------------------------------
 
 /**
- * Invariants structurels d'une séance.
+ * Structural invariants of a session.
  *
- * Note : on vérifie le **format** de `date` mais pas sa cohérence avec
- * `startedAt`. `date` est figée à la création, dans le fuseau de l'utilisateur
- * d'alors ; exiger qu'elle corresponde toujours au jour local de `startedAt`
- * casserait toute séance saisie avant un changement de fuseau.
+ * Note: the **format** of `date` is checked, but not its consistency with
+ * `startedAt`. `date` is frozen at creation, in the user's timezone at that
+ * moment; requiring it to always match the local day of `startedAt` would break
+ * every session logged before a timezone change.
  */
 export function checkSessionShape(value: unknown): ValidationIssue[] {
   const s = asRecord(value);
-  if (!s) return [notAnObjectIssue('La séance')];
+  if (!s) return [notAnObjectIssue('A session')];
 
   const issues: ValidationIssue[] = [];
 
@@ -47,7 +47,7 @@ export function checkSessionShape(value: unknown): ValidationIssue[] {
     issues.push({
       field: 'id',
       code: 'invalid_id',
-      message: '« id » doit être un identifiant non vide.',
+      message: 'Session id must be a non-empty identifier.',
     });
   }
 
@@ -56,7 +56,7 @@ export function checkSessionShape(value: unknown): ValidationIssue[] {
       issues.push({
         field,
         code: 'invalid_timestamp',
-        message: `« ${field} » doit être un timestamp positif.`,
+        message: `Field ${field} must be a positive timestamp.`,
       });
     }
   }
@@ -65,7 +65,7 @@ export function checkSessionShape(value: unknown): ValidationIssue[] {
     issues.push({
       field: 'date',
       code: 'invalid_date',
-      message: '« date » doit être un jour réel au format AAAA-MM-JJ.',
+      message: 'Date must be a real day in YYYY-MM-DD form.',
     });
   }
 
@@ -74,14 +74,14 @@ export function checkSessionShape(value: unknown): ValidationIssue[] {
       issues.push({
         field: 'endedAt',
         code: 'invalid_timestamp',
-        message: '« endedAt » doit être un timestamp positif.',
+        message: 'End time must be a positive timestamp.',
       });
     } else if (isTimestamp(s.startedAt) && s.endedAt < s.startedAt) {
-      // Structurel : les deux champs sont sur la même ligne, aucune lecture.
+      // Structural: both fields sit on the same row, no read involved.
       issues.push({
         field: 'endedAt',
         code: 'ends_before_start',
-        message: 'Une séance ne peut pas se terminer avant d’avoir commencé.',
+        message: 'A session cannot end before it started.',
       });
     }
   }
@@ -91,13 +91,13 @@ export function checkSessionShape(value: unknown): ValidationIssue[] {
       issues.push({
         field: 'bodyweightKg',
         code: 'invalid_bodyweight',
-        message: 'Le poids de corps doit être un nombre strictement positif, en kg.',
+        message: 'Bodyweight must be a positive number, in kilograms.',
       });
     } else if (s.bodyweightKg > SESSION_LIMITS.maxBodyweightKg) {
       issues.push({
         field: 'bodyweightKg',
         code: 'bodyweight_out_of_range',
-        message: `Le poids de corps ne peut pas dépasser ${SESSION_LIMITS.maxBodyweightKg} kg.`,
+        message: `Bodyweight cannot exceed ${SESSION_LIMITS.maxBodyweightKg} kg.`,
       });
     }
   }
@@ -107,7 +107,7 @@ export function checkSessionShape(value: unknown): ValidationIssue[] {
       issues.push({
         field,
         code: 'invalid_text',
-        message: `« ${field} » doit être du texte.`,
+        message: `Field ${field} must be text.`,
       });
     }
   }
@@ -126,7 +126,7 @@ export function assertSessionShape(value: unknown): void {
 
 export function checkSessionExerciseShape(value: unknown): ValidationIssue[] {
   const b = asRecord(value);
-  if (!b) return [notAnObjectIssue('L’exercice de la séance')];
+  if (!b) return [notAnObjectIssue('A session exercise')];
 
   const issues: ValidationIssue[] = [];
 
@@ -135,7 +135,7 @@ export function checkSessionExerciseShape(value: unknown): ValidationIssue[] {
       issues.push({
         field,
         code: 'invalid_id',
-        message: `« ${field} » doit être un identifiant non vide.`,
+        message: `Field ${field} must be a non-empty identifier.`,
       });
     }
   }
@@ -144,7 +144,7 @@ export function checkSessionExerciseShape(value: unknown): ValidationIssue[] {
     issues.push({
       field: 'order',
       code: 'invalid_order',
-      message: '« order » doit être un entier positif ou nul.',
+      message: 'Order must be a non-negative integer.',
     });
   }
 
@@ -152,7 +152,7 @@ export function checkSessionExerciseShape(value: unknown): ValidationIssue[] {
     issues.push({
       field: 'supersetGroup',
       code: 'invalid_superset_group',
-      message: '« supersetGroup » doit être un entier positif ou nul.',
+      message: 'Superset group must be a non-negative integer.',
     });
   }
 
@@ -160,7 +160,7 @@ export function checkSessionExerciseShape(value: unknown): ValidationIssue[] {
     issues.push({
       field: 'notes',
       code: 'invalid_notes',
-      message: 'Les notes doivent être du texte.',
+      message: 'Notes must be text.',
     });
   }
 
@@ -173,9 +173,9 @@ export function assertSessionExerciseShape(value: unknown): void {
 }
 
 /**
- * Contrôle contextuel : un exercice archivé ne peut pas être ajouté à une
- * séance. C'est tout l'intérêt de l'archivage — sortir un mouvement du
- * sélecteur sans toucher à l'historique déjà saisi.
+ * Contextual check: an archived exercise cannot be added to a session. That is
+ * the whole point of archiving - taking a movement out of the picker without
+ * touching the history already logged.
  */
 export function assertExerciseSelectable(exercise: Pick<Exercise, 'name' | 'archivedAt'>): void {
   if (exercise.archivedAt !== undefined) {
@@ -183,7 +183,7 @@ export function assertExerciseSelectable(exercise: Pick<Exercise, 'name' | 'arch
       {
         field: 'exerciseId',
         code: 'exercise_archived',
-        message: `« ${exercise.name} » est archivé et ne peut pas être ajouté à une séance.`,
+        message: `${exercise.name} is archived and cannot be added to a session.`,
       },
     ]);
   }
