@@ -11,19 +11,24 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { getActiveSession } from '@/lib/db/sessions';
+import { TAB_ORDER, type TabHref } from '@/lib/navigation';
 
 interface Tab {
-  href: string;
+  href: TabHref;
   label: string;
   icon: Icon;
 }
 
-const TABS: Tab[] = [
-  { href: '/', label: 'Session', icon: Barbell },
-  { href: '/history', label: 'History', icon: ClockCounterClockwise },
-  { href: '/progress', label: 'Progress', icon: ChartLineUp },
-  { href: '/settings', label: 'Settings', icon: SlidersHorizontal },
-];
+const LABELS: Record<TabHref, { label: string; icon: Icon }> = {
+  '/': { label: 'Session', icon: Barbell },
+  '/history': { label: 'History', icon: ClockCounterClockwise },
+  '/progress': { label: 'Progress', icon: ChartLineUp },
+  '/settings': { label: 'Settings', icon: SlidersHorizontal },
+};
+
+// Built from the shared order, so the tabs drawn left to right are exactly the
+// ones the swipe gesture walks through.
+const TABS: Tab[] = TAB_ORDER.map((href) => ({ href, ...LABELS[href] }));
 
 /**
  * Main navigation, at the bottom within thumb reach.
