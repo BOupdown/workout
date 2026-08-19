@@ -28,7 +28,7 @@ export function ExercisePicker({ onPick, onClose }: ExercisePickerProps) {
   const matches = (exercises ?? []).filter((exercise) => exercise.nameKey.includes(needle));
 
   return (
-    <div className="fixed inset-0 z-10 flex flex-col bg-surface">
+    <div data-no-swipe className="fixed inset-0 z-10 flex flex-col bg-surface">
       <div className="flex shrink-0 items-center gap-2 border-b border-line bg-raised px-4 pt-[calc(env(safe-area-inset-top)+0.875rem)] pb-3.5">
         <div className="relative flex-1">
           <MagnifyingGlass
