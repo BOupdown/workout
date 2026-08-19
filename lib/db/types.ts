@@ -7,8 +7,9 @@
  *   └─ SessionExercise  un exercice *dans* une séance (le « bloc »), porte l'ordre
  *      └─ SetEntry      une série exécutée : poids / reps / temps
  *
- * Toutes les charges sont stockées en **kilogrammes**. La conversion en lb est un
- * problème d'affichage, jamais de stockage.
+ * Toutes les charges sont en **kilogrammes**, stockage et affichage. L'app est
+ * en kg, sans option d'unité : c'est un choix produit, pas une limitation
+ * technique à lever plus tard.
  */
 
 /** Identifiant opaque (UUID v4). Voir `newId()` dans `./db`. */
