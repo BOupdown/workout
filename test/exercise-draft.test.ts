@@ -5,6 +5,8 @@ import {
   draftAllowsIncrement,
   EMPTY_EXERCISE_DRAFT,
   exerciseDraftToInput,
+  exerciseDraftToUpdate,
+  exerciseToDraft,
   LOAD_TYPE_OPTIONS,
   METRIC_OPTIONS,
   MUSCLE_GROUP_LABELS,
@@ -132,5 +134,95 @@ describe('exerciseDraftToInput — accord avec la base', () => {
 
   it('refuse un nom vide via la validation de la base', async () => {
     await expect(createExercise(exerciseDraftToInput(draft({ name: '   ' })))).rejects.toThrow();
+  });
+});
+
+describe('exerciseToDraft', () => {
+  it('recharge un exercice existant sans rien perdre', async () => {
+    const exercise = await createExercise({
+      name: 'Face pull',
+      loadType: 'external',
+      metric: 'reps',
+      perSide: true,
+      muscleGroup: 'shoulders',
+      defaultIncrementKg: 2.5,
+    });
+
+    expect(exerciseToDraft(exercise)).toEqual({
+      name: 'Face pull',
+      loadType: 'external',
+      metric: 'reps',
+      perSide: true,
+      muscleGroup: 'shoulders',
+      defaultIncrementKg: '2.5',
+    });
+  });
+
+  it('rend des champs vides pour ce qui n’est pas renseigné', async () => {
+    const exercise = await createExercise({
+      name: 'Ring dip',
+      loadType: 'bodyweight',
+      metric: 'reps',
+    });
+
+    const draft = exerciseToDraft(exercise);
+    expect(draft.muscleGroup).toBe('');
+    expect(draft.defaultIncrementKg).toBe('');
+  });
+
+  it('fait un aller-retour stable', async () => {
+    // Ouvrir le formulaire puis enregistrer sans rien toucher ne doit rien
+    // changer : c'est ce qui rend une correction de nom sans danger.
+    const exercise = await createExercise({
+      name: 'Pendlay row',
+      loadType: 'external',
+      metric: 'reps',
+      perSide: false,
+      muscleGroup: 'back',
+      defaultIncrementKg: 2.5,
+    });
+
+    const update = exerciseDraftToUpdate(exerciseToDraft(exercise));
+    expect(update).toMatchObject({
+      name: 'Pendlay row',
+      loadType: 'external',
+      metric: 'reps',
+      perSide: false,
+      muscleGroup: 'back',
+      defaultIncrementKg: 2.5,
+    });
+  });
+});
+
+describe('exerciseDraftToUpdate', () => {
+  it('coupe les espaces autour du nom', () => {
+    expect(exerciseDraftToUpdate(draft({ name: '  Face pull  ' })).name).toBe('Face pull');
+  });
+
+  it('rend undefined, et non une absence, pour un groupe musculaire effacé', () => {
+    // La différence compte : `Table.update` lit une clé présente à `undefined`
+    // comme « supprime-la », et une clé absente comme « n'y touche pas ». Sans
+    // ça, effacer un groupe musculaire serait impossible.
+    const update = exerciseDraftToUpdate(draft({ muscleGroup: '' }));
+    expect('muscleGroup' in update).toBe(true);
+    expect(update.muscleGroup).toBeUndefined();
+  });
+
+  it('efface le pas de progression quand la charge disparaît', () => {
+    // Un exercice au poids du corps n'a pas de charge à incrémenter.
+    const update = exerciseDraftToUpdate(
+      draft({ loadType: 'bodyweight', defaultIncrementKg: '2.5' }),
+    );
+    expect('defaultIncrementKg' in update).toBe(true);
+    expect(update.defaultIncrementKg).toBeUndefined();
+  });
+
+  it('renvoie toujours les champs de nature, même inchangés', () => {
+    // updateExercise ne compte que les changements *effectifs* : les renvoyer
+    // tels quels doit rester un no-op, pas un rejet.
+    const update = exerciseDraftToUpdate(draft());
+    expect(update.loadType).toBe('external');
+    expect(update.metric).toBe('reps');
+    expect(update.perSide).toBe(false);
   });
 });

@@ -1,6 +1,6 @@
 'use client';
 
-import { ArrowLeft, TrendUp } from '@phosphor-icons/react';
+import { ArrowLeft, PencilSimple, TrendUp } from '@phosphor-icons/react';
 import { useExerciseProgression } from '@/hooks/use-exercise-progression';
 import { useWeightUnit } from '@/hooks/use-weight-unit';
 import type { Exercise } from '@/lib/db/types';
@@ -11,6 +11,8 @@ import { ProgressionChart } from './progression-chart';
 
 interface ProgressionSheetProps {
   exercise: Exercise;
+  /** Absent inside a session: editing the catalogue is not a between-sets gesture. */
+  onEdit?: () => void;
   onClose: () => void;
 }
 
@@ -27,7 +29,7 @@ const DATE_FORMAT = new Intl.DateTimeFormat('en-GB', {
  * then the session-by-session table. The table is not decorative padding - it
  * is what guarantees no value is reachable only through the chart's tooltip.
  */
-export function ProgressionSheet({ exercise, onClose }: ProgressionSheetProps) {
+export function ProgressionSheet({ exercise, onEdit, onClose }: ProgressionSheetProps) {
   const { loading, points, metric, delta, recentSets } = useExerciseProgression(exercise);
   const [unit] = useWeightUnit();
 
@@ -60,10 +62,25 @@ export function ProgressionSheet({ exercise, onClose }: ProgressionSheetProps) {
         >
           <ArrowLeft size={20} weight="bold" />
         </button>
-        <div className="min-w-0">
+        <div className="min-w-0 flex-1">
           <h2 className="truncate text-[0.9375rem] font-semibold text-ink">{exercise.name}</h2>
-          <p className="text-xs text-muted">Progression</p>
+          <p className="text-xs text-muted">
+            {exercise.archivedAt !== undefined ? 'Archived' : 'Progression'}
+          </p>
         </div>
+
+        {/* The way into the catalogue: you notice the typo while reading the
+            curve, which is where the name is under your eyes. */}
+        {onEdit ? (
+          <button
+            type="button"
+            onClick={onEdit}
+            aria-label={`Edit ${exercise.name}`}
+            className="mr-1 flex h-11 w-11 shrink-0 items-center justify-center rounded-control text-ink transition-transform active:scale-95"
+          >
+            <PencilSimple size={19} weight="bold" />
+          </button>
+        ) : null}
       </header>
 
       <div className="flex-1 space-y-3 overflow-y-auto p-4 pb-[calc(env(safe-area-inset-bottom)+1rem)]">

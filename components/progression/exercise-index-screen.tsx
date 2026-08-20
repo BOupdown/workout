@@ -1,12 +1,13 @@
 'use client';
 
-import { CaretRight, MagnifyingGlass, Plus } from '@phosphor-icons/react';
+import { Archive, CaretRight, MagnifyingGlass, Plus } from '@phosphor-icons/react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { useState } from 'react';
-import { listSelectableExercises } from '@/lib/db/exercises';
+import { listArchivedExercises, listSelectableExercises } from '@/lib/db/exercises';
 import { toNameKey } from '@/lib/db/keys';
 import { countSetsForExercise } from '@/lib/db/sets';
 import type { Exercise } from '@/lib/db/types';
+import { ExerciseEditSheet } from '@/components/exercises/exercise-edit-sheet';
 import { ExerciseFormSheet } from '@/components/exercises/exercise-form-sheet';
 import { ProgressionSheet } from './progression-sheet';
 
@@ -19,9 +20,16 @@ import { ProgressionSheet } from './progression-sheet';
 export function ExerciseIndexScreen() {
   const [search, setSearch] = useState('');
   const [openExercise, setOpenExercise] = useState<Exercise | null>(null);
+  const [editing, setEditing] = useState<Exercise | null>(null);
   const [creating, setCreating] = useState(false);
+  const [showArchived, setShowArchived] = useState(false);
 
-  const exercises = useLiveQuery(() => listSelectableExercises(), []);
+  const active = useLiveQuery(() => listSelectableExercises(), []);
+  // Loaded unconditionally, because the count is what decides whether the
+  // archive is worth mentioning at all.
+  const archived = useLiveQuery(() => listArchivedExercises(), []);
+
+  const exercises = showArchived ? archived : active;
 
   // An exercise never trained has nothing to show: it goes to the end of the
   // list rather than being hidden, so the catalogue stays complete.
@@ -70,6 +78,22 @@ export function ExerciseIndexScreen() {
             className="h-12 w-full rounded-control border border-line bg-surface pr-3 pl-9 text-base text-ink outline-none placeholder:text-muted focus:border-ink"
           />
         </div>
+
+        {(archived?.length ?? 0) > 0 ? (
+          <button
+            type="button"
+            onClick={() => setShowArchived((shown) => !shown)}
+            aria-pressed={showArchived}
+            className={`mt-2 flex min-h-11 items-center gap-1.5 rounded-control px-2.5 text-sm font-medium transition-transform active:scale-[0.98] ${
+              showArchived ? 'bg-ink text-surface' : 'text-muted'
+            }`}
+          >
+            <Archive size={16} weight="bold" />
+            {showArchived
+              ? 'Back to the catalogue'
+              : `Archived (${archived?.length ?? 0})`}
+          </button>
+        ) : null}
       </header>
 
       <ul className="flex-1 overflow-y-auto p-4">
@@ -81,7 +105,9 @@ export function ExerciseIndexScreen() {
           </li>
         ) : matches.length === 0 ? (
           <li className="py-10 text-center text-sm text-muted">
-            No exercise matches “{search.trim()}”.
+            {search.trim() === ''
+              ? 'Nothing archived.'
+              : `No exercise matches “${search.trim()}”.`}
           </li>
         ) : (
           matches.map((exercise) => {
@@ -112,7 +138,25 @@ export function ExerciseIndexScreen() {
       </ul>
 
       {openExercise ? (
-        <ProgressionSheet exercise={openExercise} onClose={() => setOpenExercise(null)} />
+        <ProgressionSheet
+          exercise={openExercise}
+          onEdit={() => setEditing(openExercise)}
+          onClose={() => setOpenExercise(null)}
+        />
+      ) : null}
+
+      {editing ? (
+        <ExerciseEditSheet
+          exercise={editing}
+          onSaved={(saved) => {
+            // Both sheets held a copy of the old row: refresh the one still
+            // open underneath, so closing the editor does not reveal the name
+            // that was just corrected.
+            setOpenExercise((current) => (current?.id === saved.id ? saved : current));
+            setEditing(null);
+          }}
+          onClose={() => setEditing(null)}
+        />
       ) : null}
 
       {creating ? (

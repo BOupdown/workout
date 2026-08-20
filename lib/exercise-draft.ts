@@ -7,9 +7,9 @@
  * emitted.
  */
 
-import type { NewExerciseInput } from './db/exercises';
+import type { ExerciseUpdate, NewExerciseInput } from './db/exercises';
 import type { EffortMetric, Exercise, LoadType, MuscleGroup } from './db/types';
-import { parseNumberInput } from './format';
+import { formatNumber, parseNumberInput } from './format';
 
 export interface ExerciseDraft {
   name: string;
@@ -93,6 +93,45 @@ export function exerciseDraftToInput(draft: ExerciseDraft): NewExerciseInput {
   }
 
   return input;
+}
+
+/** Fills a draft from an exercise already saved, to edit it. */
+export function exerciseToDraft(exercise: Exercise): ExerciseDraft {
+  return {
+    name: exercise.name,
+    loadType: exercise.loadType,
+    metric: exercise.metric,
+    perSide: exercise.perSide,
+    muscleGroup: exercise.muscleGroup ?? '',
+    defaultIncrementKg:
+      exercise.defaultIncrementKg !== undefined ? formatNumber(exercise.defaultIncrementKg) : '',
+  };
+}
+
+/**
+ * Converts the draft into an `updateExercise` patch.
+ *
+ * Optional fields are always **present**, set to `undefined` when empty, which
+ * `Table.update` reads as "remove this key". Omitting them would instead mean
+ * "leave as is" — and clearing a muscle group would become impossible.
+ *
+ * The nature fields are sent back even when untouched: `updateExercise` only
+ * counts *effective* changes, so an unchanged value is a no-op rather than a
+ * rejection.
+ */
+export function exerciseDraftToUpdate(draft: ExerciseDraft): ExerciseUpdate {
+  const increment = draftAllowsIncrement(draft)
+    ? parseNumberInput(draft.defaultIncrementKg)
+    : null;
+
+  return {
+    name: draft.name.trim(),
+    loadType: draft.loadType,
+    metric: draft.metric,
+    perSide: draft.perSide,
+    muscleGroup: draft.muscleGroup === '' ? undefined : draft.muscleGroup,
+    defaultIncrementKg: increment ?? undefined,
+  };
 }
 
 /** Reduced view of an existing exercise, to offer reusing it. */
