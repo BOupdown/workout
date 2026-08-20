@@ -1,14 +1,11 @@
 'use client';
 
 import { Timer, X } from '@phosphor-icons/react';
-import { useEffect } from 'react';
 import type { RestProgress } from '@/lib/rest-timer';
 import { formatDuration } from '@/lib/format';
 
 interface RestTimerBarProps {
   progress: RestProgress;
-  /** Identifies the current rest, so the buzz fires once per rest, not per render. */
-  restKey: number;
   onExtend: (deltaSec: number) => void;
   onDismiss: () => void;
 }
@@ -22,24 +19,14 @@ const EXTEND_SEC = 30;
  * "Save set" button up the moment a set is logged, and moving that target is
  * exactly what breaks repeating a set in a single tap. At the top the bar takes
  * its room from the scrolling list, which nothing is aiming at.
+ *
+ * It is also the *only* signal the end of a rest gets. The web cannot alert a
+ * phone whose screen is off — iOS has no vibration API at all, and Chrome
+ * ignores one from a hidden page — so the bar is built to be read at a glance
+ * rather than to supplement a buzz that never comes.
  */
-export function RestTimerBar({ progress, restKey, onExtend, onDismiss }: RestTimerBarProps) {
+export function RestTimerBar({ progress, onExtend, onDismiss }: RestTimerBarProps) {
   const over = progress.phase === 'over';
-
-  useEffect(() => {
-    if (!over) return;
-
-    // Chrome refuses to vibrate before the page has been tapped, and *logs an
-    // error* when asked anyway. A rest that ends right after a reload is
-    // precisely that case, so the same gate is applied here rather than
-    // leaving an error in the console on every such reload.
-    if (navigator.userActivation && !navigator.userActivation.hasBeenActive) return;
-
-    // Android buzzes, iOS ignores this silently — no web API gets a phone to
-    // alert reliably from a background tab, so the bar carries the message
-    // visually on its own.
-    navigator.vibrate?.([120, 60, 120]);
-  }, [over, restKey]);
 
   return (
     <section

@@ -195,7 +195,6 @@ export function ActiveSessionScreen() {
       {rest.progress ? (
         <RestTimerBar
           progress={rest.progress}
-          restKey={rest.timer?.startedAt ?? 0}
           onExtend={rest.extend}
           onDismiss={rest.dismiss}
         />
