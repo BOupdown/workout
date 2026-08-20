@@ -4,6 +4,7 @@ import { Barbell, CaretRight, Plus } from '@phosphor-icons/react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { useState } from 'react';
 import { useActiveSession } from '@/hooks/use-active-session';
+import { useRestTimer } from '@/hooks/use-rest-timer';
 import { useSetDraft } from '@/hooks/use-set-draft';
 import { useWeightUnit } from '@/hooks/use-weight-unit';
 import {
@@ -25,6 +26,7 @@ import { BodyweightSheet } from './bodyweight-sheet';
 import { ExercisePicker } from './exercise-picker';
 import { ExerciseRow } from './exercise-row';
 import { SetEditorSheet } from './set-editor-sheet';
+import { RestTimerBar } from './rest-timer-bar';
 import { SessionHeader } from './session-header';
 import { SessionSkeleton } from './session-skeleton';
 import { SetEntryPanel } from './set-entry-panel';
@@ -61,6 +63,7 @@ export function ActiveSessionScreen() {
 
   const controller = useSetDraft(activeEntry);
   const [unit] = useWeightUnit();
+  const rest = useRestTimer();
 
   // Resolved from the loaded session: no extra query, and the sheet closes by
   // itself if the block disappears.
@@ -88,6 +91,7 @@ export function ActiveSessionScreen() {
     try {
       await endSession(detail.id);
       setSelectedBlockId(null);
+      rest.dismiss();
     } finally {
       setBusy(false);
     }
@@ -132,6 +136,9 @@ export function ActiveSessionScreen() {
       );
       setMessages(NO_MESSAGES);
       setJustLoggedSetId(set.id);
+      // Only once the set is in the database: a rejected set is a correction to
+      // make, not a rest to take.
+      rest.start();
     } catch (error) {
       setMessages(toFieldMessages(error, controller.visibleFields));
     } finally {
@@ -184,6 +191,15 @@ export function ActiveSessionScreen() {
         unit={unit}
         onEditBodyweight={() => setBodyweightOpen(true)}
       />
+
+      {rest.progress ? (
+        <RestTimerBar
+          progress={rest.progress}
+          restKey={rest.timer?.startedAt ?? 0}
+          onExtend={rest.extend}
+          onDismiss={rest.dismiss}
+        />
+      ) : null}
 
       <div className="flex-1 space-y-2 overflow-y-auto p-4">
         {entries.map((entry) => (
