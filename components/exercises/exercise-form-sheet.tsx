@@ -1,19 +1,16 @@
 'use client';
 
-import { ArrowLeft, Check } from '@phosphor-icons/react';
+import { ArrowLeft } from '@phosphor-icons/react';
 import { useState } from 'react';
 import { createExercise, ExerciseNameConflictError } from '@/lib/db/exercises';
-import type { Exercise, MuscleGroup } from '@/lib/db/types';
+import type { Exercise } from '@/lib/db/types';
 import { ValidationError } from '@/lib/db/validation';
 import {
-  draftAllowsIncrement,
   EMPTY_EXERCISE_DRAFT,
   exerciseDraftToInput,
-  LOAD_TYPE_OPTIONS,
-  METRIC_OPTIONS,
-  MUSCLE_GROUP_LABELS,
   type ExerciseDraft,
 } from '@/lib/exercise-draft';
+import { ExerciseFields } from './exercise-fields';
 
 interface ExerciseFormSheetProps {
   /** Pre-filled name, when creation starts from a fruitless search. */
@@ -86,18 +83,7 @@ export function ExerciseFormSheet({
       </header>
 
       <div className="flex-1 space-y-4 overflow-y-auto p-4">
-        <Field label="Name">
-          <input
-            type="text"
-            autoComplete="off"
-            autoFocus
-            aria-label="Exercise name"
-            value={draft.name}
-            onChange={(event) => patch({ name: event.target.value })}
-            placeholder="Face pull"
-            className="h-14 w-full rounded-control border-2 border-line bg-raised px-3.5 text-base text-ink outline-none placeholder:text-muted focus:border-ink"
-          />
-        </Field>
+        <ExerciseFields draft={draft} patch={patch} autoFocusName />
 
         {conflict ? (
           <div role="alert" className="rounded-panel bg-raised px-4 py-3.5">
@@ -119,101 +105,6 @@ export function ExerciseFormSheet({
             {error}
           </p>
         ) : null}
-
-        <Field label="How the load works">
-          <div className="space-y-1.5">
-            {LOAD_TYPE_OPTIONS.map((option) => (
-              <button
-                key={option.value}
-                type="button"
-                onClick={() => patch({ loadType: option.value })}
-                aria-pressed={draft.loadType === option.value}
-                className={`flex min-h-14 w-full flex-col justify-center rounded-control border-2 px-3.5 py-2 text-left transition-transform active:scale-[0.99] ${
-                  draft.loadType === option.value
-                    ? 'border-ink bg-raised'
-                    : 'border-transparent bg-raised'
-                }`}
-              >
-                <span className="text-[0.9375rem] font-medium text-ink">{option.label}</span>
-                <span className="text-xs text-muted">{option.hint}</span>
-              </button>
-            ))}
-          </div>
-        </Field>
-
-        <Field label="What you count">
-          <div className="flex gap-1.5">
-            {METRIC_OPTIONS.map((option) => (
-              <button
-                key={option.value}
-                type="button"
-                onClick={() => patch({ metric: option.value })}
-                aria-pressed={draft.metric === option.value}
-                className={`h-14 flex-1 rounded-control border-2 text-[0.9375rem] font-medium transition-transform active:scale-[0.98] ${
-                  draft.metric === option.value
-                    ? 'border-ink bg-raised text-ink'
-                    : 'border-transparent bg-raised text-muted'
-                }`}
-              >
-                {option.label}
-              </button>
-            ))}
-          </div>
-        </Field>
-
-        {draftAllowsIncrement(draft) ? (
-          <Field label="Progression step" hint="what the + and − buttons add">
-            <input
-              type="text"
-              inputMode="decimal"
-              autoComplete="off"
-              aria-label="Progression step in kilograms"
-              value={draft.defaultIncrementKg}
-              onChange={(event) => patch({ defaultIncrementKg: event.target.value })}
-              placeholder="2.5"
-              className="h-14 w-full rounded-control border-2 border-line bg-raised px-3.5 font-mono text-base text-ink tabular-nums outline-none placeholder:text-muted focus:border-ink"
-            />
-          </Field>
-        ) : null}
-
-        <Field label="Muscle group" hint="optional">
-          <select
-            aria-label="Muscle group"
-            value={draft.muscleGroup}
-            onChange={(event) => patch({ muscleGroup: event.target.value as MuscleGroup | '' })}
-            className="h-14 w-full rounded-control border-2 border-line bg-raised px-3 text-base text-ink outline-none focus:border-ink"
-          >
-            <option value="">Not specified</option>
-            {Object.entries(MUSCLE_GROUP_LABELS).map(([value, label]) => (
-              <option key={value} value={value}>
-                {label}
-              </option>
-            ))}
-          </select>
-        </Field>
-
-        <button
-          type="button"
-          onClick={() => patch({ perSide: !draft.perSide })}
-          aria-pressed={draft.perSide}
-          className={`flex min-h-14 w-full items-center justify-between gap-3 rounded-control border-2 px-3.5 text-left transition-transform active:scale-[0.99] ${
-            draft.perSide ? 'border-ink bg-raised' : 'border-transparent bg-raised'
-          }`}
-        >
-          <span>
-            <span className="block text-[0.9375rem] font-medium text-ink">Counted per side</span>
-            <span className="block text-xs text-muted">
-              “10 reps” means 10 per arm or per leg
-            </span>
-          </span>
-          <span
-            className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full ${
-              draft.perSide ? 'bg-accent text-accent-ink' : 'bg-surface text-transparent'
-            }`}
-          >
-            <Check size={14} weight="bold" />
-          </span>
-        </button>
       </div>
 
       <div className="shrink-0 border-t border-line bg-raised px-4 pt-3 pb-[calc(env(safe-area-inset-bottom)+0.875rem)]">
@@ -226,27 +117,6 @@ export function ExerciseFormSheet({
           {saving ? 'Creating…' : 'Create exercise'}
         </button>
       </div>
-    </div>
-  );
-}
-
-function Field({
-  label,
-  hint,
-  children,
-}: {
-  label: string;
-  hint?: string;
-  children: React.ReactNode;
-}) {
-  return (
-    <div>
-      {/* Label above the field, never a placeholder standing in for one. */}
-      <p className="mb-1.5 text-[0.6875rem] font-semibold tracking-[0.08em] text-muted uppercase">
-        {label}
-        {hint ? <span className="normal-case"> · {hint}</span> : null}
-      </p>
-      {children}
     </div>
   );
 }
