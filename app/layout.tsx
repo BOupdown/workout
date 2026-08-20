@@ -1,8 +1,5 @@
 import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
-import { SwipeNavigator } from "@/components/nav/swipe-navigator";
-import { TabBar } from "@/components/nav/tab-bar";
-import { ServiceWorkerRegistrar } from "@/components/pwa/service-worker-registrar";
 import { StorageGuard } from "@/components/storage/storage-guard";
 import "./globals.css";
 
@@ -67,17 +64,8 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
       lang="en"
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
-      <body className="min-h-full">
-        {/* The shell owns the height; each screen fills `main` with h-full and
-            handles its own scrolling. */}
-        <div className="flex h-[100dvh] flex-col">
-          <main className="min-h-0 flex-1">
-            <StorageGuard>{children}</StorageGuard>
-          </main>
-          <SwipeNavigator />
-          <ServiceWorkerRegistrar />
-          <TabBar />
-        </div>
+      <body className="h-full">
+        <StorageGuard>{children}</StorageGuard>
       </body>
     </html>
   );

@@ -50,7 +50,7 @@ export function ProgressionSheet({ exercise, onClose }: ProgressionSheetProps) {
   );
 
   return (
-    <div data-no-swipe className="fixed inset-0 z-20 flex flex-col bg-surface">
+    <div className="fixed inset-0 z-20 flex flex-col bg-surface">
       <header className="flex shrink-0 items-center gap-2 border-b border-line bg-raised px-2 pt-[calc(env(safe-area-inset-top)+0.875rem)] pb-3.5">
         <button
           type="button"
