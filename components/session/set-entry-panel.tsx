@@ -70,8 +70,9 @@ export function SetEntryPanel({
   return (
     <section
       aria-label={`Log a set of ${entry.exercise.name}`}
-      /* A horizontal drag here means adjusting a value, not changing tab. */
-      data-no-swipe
+      /* `touch-action: pan-y` tells the browser a horizontal drag here is not
+         a scroll: adjusting a value must never slide the tab track. */
+      style={{ touchAction: 'pan-y' }}
       className="shrink-0 border-t border-line bg-raised px-4 pt-2 pb-[calc(env(safe-area-inset-bottom)+0.875rem)]"
     >
       <div className="mb-2 flex items-center justify-between gap-2">

@@ -7,38 +7,32 @@ import {
   SlidersHorizontal,
   type Icon,
 } from '@phosphor-icons/react';
-import Link from 'next/link';
-import { usePathname } from 'next/navigation';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { getActiveSession } from '@/lib/db/sessions';
-import { TAB_ORDER, type TabHref } from '@/lib/navigation';
+import { TABS, type TabLabel } from '@/lib/navigation';
 
-interface Tab {
-  href: TabHref;
-  label: string;
-  icon: Icon;
-}
-
-const LABELS: Record<TabHref, { label: string; icon: Icon }> = {
-  '/': { label: 'Session', icon: Barbell },
-  '/history': { label: 'History', icon: ClockCounterClockwise },
-  '/progress': { label: 'Progress', icon: ChartLineUp },
-  '/settings': { label: 'Settings', icon: SlidersHorizontal },
+const ICONS: Record<TabLabel, Icon> = {
+  Session: Barbell,
+  History: ClockCounterClockwise,
+  Progress: ChartLineUp,
+  Settings: SlidersHorizontal,
 };
 
-// Built from the shared order, so the tabs drawn left to right are exactly the
-// ones the swipe gesture walks through.
-const TABS: Tab[] = TAB_ORDER.map((href) => ({ href, ...LABELS[href] }));
+interface TabBarProps {
+  active: number;
+  onSelect: (index: number) => void;
+}
 
 /**
  * Main navigation, at the bottom within thumb reach.
  *
- * Four tabs, four real destinations: no decorative entry leading to an empty
- * screen. The accent carries the active tab's glyph rather than colouring it -
- * at that lightness, a green icon on a light background would vanish.
+ * Buttons rather than links: tapping scrolls the same track the finger swipes,
+ * so a tap and a swipe end in exactly the same place by exactly the same means.
+ *
+ * The accent carries the active tab's glyph rather than colouring it - at that
+ * lightness, a green icon on a light background would vanish.
  */
-export function TabBar() {
-  const pathname = usePathname();
+export function TabBar({ active, onSelect }: TabBarProps) {
   const activeSession = useLiveQuery(() => getActiveSession(), []);
 
   return (
@@ -47,18 +41,20 @@ export function TabBar() {
       className="shrink-0 border-t border-line bg-raised pb-[env(safe-area-inset-bottom)]"
     >
       <ul className="flex">
-        {TABS.map(({ href, label, icon: TabIcon }) => {
-          const isCurrent = href === '/' ? pathname === '/' : pathname.startsWith(href);
+        {TABS.map((label, index) => {
+          const TabIcon = ICONS[label];
+          const isCurrent = index === active;
           // A semantic dot: it signals a session actually in progress, it is
           // not decoration.
-          const showDot = href === '/' && activeSession !== undefined && activeSession !== null;
+          const showDot = index === 0 && activeSession !== undefined && activeSession !== null;
 
           return (
-            <li key={href} className="flex-1">
-              <Link
-                href={href}
+            <li key={label} className="flex-1">
+              <button
+                type="button"
+                onClick={() => onSelect(index)}
                 aria-current={isCurrent ? 'page' : undefined}
-                className="flex min-h-14 flex-col items-center justify-center gap-0.5 py-1.5 transition-transform active:scale-95"
+                className="flex min-h-14 w-full flex-col items-center justify-center gap-0.5 py-1.5 transition-transform active:scale-95"
               >
                 <span
                   className={`relative flex h-7 w-12 items-center justify-center rounded-full ${
@@ -77,7 +73,7 @@ export function TabBar() {
                 >
                   {label}
                 </span>
-              </Link>
+              </button>
             </li>
           );
         })}

@@ -22,8 +22,8 @@ const VERSION = 'v1';
 const SHELL_CACHE = `workout-shell-${VERSION}`;
 const ASSET_CACHE = `workout-assets-${VERSION}`;
 
-/** Les quatre onglets, pour qu'une première ouverture hors ligne aboutisse. */
-const SHELL_URLS = ['/', '/historique', '/progression', '/reglages'];
+/** The single route, so a first offline open succeeds. */
+const SHELL_URLS = ['/'];
 
 const STATIC_PATHS = ['/manifest.webmanifest', '/icon', '/apple-icon'];
 
