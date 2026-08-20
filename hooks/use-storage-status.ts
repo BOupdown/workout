@@ -1,18 +1,20 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useState, useSyncExternalStore } from 'react';
 
 export interface StorageStatus {
-  /** The Storage API is available in this browser. */
-  supported: boolean;
+  /** The Storage API is available in this browser. `null` until mounted. */
+  supported: boolean | null;
   /** `null` until the answer is known. */
   persisted: boolean | null;
   usageBytes: number | null;
   requestPersist: () => Promise<void>;
 }
 
-const supportsStorageApi = () =>
-  typeof navigator !== 'undefined' && typeof navigator.storage?.persisted === 'function';
+const supportsStorageApi = () => typeof navigator.storage?.persisted === 'function';
+
+/** Support never changes during a session: there is nothing to subscribe to. */
+const neverChanges = () => () => {};
 
 /**
  * Durable storage state.
@@ -26,7 +28,10 @@ const supportsStorageApi = () =>
  * honestly, with a backup offered instead.
  */
 export function useStorageStatus(): StorageStatus {
-  const supported = supportsStorageApi();
+  // `navigator` does not exist during the server render. Answering "not
+  // supported" there would contradict the first client render, so the server
+  // snapshot is `null` and the real answer only arrives once mounted.
+  const supported = useSyncExternalStore(neverChanges, supportsStorageApi, () => null);
 
   const [persisted, setPersisted] = useState<boolean | null>(null);
   const [usageBytes, setUsageBytes] = useState<number | null>(null);
