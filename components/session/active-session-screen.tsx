@@ -11,6 +11,7 @@ import {
   addExerciseToSession,
   endSession,
   removeExerciseFromSession,
+  reorderSessionExercises,
   SessionExerciseNotEmptyError,
   startSession,
 } from '@/lib/db/sessions';
@@ -19,6 +20,7 @@ import { createSet } from '@/lib/db/sets';
 import { formatElapsed } from '@/lib/format';
 import type { Id, SetEntry, SetKind } from '@/lib/db/types';
 import { NO_MESSAGES, toFieldMessages, type FieldMessages } from '@/lib/errors';
+import { moveBlock } from '@/lib/session-order';
 import { draftToSetInput } from '@/lib/set-draft';
 import { ProgressionSheet } from '@/components/progression/progression-sheet';
 import { SessionDetailSheet } from '@/components/history/session-detail-sheet';
@@ -126,6 +128,23 @@ export function ActiveSessionScreen() {
     }
   };
 
+  /**
+   * Moving a block. `reorderSessionExercises` wants the session's full order,
+   * not the pair that swapped, so the whole list is rebuilt and handed over.
+   */
+  const handleMove = async (sessionExerciseId: Id, direction: -1 | 1) => {
+    if (!detail) return;
+
+    const next = moveBlock(
+      entries.map((entry) => entry.id),
+      sessionExerciseId,
+      direction,
+    );
+    if (!next) return;
+
+    await reorderSessionExercises(detail.id, next);
+  };
+
   const handleSave = async () => {
     if (!activeEntry) return;
 
@@ -201,7 +220,7 @@ export function ActiveSessionScreen() {
       ) : null}
 
       <div className="flex-1 space-y-2 overflow-y-auto p-4">
-        {entries.map((entry) => (
+        {entries.map((entry, index) => (
           <ExerciseRow
             key={entry.id}
             entry={entry}
@@ -214,6 +233,9 @@ export function ActiveSessionScreen() {
             }}
             onEditSet={(set: SetEntry) => setEditingSetId(set.id)}
             onRemove={() => handleRemove(entry.id)}
+            onMove={entries.length > 1 ? (direction) => handleMove(entry.id, direction) : undefined}
+            isFirst={index === 0}
+            isLast={index === entries.length - 1}
             unit={unit}
             justLoggedSetId={justLoggedSetId}
           />

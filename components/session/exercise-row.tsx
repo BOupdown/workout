@@ -1,6 +1,6 @@
 'use client';
 
-import { Trash } from '@phosphor-icons/react';
+import { ArrowDown, ArrowUp, Trash } from '@phosphor-icons/react';
 import { describeSet } from '@/lib/format';
 import type { Exercise, SessionExerciseWithSets, SetEntry } from '@/lib/db/types';
 import type { WeightUnit } from '@/lib/units';
@@ -12,6 +12,10 @@ interface ExerciseRowProps {
   /** Opens the editor for one set. Only reachable on the active row. */
   onEditSet: (set: SetEntry) => void;
   onRemove: () => void;
+  /** Absent when the session holds a single exercise: nothing to reorder. */
+  onMove?: (direction: -1 | 1) => void;
+  isFirst?: boolean;
+  isLast?: boolean;
   unit: WeightUnit;
   /** The set just logged, to be brought in. */
   justLoggedSetId?: string;
@@ -39,6 +43,9 @@ export function ExerciseRow({
   onSelect,
   onEditSet,
   onRemove,
+  onMove,
+  isFirst = false,
+  isLast = false,
   unit,
   justLoggedSetId,
 }: ExerciseRowProps) {
@@ -66,6 +73,32 @@ export function ExerciseRow({
             {sets.length > 0 ? `${sets.length} ×` : 'to do'}
           </span>
         </button>
+
+        {/* Both arrows are always drawn, the unusable one disabled rather than
+            removed: dropping it would slide the trash under the thumb that was
+            aiming at "down". */}
+        {isActive && onMove ? (
+          <>
+            <button
+              type="button"
+              disabled={isFirst}
+              onClick={() => onMove(-1)}
+              aria-label={`Move ${exercise.name} up`}
+              className="-my-2 flex h-11 w-9 shrink-0 items-center justify-center rounded-control text-muted transition-transform active:scale-90 disabled:opacity-30"
+            >
+              <ArrowUp size={17} weight="bold" />
+            </button>
+            <button
+              type="button"
+              disabled={isLast}
+              onClick={() => onMove(1)}
+              aria-label={`Move ${exercise.name} down`}
+              className="-my-2 flex h-11 w-9 shrink-0 items-center justify-center rounded-control text-muted transition-transform active:scale-90 disabled:opacity-30"
+            >
+              <ArrowDown size={17} weight="bold" />
+            </button>
+          </>
+        ) : null}
 
         {/* Only on the active row: one exercise at a time can be removed, and
             the icon does not clutter the four others. */}

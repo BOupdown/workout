@@ -1,11 +1,11 @@
 'use client';
 
-import { ArrowLeft, Trash } from '@phosphor-icons/react';
+import { ArrowLeft, CalendarBlank, Trash } from '@phosphor-icons/react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { useState } from 'react';
 import { useWeightUnit } from '@/hooks/use-weight-unit';
 import { getSessionDetail } from '@/lib/db/queries';
-import { deleteSession } from '@/lib/db/sessions';
+import { deleteSession, updateSessionDate } from '@/lib/db/sessions';
 import type { Id } from '@/lib/db/types';
 import { describeSet, formatElapsed } from '@/lib/format';
 
@@ -22,14 +22,35 @@ const DATE_FORMAT = new Intl.DateTimeFormat('en-GB', {
 
 const TIME_FORMAT = new Intl.DateTimeFormat('en-GB', { hour: '2-digit', minute: '2-digit' });
 
-/** A past session, read-only, with its deletion. */
+/** A past session: its sets, the day it happened, and its deletion. */
 export function SessionDetailSheet({ sessionId, onClose }: SessionDetailSheetProps) {
   const detail = useLiveQuery(() => getSessionDetail(sessionId), [sessionId]);
   const [unit] = useWeightUnit();
   const [confirming, setConfirming] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [dateError, setDateError] = useState<string | null>(null);
 
   const setCount = detail?.entries.reduce((total, entry) => total + entry.sets.length, 0) ?? 0;
+
+  /**
+   * Correcting the day. `updateSessionDate` is the only sanctioned way: it also
+   * rewrites `performedAt` on every set, the denormalisation that makes an
+   * exercise's history readable without a join, and which would otherwise drift.
+   *
+   * Applied as soon as the picker closes rather than behind a save button — the
+   * gesture is already deliberate, and it is reversible by picking again.
+   */
+  const handleDate = async (value: string) => {
+    // An emptied field is the picker being cleared, not a date of "nothing".
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return;
+
+    setDateError(null);
+    try {
+      await updateSessionDate(sessionId, value);
+    } catch {
+      setDateError('Could not move this session.');
+    }
+  };
 
   return (
     <div className="fixed inset-0 z-20 flex flex-col bg-surface">
@@ -113,6 +134,33 @@ export function SessionDetailSheet({ sessionId, onClose }: SessionDetailSheetPro
         {detail?.notes ? (
           <section className="rounded-panel bg-raised px-4 py-3.5 text-sm text-muted">
             {detail.notes}
+          </section>
+        ) : null}
+
+        {detail ? (
+          <section className="rounded-panel bg-raised px-4 py-3.5">
+            <div className="flex items-center gap-2">
+              <CalendarBlank size={18} weight="bold" className="shrink-0 text-ink" />
+              <h3 className="text-[0.9375rem] font-semibold text-ink">Day</h3>
+            </div>
+            <p className="mt-1.5 text-sm text-muted">
+              For a session logged the day after. The time of day is kept, and every set moves
+              with it.
+            </p>
+
+            <input
+              type="date"
+              aria-label="Day of the session"
+              value={detail.date}
+              onChange={(event) => handleDate(event.target.value)}
+              className="mt-3 h-14 w-full rounded-control border-2 border-line bg-surface px-3.5 font-mono text-base text-ink tabular-nums outline-none focus:border-ink"
+            />
+
+            {dateError ? (
+              <p role="alert" className="mt-2 text-sm text-danger">
+                {dateError}
+              </p>
+            ) : null}
           </section>
         ) : null}
 
