@@ -10,6 +10,7 @@ import {
   removeExerciseFromSession,
   reorderSessionExercises,
   SessionExerciseNotEmptyError,
+  setSessionBodyweight,
   startSession,
   updateSessionDate,
 } from '../lib/db/sessions';
@@ -395,5 +396,40 @@ describe('deleteSession — cascade', () => {
     await deleteSession(session.id);
 
     expect(await db.exercises.count()).toBe(before);
+  });
+});
+
+describe('setSessionBodyweight', () => {
+  it('enregistre le poids de corps', async () => {
+    const { session } = await startSession();
+    const updated = await setSessionBodyweight(session.id, 78.4);
+
+    expect(updated.bodyweightKg).toBe(78.4);
+    expect((await db.sessions.get(session.id))!.bodyweightKg).toBe(78.4);
+  });
+
+  it('le corrige', async () => {
+    const { session } = await startSession({ bodyweightKg: 78 });
+    const updated = await setSessionBodyweight(session.id, 77.2);
+
+    expect(updated.bodyweightKg).toBe(77.2);
+  });
+
+  it('l’efface plutôt que de stocker une valeur vide', async () => {
+    const { session } = await startSession({ bodyweightKg: 78 });
+    const updated = await setSessionBodyweight(session.id, undefined);
+
+    expect(updated.bodyweightKg).toBeUndefined();
+    expect('bodyweightKg' in (await db.sessions.get(session.id))!).toBe(false);
+  });
+
+  it('refuse une valeur aberrante', async () => {
+    const { session } = await startSession();
+    await expect(setSessionBodyweight(session.id, 900)).rejects.toThrow(SessionValidationError);
+    await expect(setSessionBodyweight(session.id, 0)).rejects.toThrow(SessionValidationError);
+  });
+
+  it('lève sur une séance inconnue', async () => {
+    await expect(setSessionBodyweight('inconnue', 78)).rejects.toThrow(/not found/);
   });
 });

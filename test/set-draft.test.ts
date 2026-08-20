@@ -6,6 +6,7 @@ import { setFieldRequirements } from '../lib/db/validation';
 import {
   draftFromSet,
   draftToSetInput,
+  draftToSetPatch,
   EMPTY_DRAFT,
   resolveDraftReference,
   stepDraftValue,
@@ -220,5 +221,57 @@ describe('stepDraftValue', () => {
 
   it('n’introduit pas d’erreur de flottant', () => {
     expect(stepDraftValue('0.1', 0.2)).toBe('0.3');
+  });
+});
+
+describe('draftToSetPatch', () => {
+  it('produit les mesures attendues par l’exercice', () => {
+    expect(draftToSetPatch({ weightKg: '102.5', reps: '5', durationSec: '' }, squat)).toEqual({
+      weightKg: 102.5,
+      reps: 5,
+    });
+  });
+
+  it('n’émet aucune charge pour un exercice au poids du corps', () => {
+    const patch = draftToSetPatch({ weightKg: '20', reps: '25', durationSec: '' }, pushUps);
+    expect(patch).toEqual({ reps: 25 });
+  });
+
+  it('transmet le type de série', () => {
+    const patch = draftToSetPatch({ weightKg: '40', reps: '10', durationSec: '' }, squat, {
+      kind: 'warmup',
+    });
+    expect(patch.kind).toBe('warmup');
+  });
+
+  it('efface un champ requis laissé vide, au lieu de le taire', async () => {
+    // L'omettre reviendrait à garder l'ancienne valeur : la correction
+    // paraîtrait ignorée. `undefined` laisse la validation répondre.
+    const patch = draftToSetPatch({ weightKg: '', reps: '5', durationSec: '' }, squat);
+
+    expect('weightKg' in patch).toBe(true);
+    expect(patch.weightKg).toBeUndefined();
+
+    const { session } = await startSession();
+    const block = await addExerciseToSession(session.id, squat.id);
+    const set = await createSet({ sessionExerciseId: block.id, weightKg: 100, reps: 5 });
+
+    const { updateSet } = await import('../lib/db/sets');
+    await expect(updateSet(set.id, patch)).rejects.toThrow(/expects a load/);
+  });
+
+  it('un patch rempli est accepté par la base', async () => {
+    const { session } = await startSession();
+    const block = await addExerciseToSession(session.id, squat.id);
+    const set = await createSet({ sessionExerciseId: block.id, weightKg: 100, reps: 5 });
+
+    const { updateSet } = await import('../lib/db/sets');
+    const updated = await updateSet(
+      set.id,
+      draftToSetPatch({ weightKg: '102.5', reps: '4', durationSec: '' }, squat),
+    );
+
+    expect(updated.weightKg).toBe(102.5);
+    expect(updated.reps).toBe(4);
   });
 });

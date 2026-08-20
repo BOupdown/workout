@@ -187,6 +187,34 @@ export async function updateSessionDate(id: Id, date: LocalDate): Promise<Sessio
   });
 }
 
+/**
+ * Records the bodyweight for a session, or clears it when passed `undefined`.
+ *
+ * Without it no progression is measurable on `bodyweight`,
+ * `weighted_bodyweight` or `assisted` exercises: ten pull-ups four kilos
+ * lighter is not the same performance, and nothing else in the model says so.
+ *
+ * Bounds are checked by the structural hook, as for any other session write.
+ */
+export async function setSessionBodyweight(
+  id: Id,
+  bodyweightKg: number | undefined,
+): Promise<Session> {
+  return db.transaction('rw', db.sessions, async () => {
+    const session = await db.sessions.get(id);
+    if (!session) throw new Error(`Session not found: ${id}`);
+
+    // `undefined` deletes the property rather than storing an empty value.
+    await db.sessions.update(id, { bodyweightKg });
+
+    const next = { ...session };
+    if (bodyweightKg === undefined) delete next.bodyweightKg;
+    else next.bodyweightKg = bodyweightKg;
+
+    return next;
+  });
+}
+
 /** Deletes a session, its blocks and all its sets in a single transaction. */
 export async function deleteSession(id: Id): Promise<void> {
   await db.transaction('rw', db.sessions, db.sessionExercises, db.sets, async () => {

@@ -10,7 +10,7 @@
  * field, so it never produces its value.
  */
 
-import type { NewSetInput } from './db/sets';
+import type { NewSetInput, SetPatch } from './db/sets';
 import type { Exercise, Id, SetKind } from './db/types';
 import { setFieldRequirements, type SetFieldRequirements } from './db/validation';
 import { formatNumber, parseNumberInput } from './format';
@@ -138,6 +138,36 @@ export function draftToSetInput(
   }
 
   return input;
+}
+
+/**
+ * Converts the draft into an `updateSet` patch.
+ *
+ * Unlike creation, a required field that is empty is passed as `undefined`
+ * rather than omitted: omitting it would silently keep the old value, so a
+ * cleared field would look like it had been ignored. Passing `undefined` lets
+ * the validation answer with its own message instead.
+ */
+export function draftToSetPatch(
+  draft: SetDraft,
+  exercise: DraftExercise,
+  options: { kind?: SetKind; unit?: WeightUnit } = {},
+): SetPatch {
+  const requirements = setFieldRequirements(exercise);
+  const unit = options.unit ?? 'kg';
+  const patch: SetPatch = {};
+
+  if (options.kind !== undefined) patch.kind = options.kind;
+
+  for (const field of DRAFT_FIELDS) {
+    if (requirements[field] !== 'required') continue;
+
+    const parsed = parseNumberInput(draft[field]);
+    patch[field] =
+      parsed === null ? undefined : field === 'weightKg' ? fromDisplayWeight(parsed, unit) : parsed;
+  }
+
+  return patch;
 }
 
 /** Step for the +/- buttons: the load follows the exercise and the unit. */
