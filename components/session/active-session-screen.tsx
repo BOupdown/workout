@@ -6,17 +6,25 @@ import { useState } from 'react';
 import { useActiveSession } from '@/hooks/use-active-session';
 import { useSetDraft } from '@/hooks/use-set-draft';
 import { useWeightUnit } from '@/hooks/use-weight-unit';
-import { addExerciseToSession, endSession, startSession } from '@/lib/db/sessions';
+import {
+  addExerciseToSession,
+  endSession,
+  removeExerciseFromSession,
+  SessionExerciseNotEmptyError,
+  startSession,
+} from '@/lib/db/sessions';
 import { listSessionSummaries } from '@/lib/db/queries';
 import { createSet } from '@/lib/db/sets';
 import { formatElapsed } from '@/lib/format';
-import type { Id, SetKind } from '@/lib/db/types';
+import type { Id, SetEntry, SetKind } from '@/lib/db/types';
 import { NO_MESSAGES, toFieldMessages, type FieldMessages } from '@/lib/errors';
 import { draftToSetInput } from '@/lib/set-draft';
 import { ProgressionSheet } from '@/components/progression/progression-sheet';
 import { SessionDetailSheet } from '@/components/history/session-detail-sheet';
+import { BodyweightSheet } from './bodyweight-sheet';
 import { ExercisePicker } from './exercise-picker';
 import { ExerciseRow } from './exercise-row';
+import { SetEditorSheet } from './set-editor-sheet';
 import { SessionHeader } from './session-header';
 import { SessionSkeleton } from './session-skeleton';
 import { SetEntryPanel } from './set-entry-panel';
@@ -39,6 +47,9 @@ export function ActiveSessionScreen() {
   const [justLoggedSetId, setJustLoggedSetId] = useState<Id | undefined>();
   const [progressionFor, setProgressionFor] = useState<Id | null>(null);
   const [kind, setKind] = useState<SetKind>('work');
+  const [editingSetId, setEditingSetId] = useState<Id | null>(null);
+  const [bodyweightOpen, setBodyweightOpen] = useState(false);
+  const [removalCount, setRemovalCount] = useState<number | null>(null);
 
   const detail = state.status === 'ready' ? state.detail : undefined;
   const entries = detail?.entries ?? [];
@@ -54,6 +65,13 @@ export function ActiveSessionScreen() {
   // Resolved from the loaded session: no extra query, and the sheet closes by
   // itself if the block disappears.
   const progressionExercise = entries.find((e) => e.exercise.id === progressionFor)?.exercise;
+
+  // Same principle for the set under edit: it is looked up in the live session
+  // rather than copied into state, so deleting it closes the sheet on its own
+  // and an edit is never applied to a stale copy.
+  const editing = editingSetId
+    ? activeEntry?.sets.find((set) => set.id === editingSetId)
+    : undefined;
 
   const handleStart = async () => {
     setBusy(true);
@@ -82,6 +100,26 @@ export function ActiveSessionScreen() {
     setMessages(NO_MESSAGES);
     setKind('work');
     setPickerOpen(false);
+  };
+
+  /**
+   * Removing an exercise. An empty block goes without asking — it was a
+   * mis-tap. A block holding sets comes back as a typed error carrying the
+   * count, which is what lets the confirmation say how much is at stake instead
+   * of warning vaguely.
+   */
+  const handleRemove = async (sessionExerciseId: Id, force = false) => {
+    try {
+      await removeExerciseFromSession(sessionExerciseId, { force });
+      setRemovalCount(null);
+      setSelectedBlockId(null);
+    } catch (error) {
+      if (error instanceof SessionExerciseNotEmptyError) {
+        setRemovalCount(error.setCount);
+        return;
+      }
+      throw error;
+    }
   };
 
   const handleSave = async () => {
@@ -139,7 +177,13 @@ export function ActiveSessionScreen() {
 
   return (
     <main className="flex h-full flex-col">
-      <SessionHeader detail={state.detail} onEnd={handleEnd} ending={busy} />
+      <SessionHeader
+        detail={state.detail}
+        onEnd={handleEnd}
+        ending={busy}
+        unit={unit}
+        onEditBodyweight={() => setBodyweightOpen(true)}
+      />
 
       <div className="flex-1 space-y-2 overflow-y-auto p-4">
         {entries.map((entry) => (
@@ -151,7 +195,10 @@ export function ActiveSessionScreen() {
               setSelectedBlockId(entry.id);
               setMessages(NO_MESSAGES);
               setKind('work');
+              setRemovalCount(null);
             }}
+            onEditSet={(set: SetEntry) => setEditingSetId(set.id)}
+            onRemove={() => handleRemove(entry.id)}
             unit={unit}
             justLoggedSetId={justLoggedSetId}
           />
@@ -197,7 +244,94 @@ export function ActiveSessionScreen() {
           onClose={() => setProgressionFor(null)}
         />
       ) : null}
+
+      {editing && activeEntry ? (
+        <SetEditorSheet
+          set={editing}
+          exercise={activeEntry.exercise}
+          position={activeEntry.sets.findIndex((set) => set.id === editing.id) + 1}
+          unit={unit}
+          onClose={() => setEditingSetId(null)}
+        />
+      ) : null}
+
+      {bodyweightOpen ? (
+        <BodyweightSheet
+          sessionId={state.detail.id}
+          bodyweightKg={state.detail.bodyweightKg}
+          unit={unit}
+          onClose={() => setBodyweightOpen(false)}
+        />
+      ) : null}
+
+      {removalCount !== null && activeEntry ? (
+        <RemoveExerciseConfirm
+          name={activeEntry.exercise.name}
+          setCount={removalCount}
+          onCancel={() => setRemovalCount(null)}
+          onConfirm={() => handleRemove(activeEntry.id, true)}
+        />
+      ) : null}
     </main>
+  );
+}
+
+/**
+ * Confirmation before losing sets.
+ *
+ * It states the number: "and its 4 sets" is a decision, "are you sure?" is a
+ * reflex. The destructive action is the one that has to be aimed at, so Cancel
+ * takes the wide, thumb-natural side.
+ */
+function RemoveExerciseConfirm({
+  name,
+  setCount,
+  onCancel,
+  onConfirm,
+}: {
+  name: string;
+  setCount: number;
+  onCancel: () => void;
+  onConfirm: () => void;
+}) {
+  return (
+    <div className="fixed inset-0 z-30 flex flex-col justify-end">
+      <button
+        type="button"
+        aria-label="Cancel removal"
+        onClick={onCancel}
+        className="flex-1 bg-ink/40"
+      />
+
+      <section
+        role="alertdialog"
+        aria-label={`Remove ${name}`}
+        className="shrink-0 rounded-t-panel border-t border-line bg-raised px-4 pt-4 pb-[calc(env(safe-area-inset-bottom)+0.875rem)]"
+      >
+        <h2 className="text-[0.9375rem] font-semibold text-ink">Remove {name}?</h2>
+        <p className="mt-1 text-sm text-muted">
+          Its {setCount} logged set{setCount > 1 ? 's' : ''} will be deleted with it. This cannot be
+          undone.
+        </p>
+
+        <div className="mt-4 flex items-stretch gap-2">
+          <button
+            type="button"
+            onClick={onCancel}
+            className="h-14 flex-1 rounded-control bg-surface text-[0.9375rem] font-semibold text-ink transition-transform active:scale-[0.98]"
+          >
+            Keep it
+          </button>
+          <button
+            type="button"
+            onClick={onConfirm}
+            className="h-14 shrink-0 rounded-control px-4 text-[0.9375rem] font-semibold text-danger transition-transform active:scale-95"
+          >
+            Delete
+          </button>
+        </div>
+      </section>
+    </div>
   );
 }
 

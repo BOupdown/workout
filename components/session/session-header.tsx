@@ -1,8 +1,9 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { formatElapsed } from '@/lib/format';
+import { formatElapsed, formatNumber } from '@/lib/format';
 import type { SessionDetail } from '@/lib/db/types';
+import { toDisplayWeight, type WeightUnit } from '@/lib/units';
 
 const DAY_FORMAT = new Intl.DateTimeFormat('en-GB', { weekday: 'long', day: 'numeric', month: 'long' });
 
@@ -10,9 +11,17 @@ interface SessionHeaderProps {
   detail: SessionDetail;
   onEnd: () => void;
   ending: boolean;
+  unit: WeightUnit;
+  onEditBodyweight: () => void;
 }
 
-export function SessionHeader({ detail, onEnd, ending }: SessionHeaderProps) {
+export function SessionHeader({
+  detail,
+  onEnd,
+  ending,
+  unit,
+  onEditBodyweight,
+}: SessionHeaderProps) {
   const [confirming, setConfirming] = useState(false);
   const [elapsed, setElapsed] = useState(() => Date.now() - detail.startedAt);
 
@@ -38,6 +47,19 @@ export function SessionHeader({ detail, onEnd, ending }: SessionHeaderProps) {
             <span>
               {setCount} set{setCount > 1 ? 's' : ''}
             </span>
+            <span aria-hidden className="h-1 w-1 rounded-full bg-line" />
+            {/* Small on purpose — it is read at a glance and set once — but the
+                pseudo-element gives it a full-size touch target without pushing
+                the header taller. */}
+            <button
+              type="button"
+              onClick={onEditBodyweight}
+              className="relative font-sans font-medium text-ink underline decoration-line underline-offset-4 transition-transform active:scale-95 after:absolute after:-inset-x-3 after:-inset-y-3 after:content-['']"
+            >
+              {detail.bodyweightKg !== undefined
+                ? `${formatNumber(toDisplayWeight(detail.bodyweightKg, unit))} ${unit}`
+                : 'Bodyweight'}
+            </button>
           </p>
         </div>
 
