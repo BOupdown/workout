@@ -6,12 +6,14 @@ import {
   HardDrives,
   Scales,
   ShieldCheck,
+  Timer,
   UploadSimple,
 } from '@phosphor-icons/react';
 import { useRef, useState } from 'react';
 import { useInstallPrompt } from '@/hooks/use-install-prompt';
 import { useWeightUnit } from '@/hooks/use-weight-unit';
 import { useStorageStatus } from '@/hooks/use-storage-status';
+import { useRestTimer } from '@/hooks/use-rest-timer';
 import {
   backupFileName,
   BackupFormatError,
@@ -20,6 +22,8 @@ import {
   parseBackup,
   type BackupSummary,
 } from '@/lib/db/backup';
+import { formatDuration } from '@/lib/format';
+import { REST_DURATIONS_SEC } from '@/lib/rest-timer';
 import { WEIGHT_UNITS } from '@/lib/units';
 
 function formatBytes(bytes: number): string {
@@ -32,6 +36,7 @@ export function SettingsScreen() {
   const storage = useStorageStatus();
   const install = useInstallPrompt();
   const [unit, setUnit] = useWeightUnit();
+  const rest = useRestTimer();
   const fileInput = useRef<HTMLInputElement>(null);
 
   const [busy, setBusy] = useState(false);
@@ -136,6 +141,34 @@ export function SettingsScreen() {
                 }`}
               >
                 {option === 'kg' ? 'Kilograms (kg)' : 'Pounds (lb)'}
+              </button>
+            ))}
+          </div>
+        </section>
+
+        <section className="rounded-panel bg-raised px-4 py-3.5">
+          <div className="flex items-center gap-2">
+            <Timer size={18} weight="bold" className="shrink-0 text-ink" />
+            <h2 className="text-[0.9375rem] font-semibold text-ink">Rest timer</h2>
+          </div>
+          <p className="mt-1.5 text-sm text-muted">
+            Starts on its own each time you save a set. You can always add time, or skip it.
+          </p>
+
+          <div className="mt-3 flex gap-1.5">
+            {REST_DURATIONS_SEC.map((option) => (
+              <button
+                key={option}
+                type="button"
+                onClick={() => rest.setDurationSec(option)}
+                aria-pressed={rest.durationSec === option}
+                className={`h-14 flex-1 rounded-control border-2 font-mono text-[0.9375rem] font-semibold tabular-nums transition-transform active:scale-[0.98] ${
+                  rest.durationSec === option
+                    ? 'border-ink bg-raised text-ink'
+                    : 'border-transparent bg-surface text-muted'
+                }`}
+              >
+                {formatDuration(option)}
               </button>
             ))}
           </div>
