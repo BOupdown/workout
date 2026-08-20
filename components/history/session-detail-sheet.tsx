@@ -1,6 +1,6 @@
 'use client';
 
-import { ArrowLeft, CalendarBlank, Trash } from '@phosphor-icons/react';
+import { ArrowLeft, CalendarBlank, NotePencil, Trash } from '@phosphor-icons/react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { useState } from 'react';
 import { useWeightUnit } from '@/hooks/use-weight-unit';
@@ -8,6 +8,7 @@ import { getSessionDetail } from '@/lib/db/queries';
 import { deleteSession, updateSessionDate } from '@/lib/db/sessions';
 import type { Id } from '@/lib/db/types';
 import { describeSet, formatElapsed } from '@/lib/format';
+import { SessionNotesSheet } from '@/components/session/session-notes-sheet';
 
 interface SessionDetailSheetProps {
   sessionId: Id;
@@ -29,6 +30,7 @@ export function SessionDetailSheet({ sessionId, onClose }: SessionDetailSheetPro
   const [confirming, setConfirming] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [dateError, setDateError] = useState<string | null>(null);
+  const [notesOpen, setNotesOpen] = useState(false);
 
   const setCount = detail?.entries.reduce((total, entry) => total + entry.sets.length, 0) ?? 0;
 
@@ -131,10 +133,19 @@ export function SessionDetailSheet({ sessionId, onClose }: SessionDetailSheetPro
           ))
         )}
 
-        {detail?.notes ? (
-          <section className="rounded-panel bg-raised px-4 py-3.5 text-sm text-muted">
-            {detail.notes}
-          </section>
+        {/* The notes were rendered and unwritable. Same screen as during the
+            session, so a note left out in the gym can be added afterwards. */}
+        {detail ? (
+          <button
+            type="button"
+            onClick={() => setNotesOpen(true)}
+            className="flex w-full items-start gap-2.5 rounded-panel bg-raised px-4 py-3.5 text-left transition-transform active:scale-[0.99]"
+          >
+            <NotePencil size={18} weight="bold" className="mt-0.5 shrink-0 text-ink" />
+            <span className="min-w-0 flex-1 text-sm text-muted">
+              {detail.notes ?? 'Name this session, or note how it went.'}
+            </span>
+          </button>
         ) : null}
 
         {detail ? (
@@ -215,6 +226,10 @@ export function SessionDetailSheet({ sessionId, onClose }: SessionDetailSheetPro
           </section>
         ) : null}
       </div>
+
+      {notesOpen ? (
+        <SessionNotesSheet sessionId={sessionId} onClose={() => setNotesOpen(false)} />
+      ) : null}
     </div>
   );
 }

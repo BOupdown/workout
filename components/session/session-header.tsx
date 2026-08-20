@@ -1,5 +1,6 @@
 'use client';
 
+import { NotePencil } from '@phosphor-icons/react';
 import { useEffect, useState } from 'react';
 import { formatElapsed, formatNumber } from '@/lib/format';
 import type { SessionDetail } from '@/lib/db/types';
@@ -13,6 +14,7 @@ interface SessionHeaderProps {
   ending: boolean;
   unit: WeightUnit;
   onEditBodyweight: () => void;
+  onEditNotes: () => void;
 }
 
 export function SessionHeader({
@@ -21,6 +23,7 @@ export function SessionHeader({
   ending,
   unit,
   onEditBodyweight,
+  onEditNotes,
 }: SessionHeaderProps) {
   const [confirming, setConfirming] = useState(false);
   const [elapsed, setElapsed] = useState(() => Date.now() - detail.startedAt);
@@ -38,9 +41,19 @@ export function SessionHeader({
     <header className="shrink-0 border-b border-line bg-raised px-4 pt-[calc(env(safe-area-inset-top)+0.875rem)] pb-3.5">
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
-          <p className="truncate text-[0.9375rem] font-semibold text-ink">
-            {detail.title ?? day}
-          </p>
+          {/* The name was displayed and never settable. Tapping it is the way
+              in: it is the one place where "this is Push A" is on your mind. */}
+          <button
+            type="button"
+            onClick={onEditNotes}
+            aria-label="Name this session, and add notes"
+            className="-ml-1 flex min-h-8 max-w-full items-center gap-1.5 rounded-control px-1 text-left transition-transform active:scale-[0.98]"
+          >
+            <span className="truncate text-[0.9375rem] font-semibold text-ink">
+              {detail.title ?? day}
+            </span>
+            <NotePencil size={15} weight="bold" className="shrink-0 text-muted" />
+          </button>
           <p className="mt-1 flex items-center gap-2 font-mono text-xs text-muted tabular-nums">
             <span>{formatElapsed(elapsed)}</span>
             <span aria-hidden className="h-1 w-1 rounded-full bg-line" />
