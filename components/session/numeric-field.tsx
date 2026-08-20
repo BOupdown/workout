@@ -16,7 +16,7 @@ interface NumericFieldProps {
 }
 
 const STEP_BUTTON =
-  'flex h-16 w-14 shrink-0 items-center justify-center rounded-control bg-surface text-ink ' +
+  'flex h-11 flex-1 items-center justify-center rounded-control bg-surface text-ink ' +
   'transition-transform active:scale-95 disabled:opacity-40';
 
 /**
@@ -26,6 +26,12 @@ const STEP_BUTTON =
  * scroll wheel change the value, handles the decimal separator badly depending
  * on locale, and silently swallows entries it deems invalid. `inputMode` is
  * enough to bring up the numeric keypad on mobile.
+ *
+ * The step buttons sit **under** the value rather than flanking it. Flanking
+ * them cost 112 px out of the 166 px a field gets on a 375 px screen, which
+ * left 42 px for the number: "102.5" needs 90 px and was cut off mid-digit —
+ * the one figure this whole app exists to show. Underneath, the value gets the
+ * full width and the buttons get wider targets than they had.
  */
 export function NumericField({
   label,
@@ -51,6 +57,23 @@ export function NumericField({
         {unit ? <span className="normal-case"> ({unit})</span> : null}
       </span>
 
+      <input
+        type="text"
+        inputMode={mode}
+        enterKeyHint="done"
+        autoComplete="off"
+        aria-label={label}
+        aria-invalid={error ? true : undefined}
+        aria-describedby={errorId}
+        value={value}
+        disabled={disabled}
+        onFocus={selectAll}
+        onChange={(event) => onChange(event.target.value)}
+        className={`h-16 w-full min-w-0 rounded-control border-2 bg-raised text-center font-mono text-3xl font-semibold text-ink tabular-nums outline-none disabled:opacity-40 ${
+          error ? 'border-danger' : 'border-line focus:border-ink'
+        }`}
+      />
+
       <div className="flex items-stretch gap-1.5">
         <button
           type="button"
@@ -61,24 +84,6 @@ export function NumericField({
         >
           <Minus size={20} weight="bold" />
         </button>
-
-        <input
-          type="text"
-          inputMode={mode}
-          enterKeyHint="done"
-          autoComplete="off"
-          aria-label={label}
-          aria-invalid={error ? true : undefined}
-          aria-describedby={errorId}
-          value={value}
-          disabled={disabled}
-          onFocus={selectAll}
-          onChange={(event) => onChange(event.target.value)}
-          className={`h-16 w-full min-w-0 rounded-control border-2 bg-raised text-center font-mono text-3xl font-semibold text-ink tabular-nums outline-none disabled:opacity-40 ${
-            error ? 'border-danger' : 'border-line focus:border-ink'
-          }`}
-        />
-
         <button
           type="button"
           aria-label={`Increase ${label}`}
