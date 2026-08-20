@@ -30,6 +30,7 @@ import { ExerciseRow } from './exercise-row';
 import { SetEditorSheet } from './set-editor-sheet';
 import { RestTimerBar } from './rest-timer-bar';
 import { SessionHeader } from './session-header';
+import { SessionNotesSheet } from './session-notes-sheet';
 import { SessionSkeleton } from './session-skeleton';
 import { SetEntryPanel } from './set-entry-panel';
 
@@ -53,6 +54,7 @@ export function ActiveSessionScreen() {
   const [kind, setKind] = useState<SetKind>('work');
   const [editingSetId, setEditingSetId] = useState<Id | null>(null);
   const [bodyweightOpen, setBodyweightOpen] = useState(false);
+  const [notesOpen, setNotesOpen] = useState(false);
   const [removalCount, setRemovalCount] = useState<number | null>(null);
 
   const detail = state.status === 'ready' ? state.detail : undefined;
@@ -209,7 +211,12 @@ export function ActiveSessionScreen() {
         ending={busy}
         unit={unit}
         onEditBodyweight={() => setBodyweightOpen(true)}
+        onEditNotes={() => setNotesOpen(true)}
       />
+
+      {notesOpen && detail ? (
+        <SessionNotesSheet sessionId={detail.id} onClose={() => setNotesOpen(false)} />
+      ) : null}
 
       {rest.progress ? (
         <RestTimerBar

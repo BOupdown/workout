@@ -11,8 +11,10 @@ import {
   reorderSessionExercises,
   SessionExerciseNotEmptyError,
   setSessionBodyweight,
+  setSessionExerciseNotes,
   startSession,
   updateSessionDate,
+  updateSessionText,
 } from '../lib/db/sessions';
 import type { Exercise, Session } from '../lib/db/types';
 import {
@@ -431,5 +433,94 @@ describe('setSessionBodyweight', () => {
 
   it('lève sur une séance inconnue', async () => {
     await expect(setSessionBodyweight('inconnue', 78)).rejects.toThrow(/not found/);
+  });
+});
+
+describe('updateSessionText', () => {
+  it('pose un titre sur une seance deja commencee', async () => {
+    const { session } = await startSession();
+    const named = await updateSessionText(session.id, { title: 'Push A' });
+
+    expect(named.title).toBe('Push A');
+    expect((await db.sessions.get(session.id))?.title).toBe('Push A');
+  });
+
+  it('efface un titre passe a undefined', async () => {
+    const { session } = await startSession({ title: 'Push A' });
+    await updateSessionText(session.id, { title: undefined });
+
+    const stored = await db.sessions.get(session.id);
+    expect(stored).toBeDefined();
+    expect('title' in stored!).toBe(false);
+  });
+
+  it('ne touche pas a ce qui est absent du patch', async () => {
+    const { session } = await startSession({ title: 'Push A', notes: 'dos fatigue' });
+    await updateSessionText(session.id, { notes: 'mieux' });
+
+    const stored = await db.sessions.get(session.id);
+    expect(stored?.title).toBe('Push A');
+    expect(stored?.notes).toBe('mieux');
+  });
+
+  it('ne deplace ni la date ni les series', async () => {
+    // Le contrat de la fonction : elle ne touche qu'au texte. La date a sa
+    // propre fonction parce qu'elle propage performedAt.
+    const { session } = await startSession();
+    await updateSessionText(session.id, { title: 'Push A' });
+
+    const stored = await db.sessions.get(session.id);
+    expect(stored?.startedAt).toBe(session.startedAt);
+    expect(stored?.date).toBe(session.date);
+  });
+
+  it('rejette un titre qui n est pas du texte', async () => {
+    const { session } = await startSession();
+    await expect(
+      updateSessionText(session.id, { title: 42 as unknown as string }),
+    ).rejects.toBeInstanceOf(SessionValidationError);
+  });
+
+  it('refuse une seance inconnue', async () => {
+    await expect(updateSessionText('nope', { title: 'x' })).rejects.toThrow();
+  });
+});
+
+describe('setSessionExerciseNotes', () => {
+  it('note un exercice pour ce jour-la', async () => {
+    const { session } = await startSession();
+    const block = await addExerciseToSession(session.id, squat.id);
+
+    const noted = await setSessionExerciseNotes(block.id, 'banc trop haut');
+    expect(noted.notes).toBe('banc trop haut');
+    expect((await db.sessionExercises.get(block.id))?.notes).toBe('banc trop haut');
+  });
+
+  it('efface la note', async () => {
+    const { session } = await startSession();
+    const block = await addExerciseToSession(session.id, squat.id, {
+      notes: 'banc trop haut',
+    });
+
+    await setSessionExerciseNotes(block.id, undefined);
+    const stored = await db.sessionExercises.get(block.id);
+    expect(stored).toBeDefined();
+    expect('notes' in stored!).toBe(false);
+  });
+
+  it('laisse le rang et le rattachement intacts', async () => {
+    const { session } = await startSession();
+    const block = await addExerciseToSession(session.id, squat.id);
+
+    await setSessionExerciseNotes(block.id, 'gene epaule');
+    const stored = await db.sessionExercises.get(block.id);
+
+    expect(stored?.order).toBe(block.order);
+    expect(stored?.sessionId).toBe(session.id);
+    expect(stored?.exerciseId).toBe(squat.id);
+  });
+
+  it('refuse un bloc inconnu', async () => {
+    await expect(setSessionExerciseNotes('nope', 'x')).rejects.toThrow();
   });
 });

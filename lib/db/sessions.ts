@@ -188,6 +188,63 @@ export async function updateSessionDate(id: Id, date: LocalDate): Promise<Sessio
 }
 
 /**
+ * The free text of a session: what it is called, and anything worth a sentence.
+ *
+ * Deliberately **not** a general-purpose session patch. The date and the
+ * bodyweight already have their own functions because each carries a
+ * consequence — `performedAt` on every set of the session, progression on
+ * bodyweight movements — and folding them in here would produce an inviting
+ * patch that quietly skips those.
+ *
+ * A key present and `undefined` clears the field, as everywhere else.
+ */
+export type SessionText = Partial<Pick<Session, 'title' | 'notes'>>;
+
+export async function updateSessionText(id: Id, patch: SessionText): Promise<Session> {
+  return db.transaction('rw', db.sessions, async () => {
+    const session = await db.sessions.get(id);
+    if (!session) throw new Error(`Session not found: ${id}`);
+
+    // Merge aligned with `Table.update`, which is also what the shape guard
+    // reconstructs before validating.
+    const next = { ...session } as Record<string, unknown>;
+    for (const key of Object.keys(patch)) {
+      const value = patch[key as keyof SessionText];
+      if (value === undefined) delete next[key];
+      else next[key] = value;
+    }
+
+    await db.sessions.update(id, patch);
+    return next as unknown as Session;
+  });
+}
+
+/**
+ * The note carried by one exercise *within* a session — "bench set too high",
+ * "shoulder complained on the third set".
+ *
+ * It belongs to the block and not to the exercise: it is true of that day, not
+ * of the movement. Passing `undefined` clears it.
+ */
+export async function setSessionExerciseNotes(
+  id: Id,
+  notes: string | undefined,
+): Promise<SessionExercise> {
+  return db.transaction('rw', db.sessionExercises, async () => {
+    const block = await db.sessionExercises.get(id);
+    if (!block) throw new Error(`Session exercise not found: ${id}`);
+
+    await db.sessionExercises.update(id, { notes });
+
+    const next = { ...block };
+    if (notes === undefined) delete next.notes;
+    else next.notes = notes;
+
+    return next;
+  });
+}
+
+/**
  * Records the bodyweight for a session, or clears it when passed `undefined`.
  *
  * Without it no progression is measurable on `bodyweight`,
