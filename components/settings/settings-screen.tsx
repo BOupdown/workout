@@ -175,13 +175,14 @@ export function SettingsScreen() {
             <h2 className="text-[0.9375rem] font-semibold text-ink">Storage</h2>
           </div>
 
-          {!storage.supported ? (
+          {storage.supported === false ? (
             <p className="mt-1.5 text-sm text-muted">
               This browser does not report storage state.
             </p>
           ) : (
             <>
               <p className="mt-1.5 text-sm text-muted">
+                {/* Also the neutral first render, before the browser is asked. */}
                 {storage.persisted === null
                   ? 'Checking…'
                   : storage.persisted
