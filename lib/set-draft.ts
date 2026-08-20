@@ -11,7 +11,7 @@
  */
 
 import type { NewSetInput, SetPatch } from './db/sets';
-import type { Exercise, Id, SetKind } from './db/types';
+import type { Exercise, Id, SetEntry, SetKind } from './db/types';
 import { setFieldRequirements, type SetFieldRequirements } from './db/validation';
 import { formatNumber, parseNumberInput } from './format';
 import { toDisplayWeight, fromDisplayWeight, weightIncrement, type WeightUnit } from './units';
@@ -187,4 +187,81 @@ export function stepDraftValue(current: string, step: number): string {
   // Re-rounded: 0.1 + 0.2 must not put 0.30000000000000004 in a field.
   const next = Math.max(0, Math.round((base + step) * 1000) / 1000);
   return formatNumber(next);
+}
+
+// ---------------------------------------------------------------------------
+// What qualifies a set, beside its measure
+// ---------------------------------------------------------------------------
+
+/** RPE bounds, mirrored from the validation so the UI cannot offer a refused value. */
+export const RPE_MIN = 1;
+export const RPE_MAX = 10;
+/** RPE is written 7, 7.5, 8 — never 7.3. */
+export const RPE_STEP = 0.5;
+
+/**
+ * Where the stepper lands on its first press.
+ *
+ * Not a midpoint: 8 is the value people actually log, and every other one is a
+ * tap or two away from it. Starting at 5.5 would be neutral and useless.
+ */
+export const RPE_FIRST = 8;
+
+/**
+ * The qualifiers of a set: how hard it felt, whether it ended in failure, and
+ * anything worth a sentence. None of them is a measure — the set is valid
+ * without them, which is exactly why they stay out of the entry flow.
+ */
+export interface SetDetailDraft {
+  /** `null` = not recorded, which is different from "easy". */
+  rpe: number | null;
+  isFailure: boolean;
+  notes: string;
+}
+
+export function detailFromSet(
+  set: Pick<SetEntry, 'rpe' | 'isFailure' | 'notes'>,
+): SetDetailDraft {
+  return {
+    rpe: set.rpe ?? null,
+    isFailure: set.isFailure ?? false,
+    notes: set.notes ?? '',
+  };
+}
+
+/** Applies a step to the RPE, clamped, starting at `RPE_FIRST` when unset. */
+export function stepRpe(current: number | null, direction: -1 | 1): number {
+  if (current === null) return RPE_FIRST;
+
+  const next = current + direction * RPE_STEP;
+  return Math.min(RPE_MAX, Math.max(RPE_MIN, Math.round(next * 2) / 2));
+}
+
+/**
+ * The patch for what actually changed.
+ *
+ * Only differing keys are emitted, and a cleared field is emitted as
+ * `undefined` — `Table.update` reads that as "remove", while an absent key
+ * means "leave alone". Saving without touching anything must write nothing,
+ * the same doctrine the measures already follow.
+ */
+export function detailPatch(initial: SetDetailDraft, current: SetDetailDraft): SetPatch {
+  const patch: SetPatch = {};
+
+  if (current.rpe !== initial.rpe) {
+    patch.rpe = current.rpe ?? undefined;
+  }
+
+  if (current.isFailure !== initial.isFailure) {
+    // `false` is not worth storing: a set that did not end in failure is the
+    // ordinary case, and the absent key already says so.
+    patch.isFailure = current.isFailure ? true : undefined;
+  }
+
+  const notes = current.notes.trim();
+  if (notes !== initial.notes.trim()) {
+    patch.notes = notes === '' ? undefined : notes;
+  }
+
+  return patch;
 }

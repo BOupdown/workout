@@ -1,18 +1,24 @@
 'use client';
 
-import { Trash } from '@phosphor-icons/react';
+import { CaretDown, CaretUp, Check, Minus, Plus, Trash } from '@phosphor-icons/react';
 import { useState } from 'react';
 import { deleteSet, updateSet } from '@/lib/db/sets';
 import type { Exercise, SetEntry, SetKind } from '@/lib/db/types';
 import { setFieldRequirements } from '@/lib/db/validation';
 import { NO_MESSAGES, toFieldMessages, type FieldMessages } from '@/lib/errors';
 import {
+  detailFromSet,
+  detailPatch,
   draftFromSet,
   draftToSetPatch,
+  RPE_MAX,
+  RPE_MIN,
+  stepRpe,
   stepDraftValue,
   stepForField,
   visibleDraftFields,
   type DraftField,
+  type SetDetailDraft,
   type SetDraft,
 } from '@/lib/set-draft';
 import type { WeightUnit } from '@/lib/units';
@@ -69,6 +75,14 @@ export function SetEditorSheet({ set, exercise, position, unit, onClose }: SetEd
   const [busy, setBusy] = useState(false);
   const [confirmingDelete, setConfirmingDelete] = useState(false);
 
+  const [initialDetail] = useState<SetDetailDraft>(() => detailFromSet(set));
+  const [detail, setDetail] = useState<SetDetailDraft>(initialDetail);
+  // Open on its own when the set already carries something: a note you
+  // cannot see is a note you will never correct.
+  const [showDetail, setShowDetail] = useState(
+    () => initialDetail.rpe !== null || initialDetail.isFailure || initialDetail.notes !== '',
+  );
+
   const setField = (field: DraftField, value: string) => {
     setDraft((current) => ({ ...current, [field]: value }));
     setMessages(NO_MESSAGES);
@@ -86,7 +100,7 @@ export function SetEditorSheet({ set, exercise, position, unit, onClose }: SetEd
         if (draft[field] === initial[field]) delete patch[field];
       }
 
-      await updateSet(set.id, patch);
+      await updateSet(set.id, { ...patch, ...detailPatch(initialDetail, detail) });
       onClose();
     } catch (error) {
       setMessages(toFieldMessages(error, visibleFields));
@@ -127,7 +141,7 @@ export function SetEditorSheet({ set, exercise, position, unit, onClose }: SetEd
       <section
         aria-label={`Edit set ${position} of ${exercise.name}`}
         style={{ touchAction: 'pan-y' }}
-        className="shrink-0 rounded-t-panel border-t border-line bg-raised px-4 pt-4 pb-[calc(env(safe-area-inset-bottom)+0.875rem)]"
+        className="max-h-[88vh] shrink-0 overflow-y-auto rounded-t-panel border-t border-line bg-raised px-4 pt-4 pb-[calc(env(safe-area-inset-bottom)+0.875rem)]"
       >
         <div className="mb-3 flex items-baseline justify-between gap-3">
           <h2 className="truncate text-[0.9375rem] font-semibold text-ink">{exercise.name}</h2>
@@ -171,6 +185,96 @@ export function SetEditorSheet({ set, exercise, position, unit, onClose }: SetEd
             />
           ))}
         </div>
+
+        {/* Behind a disclosure on purpose. This sheet exists to fix one number
+            between two sets; how hard it felt, and why, is a slower intention.
+            It must not push "Save" down the screen for someone who only came
+            to correct a typo. */}
+        <button
+          type="button"
+          onClick={() => setShowDetail((shown) => !shown)}
+          aria-expanded={showDetail}
+          className="mt-3 flex min-h-11 w-full items-center justify-between gap-2 rounded-control px-1 text-left"
+        >
+          <span className="text-sm font-medium text-muted">
+            {detailSummary(detail) ?? 'How it felt'}
+          </span>
+          {showDetail ? (
+            <CaretUp size={16} weight="bold" className="shrink-0 text-muted" />
+          ) : (
+            <CaretDown size={16} weight="bold" className="shrink-0 text-muted" />
+          )}
+        </button>
+
+        {showDetail ? (
+          <div className="space-y-2">
+            <div className="flex items-center gap-2 rounded-control bg-surface px-3 py-2">
+              <span className="flex-1 text-sm font-medium text-ink">RPE</span>
+
+              <button
+                type="button"
+                disabled={busy || detail.rpe === RPE_MIN}
+                onClick={() => setDetail((d) => ({ ...d, rpe: stepRpe(d.rpe, -1) }))}
+                aria-label="Lower the RPE"
+                className="flex h-11 w-11 shrink-0 items-center justify-center rounded-control bg-raised text-ink transition-transform active:scale-90 disabled:opacity-30"
+              >
+                <Minus size={16} weight="bold" />
+              </button>
+
+              <span className="w-10 shrink-0 text-center font-mono text-base font-semibold text-ink tabular-nums">
+                {detail.rpe ?? '—'}
+              </span>
+
+              <button
+                type="button"
+                disabled={busy || detail.rpe === RPE_MAX}
+                onClick={() => setDetail((d) => ({ ...d, rpe: stepRpe(d.rpe, 1) }))}
+                aria-label="Raise the RPE"
+                className="flex h-11 w-11 shrink-0 items-center justify-center rounded-control bg-raised text-ink transition-transform active:scale-90 disabled:opacity-30"
+              >
+                <Plus size={16} weight="bold" />
+              </button>
+
+              {/* Clearing has to exist: "not recorded" is not a low RPE, and
+                  without this there would be no way back to it. */}
+              <button
+                type="button"
+                disabled={busy || detail.rpe === null}
+                onClick={() => setDetail((d) => ({ ...d, rpe: null }))}
+                className="h-11 shrink-0 rounded-control px-2 text-xs font-medium text-muted transition-transform active:scale-95 disabled:opacity-30"
+              >
+                Clear
+              </button>
+            </div>
+
+            <button
+              type="button"
+              disabled={busy}
+              onClick={() => setDetail((d) => ({ ...d, isFailure: !d.isFailure }))}
+              aria-pressed={detail.isFailure}
+              className="flex min-h-11 w-full items-center justify-between gap-3 rounded-control bg-surface px-3 text-left transition-transform active:scale-[0.99] disabled:opacity-50"
+            >
+              <span className="text-sm font-medium text-ink">Taken to failure</span>
+              <span
+                className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full ${
+                  detail.isFailure ? 'bg-accent text-accent-ink' : 'bg-raised text-transparent'
+                }`}
+              >
+                <Check size={14} weight="bold" />
+              </span>
+            </button>
+
+            <textarea
+              rows={2}
+              disabled={busy}
+              aria-label="Note on this set"
+              placeholder="Right shoulder pinched"
+              value={detail.notes}
+              onChange={(event) => setDetail((d) => ({ ...d, notes: event.target.value }))}
+              className="w-full resize-none rounded-control bg-surface px-3 py-2.5 text-base text-ink outline-none placeholder:text-muted focus:ring-2 focus:ring-ink disabled:opacity-50"
+            />
+          </div>
+        ) : null}
 
         <div className="mt-3 flex items-stretch gap-2">
           <button
@@ -220,4 +324,20 @@ export function SetEditorSheet({ set, exercise, position, unit, onClose }: SetEd
       </section>
     </div>
   );
+}
+
+/**
+ * What the collapsed row says.
+ *
+ * Reading the qualifiers back without opening the panel is the point:
+ * otherwise the only way to learn that a set carries a note is to go looking
+ * for it, which nobody does.
+ */
+function detailSummary(detail: SetDetailDraft): string | null {
+  const parts: string[] = [];
+  if (detail.rpe !== null) parts.push(`RPE ${detail.rpe}`);
+  if (detail.isFailure) parts.push('to failure');
+  if (detail.notes.trim() !== '') parts.push('note');
+
+  return parts.length > 0 ? parts.join(' · ') : null;
 }

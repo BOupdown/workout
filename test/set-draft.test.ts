@@ -12,6 +12,13 @@ import {
   stepDraftValue,
   stepForField,
   visibleDraftFields,
+  detailFromSet,
+  detailPatch,
+  RPE_FIRST,
+  RPE_MAX,
+  RPE_MIN,
+  stepRpe,
+  type SetDetailDraft,
 } from '../lib/set-draft';
 import { referenceExercises, resetDatabase } from './helpers';
 
@@ -273,5 +280,96 @@ describe('draftToSetPatch', () => {
 
     expect(updated.weightKg).toBe(102.5);
     expect(updated.reps).toBe(4);
+  });
+});
+
+describe('stepRpe', () => {
+  it('démarre à 8 quand rien n’est saisi', () => {
+    // Ni 1 ni un milieu de plage : 8 est la valeur réellement notée, et les
+    // autres sont à un ou deux taps.
+    expect(stepRpe(null, 1)).toBe(RPE_FIRST);
+    expect(stepRpe(null, -1)).toBe(RPE_FIRST);
+  });
+
+  it('avance par demi-points', () => {
+    expect(stepRpe(8, 1)).toBe(8.5);
+    expect(stepRpe(8, -1)).toBe(7.5);
+  });
+
+  it('ne sort pas des bornes', () => {
+    expect(stepRpe(RPE_MAX, 1)).toBe(RPE_MAX);
+    expect(stepRpe(RPE_MIN, -1)).toBe(RPE_MIN);
+  });
+
+  it('ne produit jamais une valeur que la validation refuserait', () => {
+    // La règle est : entre 1 et 10, et rpe × 2 entier.
+    let value: number | null = null;
+    for (let i = 0; i < 60; i += 1) {
+      value = stepRpe(value, 1);
+      expect(Number.isInteger(value * 2)).toBe(true);
+      expect(value).toBeGreaterThanOrEqual(RPE_MIN);
+      expect(value).toBeLessThanOrEqual(RPE_MAX);
+    }
+    for (let i = 0; i < 60; i += 1) {
+      value = stepRpe(value, -1);
+      expect(Number.isInteger(value * 2)).toBe(true);
+      expect(value).toBeGreaterThanOrEqual(RPE_MIN);
+      expect(value).toBeLessThanOrEqual(RPE_MAX);
+    }
+  });
+});
+
+describe('detailPatch', () => {
+  const base = (over: Partial<SetDetailDraft> = {}): SetDetailDraft => ({
+    rpe: null,
+    isFailure: false,
+    notes: '',
+    ...over,
+  });
+
+  it('n’écrit rien quand rien n’a bougé', () => {
+    expect(detailPatch(base({ rpe: 8, notes: 'ok' }), base({ rpe: 8, notes: 'ok' }))).toEqual({});
+  });
+
+  it('émet undefined, et non une absence, pour un RPE effacé', () => {
+    // La distinction est ce qui permet d'effacer : clé présente à `undefined`
+    // = supprime, clé absente = n'y touche pas.
+    const patch = detailPatch(base({ rpe: 8 }), base({ rpe: null }));
+    expect('rpe' in patch).toBe(true);
+    expect(patch.rpe).toBeUndefined();
+  });
+
+  it('ne stocke pas un échec à false', () => {
+    const patch = detailPatch(base({ isFailure: true }), base({ isFailure: false }));
+    expect('isFailure' in patch).toBe(true);
+    expect(patch.isFailure).toBeUndefined();
+  });
+
+  it('coupe les espaces des notes', () => {
+    expect(detailPatch(base(), base({ notes: '  épaule droite  ' })).notes).toBe('épaule droite');
+  });
+
+  it('traite une note devenue vide comme un effacement', () => {
+    const patch = detailPatch(base({ notes: 'gêne' }), base({ notes: '   ' }));
+    expect('notes' in patch).toBe(true);
+    expect(patch.notes).toBeUndefined();
+  });
+
+  it('ignore un changement qui se réduit à des espaces', () => {
+    expect(detailPatch(base({ notes: 'gêne' }), base({ notes: ' gêne ' }))).toEqual({});
+  });
+});
+
+describe('detailFromSet', () => {
+  it('distingue « non renseigné » de « zéro »', () => {
+    expect(detailFromSet({})).toEqual({ rpe: null, isFailure: false, notes: '' });
+  });
+
+  it('relit ce qui est enregistré', () => {
+    expect(detailFromSet({ rpe: 9.5, isFailure: true, notes: 'dernière' })).toEqual({
+      rpe: 9.5,
+      isFailure: true,
+      notes: 'dernière',
+    });
   });
 });
