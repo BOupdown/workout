@@ -85,7 +85,7 @@ export function CalendarView() {
 
       <div className="flex-1 overflow-y-auto p-3 pb-[calc(env(safe-area-inset-bottom)+1rem)]">
         {/* Above the grid rather than inside it: the week count is the answer
-            people came for, and counting coloured squares to find it would be
+            people came for, and hunting for it among coloured squares would be
             a detour. */}
         <TrainingBlockBar blocks={blocks ?? []} current={current} today={today} />
 
