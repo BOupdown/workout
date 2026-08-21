@@ -35,7 +35,7 @@ describe('ExerciseEditSheet', () => {
   it('laisse tout modifiable tant qu’aucune série n’existe', async () => {
     const fresh = await createExercise({ name: 'Sandbag carry', loadType: 'external', metric: 'reps' });
 
-    render(<ExerciseEditSheet exercise={fresh} onSaved={vi.fn()} onClose={vi.fn()} />);
+    render(<ExerciseEditSheet exercise={fresh} onSaved={vi.fn()} onDeleted={vi.fn()} onClose={vi.fn()} />);
 
     await expect.poll(() => screen.queryByText(/already recorded/)).toBeNull();
     for (const control of natureControls()) {
@@ -48,7 +48,7 @@ describe('ExerciseEditSheet', () => {
     // le sens des séries déjà là. L'écran l'empêche au lieu de le rapporter.
     await logOneSet(squat);
 
-    render(<ExerciseEditSheet exercise={squat} onSaved={vi.fn()} onClose={vi.fn()} />);
+    render(<ExerciseEditSheet exercise={squat} onSaved={vi.fn()} onDeleted={vi.fn()} onClose={vi.fn()} />);
 
     expect(await screen.findByText(/1 set already recorded/)).toBeDefined();
     for (const control of natureControls()) {
@@ -62,7 +62,7 @@ describe('ExerciseEditSheet', () => {
     const onSaved = vi.fn();
     await logOneSet(squat);
 
-    render(<ExerciseEditSheet exercise={squat} onSaved={onSaved} onClose={vi.fn()} />);
+    render(<ExerciseEditSheet exercise={squat} onSaved={onSaved} onDeleted={vi.fn()} onClose={vi.fn()} />);
 
     const name = await screen.findByLabelText('Exercise name');
     expect((name as HTMLInputElement).disabled).toBe(false);
@@ -81,7 +81,7 @@ describe('ExerciseEditSheet', () => {
     const user = userEvent.setup();
     await logOneSet(squat);
 
-    render(<ExerciseEditSheet exercise={squat} onSaved={vi.fn()} onClose={vi.fn()} />);
+    render(<ExerciseEditSheet exercise={squat} onSaved={vi.fn()} onDeleted={vi.fn()} onClose={vi.fn()} />);
     await screen.findByText(/1 set already recorded/);
 
     await user.click(screen.getByRole('button', { name: 'Save changes' }));
@@ -94,7 +94,7 @@ describe('ExerciseEditSheet', () => {
     const user = userEvent.setup();
     const fresh = await createExercise({ name: 'Sandbag carry', loadType: 'external', metric: 'reps' });
 
-    render(<ExerciseEditSheet exercise={fresh} onSaved={vi.fn()} onClose={vi.fn()} />);
+    render(<ExerciseEditSheet exercise={fresh} onSaved={vi.fn()} onDeleted={vi.fn()} onClose={vi.fn()} />);
 
     const name = await screen.findByLabelText('Exercise name');
     await user.clear(name);
@@ -110,7 +110,7 @@ describe('ExerciseEditSheet', () => {
     await logOneSet(squat);
     const setsBefore = await db.sets.count();
 
-    render(<ExerciseEditSheet exercise={squat} onSaved={vi.fn()} onClose={vi.fn()} />);
+    render(<ExerciseEditSheet exercise={squat} onSaved={vi.fn()} onDeleted={vi.fn()} onClose={vi.fn()} />);
 
     await user.click(await screen.findByRole('button', { name: /Archive this exercise/ }));
     await user.click(screen.getByRole('button', { name: 'Archive' }));
@@ -131,12 +131,117 @@ describe('ExerciseEditSheet', () => {
     await db.exercises.update(archived.id, { archivedAt: Date.now() });
     const stored = await db.exercises.get(archived.id);
 
-    render(<ExerciseEditSheet exercise={stored!} onSaved={vi.fn()} onClose={vi.fn()} />);
+    render(<ExerciseEditSheet exercise={stored!} onSaved={vi.fn()} onDeleted={vi.fn()} onClose={vi.fn()} />);
 
     await user.click(await screen.findByRole('button', { name: /Restore this exercise/ }));
 
     await expect
       .poll(async () => (await db.exercises.get(archived.id))?.archivedAt)
       .toBeUndefined();
+  });
+});
+
+describe('supprimer depuis la feuille', () => {
+  it('propose la suppression sur un exercice jamais fait', async () => {
+    const fresh = await createExercise({
+      name: 'Sandbag carry',
+      loadType: 'external',
+      metric: 'reps',
+    });
+
+    render(
+      <ExerciseEditSheet
+        exercise={fresh}
+        onSaved={vi.fn()}
+        onDeleted={vi.fn()}
+        onClose={vi.fn()}
+      />,
+    );
+
+    expect(await screen.findByRole('button', { name: /Delete this exercise/ })).toBeDefined();
+  });
+
+  it('ne la propose pas dès qu’une série existe', async () => {
+    // La règle n'est pas décorative : sans elle l'écran offrirait un geste que
+    // la base refuse, et qui effacerait des séances s'il passait.
+    await logOneSet(squat);
+
+    render(
+      <ExerciseEditSheet
+        exercise={squat}
+        onSaved={vi.fn()}
+        onDeleted={vi.fn()}
+        onClose={vi.fn()}
+      />,
+    );
+
+    await screen.findByText(/1 set already recorded/);
+    expect(screen.queryByRole('button', { name: /Delete this exercise/ })).toBeNull();
+  });
+
+  it('ne la propose pas tant que le compte n’est pas connu', async () => {
+    // `useLiveQuery` rend `undefined` avant de répondre. Traiter ça comme zéro
+    // afficherait « Delete » une fraction de seconde sur un exercice chargé
+    // d'historique — le seul instant où le geste est faux.
+    await logOneSet(squat);
+
+    render(
+      <ExerciseEditSheet
+        exercise={squat}
+        onSaved={vi.fn()}
+        onDeleted={vi.fn()}
+        onClose={vi.fn()}
+      />,
+    );
+
+    expect(screen.queryByRole('button', { name: /Delete this exercise/ })).toBeNull();
+  });
+
+  it('supprime derrière une confirmation, et prévient le parent', async () => {
+    const user = userEvent.setup();
+    const onDeleted = vi.fn();
+    const fresh = await createExercise({
+      name: 'Sandbag carry',
+      loadType: 'external',
+      metric: 'reps',
+    });
+
+    render(
+      <ExerciseEditSheet
+        exercise={fresh}
+        onSaved={vi.fn()}
+        onDeleted={onDeleted}
+        onClose={vi.fn()}
+      />,
+    );
+
+    await user.click(await screen.findByRole('button', { name: /Delete this exercise/ }));
+    await user.click(screen.getByRole('button', { name: 'Delete' }));
+
+    await expect.poll(async () => await db.exercises.get(fresh.id)).toBeUndefined();
+    expect(onDeleted).toHaveBeenCalled();
+  });
+
+  it('ne supprime rien tant qu’on n’a pas confirmé', async () => {
+    const user = userEvent.setup();
+    const fresh = await createExercise({
+      name: 'Sandbag carry',
+      loadType: 'external',
+      metric: 'reps',
+    });
+
+    render(
+      <ExerciseEditSheet
+        exercise={fresh}
+        onSaved={vi.fn()}
+        onDeleted={vi.fn()}
+        onClose={vi.fn()}
+      />,
+    );
+
+    await user.click(await screen.findByRole('button', { name: /Delete this exercise/ }));
+    await user.click(screen.getByRole('button', { name: 'Cancel' }));
+
+    expect(await db.exercises.get(fresh.id)).toBeDefined();
   });
 });

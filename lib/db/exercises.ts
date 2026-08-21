@@ -61,6 +61,28 @@ export class ExerciseNameConflictError extends Error {
  * bodyweight ones. The right move is to archive the old one and create a new
  * one — a different movement deserves a different identity.
  */
+/**
+ * Deleting an exercise that has been trained.
+ *
+ * Refused rather than cascaded: a `SetEntry` points at its exercise, so
+ * removing the row would take real sessions with it. Archiving already covers
+ * "I don't do this any more" without losing anything.
+ */
+export class ExerciseHasHistoryError extends Error {
+  readonly exerciseId: Id;
+  readonly setCount: number;
+
+  constructor(exerciseId: Id, setCount: number) {
+    super(
+      `This exercise has ${setCount} set${setCount > 1 ? 's' : ''} recorded: ` +
+        'archive it instead of deleting it.',
+    );
+    this.name = 'ExerciseHasHistoryError';
+    this.exerciseId = exerciseId;
+    this.setCount = setCount;
+  }
+}
+
 export class ExerciseInUseError extends Error {
   readonly exerciseId: Id;
   readonly setCount: number;
@@ -260,6 +282,50 @@ export async function archiveExercise(
     await db.exercises.update(id, { archivedAt });
     return { ...exercise, archivedAt };
   });
+}
+
+/**
+ * Deletes an exercise that was never trained.
+ *
+ * The catalogue ships wide so nobody has to create a bench press by hand, and
+ * the cost of that is a picker holding movements a given person will never do.
+ * Archiving hides them; this removes them.
+ *
+ * Only ever the untrained ones. With a single set recorded, deleting would be
+ * deleting training, and `archiveExercise` is the right gesture instead — it
+ * clears the picker just as well and keeps the history readable.
+ *
+ * A tombstone is written so the catalogue backfill does not hand it straight
+ * back the next time the shipped list grows.
+ *
+ * @throws {ExerciseHasHistoryError} when any set references it.
+ */
+export async function deleteExercise(
+  id: Id,
+  retiredAt: Timestamp = Date.now(),
+): Promise<void> {
+  await db.transaction(
+    'rw',
+    db.exercises,
+    db.sets,
+    db.sessionExercises,
+    db.retiredExercises,
+    async () => {
+      const exercise = await db.exercises.get(id);
+      if (!exercise) throw new Error(`Exercise not found: ${id}`);
+
+      const setCount = await countSetsForExercise(id);
+      if (setCount > 0) throw new ExerciseHasHistoryError(id, setCount);
+
+      // An exercise can sit in a session with nothing logged under it — added,
+      // then the session ended. Those blocks would otherwise point at a row
+      // that no longer exists.
+      await db.sessionExercises.where('exerciseId').equals(id).delete();
+
+      await db.exercises.delete(id);
+      await db.retiredExercises.put({ nameKey: exercise.nameKey, retiredAt });
+    },
+  );
 }
 
 /** Puts an exercise back in the picker. Idempotent. */
