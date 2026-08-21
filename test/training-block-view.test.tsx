@@ -21,14 +21,23 @@ beforeEach(async () => {
   window.localStorage.clear();
 });
 
-const blockBar = () =>
-  screen.findByRole('button', { name: 'Training blocks' }, { timeout: 5000 });
+/** The panel above the grid. It holds exactly one button, whatever its label. */
+const blockPanel = () =>
+  screen.findByRole('region', { name: 'Training block' }, { timeout: 5000 });
+
+const openBlocks = async (user: ReturnType<typeof userEvent.setup>) => {
+  const panel = await blockPanel();
+  await user.click(within(panel).getByRole('button'));
+};
 
 describe('la bande de bloc', () => {
-  it('dit qu’il n’y en a aucun', async () => {
+  it('propose clairement d’en ajouter un quand il n’y en a pas', async () => {
+    // Le défaut signalé : une ligne fine avec un « + » ne dit pas ce qu'elle
+    // est, et un contrôle qu'on ne reconnaît pas est un contrôle inutilisé.
     render(<CalendarView />);
 
-    await expect.poll(async () => (await blockBar()).textContent).toMatch(/No training block/);
+    const panel = await blockPanel();
+    expect(within(panel).getByRole('button').textContent).toMatch(/Add a training block/);
   });
 
   it('annonce le bloc en cours et sa semaine', async () => {
@@ -37,15 +46,15 @@ describe('la bande de bloc', () => {
 
     render(<CalendarView />);
 
-    await expect.poll(async () => (await blockBar()).textContent).toMatch(/Strength/);
-    expect((await blockBar()).textContent).toMatch(/week 2/);
+    await expect.poll(async () => (await blockPanel()).textContent).toMatch(/Strength/);
+    expect((await blockPanel()).textContent).toMatch(/week 2/);
   });
 
   it('démarre un bloc depuis la feuille', async () => {
     const user = userEvent.setup();
     render(<CalendarView />);
 
-    await user.click(await blockBar());
+    await openBlocks(user);
 
     const sheet = await screen.findByRole('region', { name: 'Training blocks' });
     await user.type(within(sheet).getByLabelText('Block name'), 'Deload');
@@ -60,7 +69,7 @@ describe('la bande de bloc', () => {
     const user = userEvent.setup();
     render(<CalendarView />);
 
-    await user.click(await blockBar());
+    await openBlocks(user);
 
     const sheet = await screen.findByRole('region', { name: 'Training blocks' });
     const start = within(sheet).getByRole('button', { name: /Start this block/ });
@@ -73,7 +82,7 @@ describe('la bande de bloc', () => {
     await createTrainingBlock('Deload', daysAgo(3), daysAgo(-3));
 
     render(<CalendarView />);
-    await user.click(await blockBar());
+    await openBlocks(user);
 
     const sheet = await screen.findByRole('region', { name: 'Training blocks' });
     await user.click(within(sheet).getByRole('button', { name: 'Delete Deload' }));
@@ -89,7 +98,7 @@ describe('la bande de bloc', () => {
     await createTrainingBlock('Strength', today(), daysAgo(-27));
 
     render(<CalendarView />);
-    await user.click(await blockBar());
+    await openBlocks(user);
 
     const sheet = await screen.findByRole('region', { name: 'Training blocks' });
     await user.type(within(sheet).getByLabelText('Block name'), 'Peaking');
@@ -107,7 +116,7 @@ describe('le compte des semaines', () => {
 
     render(<CalendarView />);
 
-    await expect.poll(async () => (await blockBar()).textContent).toMatch(/week 1/);
+    await expect.poll(async () => (await blockPanel()).textContent).toMatch(/week 1/);
   });
 
   it('bascule en semaine 2 le huitième jour', async () => {
@@ -118,7 +127,7 @@ describe('le compte des semaines', () => {
 
     render(<CalendarView />);
 
-    await expect.poll(async () => (await blockBar()).textContent).toMatch(/week 2/);
+    await expect.poll(async () => (await blockPanel()).textContent).toMatch(/week 2/);
   });
 });
 

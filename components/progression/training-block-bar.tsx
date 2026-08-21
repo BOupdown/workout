@@ -40,9 +40,12 @@ function addDays(date: LocalDate, offset: number): LocalDate {
 /**
  * Where you are in your cycle, and how to move on.
  *
- * The week count is the point, not the colour. "Strength · week 3" answers the
- * question people actually ask a calendar for — is it time to switch — without
- * anyone having to count coloured squares.
+ * The week count is what people actually ask a calendar for — is it time to
+ * switch — and it is stated in words rather than left to be counted off
+ * coloured squares.
+ *
+ * Given the room of a panel because the first attempt was a thin row with a
+ * bare "+": legible once you knew what it was, invisible until then.
  */
 export function TrainingBlockBar({ blocks, current, today }: TrainingBlockBarProps) {
   const [open, setOpen] = useState(false);
@@ -80,28 +83,38 @@ export function TrainingBlockBar({ blocks, current, today }: TrainingBlockBarPro
 
   return (
     <>
-      <button
-        type="button"
-        onClick={() => setOpen(true)}
-        aria-label="Training blocks"
-        className="flex min-h-11 w-full items-center gap-2 rounded-control bg-surface px-3 text-left transition-transform active:scale-[0.99]"
-      >
-        <Flag size={15} weight="bold" className="shrink-0 text-ink" />
-        {current ? (
-          <span className="min-w-0 flex-1 truncate text-sm text-ink">
-            <span className="font-semibold">{current.block.label}</span>
-            <span className="text-muted">
-              {' '}
-              · week {current.week} of {current.totalWeeks}
+      {/* A panel rather than a thin row. The first version was a small line with
+          a bare "+", which said nothing about what it was to someone arriving
+          on the screen — and a control nobody recognises is a control nobody
+          uses. */}
+      <section aria-label="Training block" className="rounded-panel bg-raised px-4 py-3.5">
+        <div className="flex items-center gap-2">
+          <Flag size={17} weight="bold" className="shrink-0 text-ink" />
+          <h3 className="min-w-0 flex-1 truncate text-[0.9375rem] font-semibold text-ink">
+            {current ? current.block.label : 'Training blocks'}
+          </h3>
+          {current ? (
+            <span className="shrink-0 font-mono text-xs text-muted tabular-nums">
+              week {current.week}/{current.totalWeeks}
             </span>
-          </span>
-        ) : (
-          <span className="min-w-0 flex-1 truncate text-sm text-muted">
-            No training block
-          </span>
-        )}
-        <Plus size={15} weight="bold" aria-hidden className="shrink-0 text-muted" />
-      </button>
+          ) : null}
+        </div>
+
+        <p className="mt-1.5 text-sm text-muted">
+          {current
+            ? `${current.daysLeft === 0 ? 'Last day' : `${current.daysLeft} days left`} of this block.`
+            : 'Name the cycle you are in — strength, hypertrophy, a deload — and the calendar will colour its weeks.'}
+        </p>
+
+        <button
+          type="button"
+          onClick={() => setOpen(true)}
+          className="mt-3 flex h-14 w-full items-center justify-center gap-2 rounded-control bg-ink text-[0.9375rem] font-semibold text-surface transition-transform active:scale-[0.98]"
+        >
+          <Plus size={17} weight="bold" aria-hidden />
+          {current ? 'Manage blocks' : 'Add a training block'}
+        </button>
+      </section>
 
       {open ? (
         <div className="fixed inset-0 z-30 flex flex-col justify-end">
