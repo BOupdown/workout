@@ -144,16 +144,26 @@ describe('describeSet', () => {
     );
   });
 
-  it('n’encombre pas une durée, qui n’a pas de côtés', () => {
-    expect(describeSet({ durationSec: 60 }, rules('bodyweight', 'time', true))).toEqual({
-      primary: '1:00',
+  it('signale aussi une position tenue par côté', () => {
+    // Cette assertion disait l'inverse — « une durée n'a pas de côtés » — et
+    // tenait tant qu'aucun exercice livré n'était à la fois au temps et
+    // unilatéral. Le gainage latéral en a deux : 45 s en font 90 de travail.
+    expect(describeSet({ durationSec: 45 }, rules('bodyweight', 'time', true))).toEqual({
+      primary: '0:45',
+      secondary: 'per side',
     });
   });
 
-  it('n’a pas de qualificatif pour une durée', () => {
+  it('laisse une durée bilatérale nue', () => {
     expect(describeSet({ durationSec: 90 }, rules('bodyweight', 'time'))).toEqual({
       primary: '1:30',
+      secondary: undefined,
     });
+  });
+
+  it('reste lisible sur une durée manquante, par côté ou non', () => {
+    expect(describeSet({}, rules('bodyweight', 'time', true)).primary).toBe('?');
+    expect(describeSet({}, rules('bodyweight', 'time')).primary).toBe('?');
   });
 
   it('reste lisible sur une série incomplète', () => {
