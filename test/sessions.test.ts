@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { db } from '../lib/db/db';
 import { createSet } from '../lib/db/sets';
+import { archiveExercise } from '../lib/db/exercises';
 import {
   addExerciseToSession,
   deleteSession,
@@ -13,6 +14,7 @@ import {
   setSessionBodyweight,
   setSessionExerciseNotes,
   startSession,
+  startSessionFrom,
   updateSessionDate,
   updateSessionText,
 } from '../lib/db/sessions';
@@ -522,5 +524,93 @@ describe('setSessionExerciseNotes', () => {
 
   it('refuse un bloc inconnu', async () => {
     await expect(setSessionExerciseNotes('nope', 'x')).rejects.toThrow();
+  });
+});
+
+describe('startSessionFrom', () => {
+  /** A finished session laid out with two exercises and one logged set. */
+  async function pastSession() {
+    const { session } = await startSession();
+    const first = await addExerciseToSession(session.id, squat.id, { notes: 'banc trop haut' });
+    await addExerciseToSession(session.id, pushUps.id);
+    await createSet({ sessionExerciseId: first.id, weightKg: 100, reps: 5, kind: 'work' });
+    await endSession(session.id);
+    return session;
+  }
+
+  it('reprend les exercices, dans le meme ordre', async () => {
+    const source = await pastSession();
+    const result = await startSessionFrom(source.id);
+
+    expect(result.copied).toBe(2);
+    const blocks = await listSessionExercises(result.session.id);
+    expect(blocks.map((b) => b.exerciseId)).toEqual([squat.id, pushUps.id]);
+  });
+
+  it('ne reprend aucune serie : c est un plan, pas une copie', async () => {
+    const source = await pastSession();
+    const result = await startSessionFrom(source.id);
+
+    const blocks = await listSessionExercises(result.session.id);
+    const counts = await Promise.all(
+      blocks.map((b) => db.sets.where('sessionExerciseId').equals(b.id).count()),
+    );
+    expect(counts).toEqual([0, 0]);
+  });
+
+  it('laisse les notes derriere elles', async () => {
+    // « banc trop haut » etait vrai ce jour-la, pas d une seance a venir.
+    const source = await pastSession();
+    const result = await startSessionFrom(source.id);
+
+    const blocks = await listSessionExercises(result.session.id);
+    expect(blocks.every((b) => b.notes === undefined)).toBe(true);
+  });
+
+  it('ne touche pas a la seance d origine', async () => {
+    const source = await pastSession();
+    await startSessionFrom(source.id);
+
+    const blocks = await listSessionExercises(source.id);
+    expect(blocks).toHaveLength(2);
+    expect(blocks[0].notes).toBe('banc trop haut');
+    expect(await db.sets.where('sessionId').equals(source.id).count()).toBe(1);
+  });
+
+  it('ecarte un exercice archive depuis, et le nomme', async () => {
+    const source = await pastSession();
+    await archiveExercise(pushUps.id);
+
+    const result = await startSessionFrom(source.id);
+
+    expect(result.copied).toBe(1);
+    expect(result.skipped).toEqual([pushUps.name]);
+    const blocks = await listSessionExercises(result.session.id);
+    expect(blocks.map((b) => b.exerciseId)).toEqual([squat.id]);
+  });
+
+  it('ferme la seance restee ouverte, comme un demarrage normal', async () => {
+    const source = await pastSession();
+    const { session: open } = await startSession();
+
+    const result = await startSessionFrom(source.id);
+
+    expect(result.autoClosed?.id).toBe(open.id);
+    expect((await db.sessions.get(open.id))?.endedAt).toBeDefined();
+  });
+
+  it('accepte une seance d origine sans exercice', async () => {
+    const { session } = await startSession();
+    await endSession(session.id);
+
+    const result = await startSessionFrom(session.id);
+    expect(result.copied).toBe(0);
+    expect(await listSessionExercises(result.session.id)).toHaveLength(0);
+  });
+
+  it('refuse une seance inconnue sans rien ouvrir', async () => {
+    const before = await db.sessions.count();
+    await expect(startSessionFrom('nope')).rejects.toThrow();
+    expect(await db.sessions.count()).toBe(before);
   });
 });

@@ -2,17 +2,20 @@ import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { ActiveSessionScreen } from '../components/session/active-session-screen';
-import { addExerciseToSession, startSession } from '../lib/db/sessions';
+import { addExerciseToSession, endSession, startSession } from '../lib/db/sessions';
+import { archiveExercise } from '../lib/db/exercises';
 import { createSet } from '../lib/db/sets';
 import { db } from '../lib/db/db';
 import type { Exercise } from '../lib/db/types';
 import { exerciseByKey, resetDatabase } from './helpers';
 
 let squat: Exercise;
+let pushUps: Exercise;
 
 beforeEach(async () => {
   await resetDatabase();
   squat = await exerciseByKey('squat');
+  pushUps = await exerciseByKey('push ups');
   window.localStorage.clear();
 });
 
@@ -205,5 +208,76 @@ describe('le record personnel', () => {
     await expect
       .poll(() => screen.queryAllByRole('button', { name: /personal record/ }).length)
       .toBe(0);
+  });
+});
+
+describe('repartir d’une séance passée', () => {
+  /** A finished session laid out with two exercises and one logged set. */
+  async function finishedSession() {
+    const { session } = await startSession();
+    const block = await addExerciseToSession(session.id, squat.id);
+    await addExerciseToSession(session.id, pushUps.id);
+    await createSet({ sessionExerciseId: block.id, weightKg: 100, reps: 5, kind: 'work' });
+    await endSession(session.id);
+    return session;
+  }
+
+  it('rouvre la même liste d’exercices, vide de séries', async () => {
+    // Le moment où la promesse des deux taps ne tenait pas : démarrer imposait
+    // de rajouter chaque exercice à la main.
+    const user = userEvent.setup();
+    await finishedSession();
+
+    render(<ActiveSessionScreen />);
+
+    await user.click(
+      await screen.findByRole('button', { name: /Start the same session again/ }),
+    );
+
+    expect(await screen.findByRole('button', { name: /^Squat/ })).toBeDefined();
+    expect(screen.getByRole('button', { name: /^Push-ups/ })).toBeDefined();
+    // Une seule série en base : celle de la séance d'origine.
+    await expect.poll(savedSets).toBe(1);
+  });
+
+  it('n’offre rien à répéter quand la dernière séance était vide', async () => {
+    const { session } = await startSession();
+    await endSession(session.id);
+
+    render(<ActiveSessionScreen />);
+
+    await screen.findByRole('button', { name: 'Start a session' });
+    expect(screen.queryByRole('button', { name: /Start the same session again/ })).toBeNull();
+  });
+
+  it('dit ce qui a été laissé de côté', async () => {
+    const user = userEvent.setup();
+    await finishedSession();
+    await archiveExercise(pushUps.id);
+
+    render(<ActiveSessionScreen />);
+
+    await user.click(
+      await screen.findByRole('button', { name: /Start the same session again/ }),
+    );
+
+    expect(await screen.findByText(/archived since, and left out/)).toBeDefined();
+    expect(screen.getByRole('button', { name: /^Squat/ })).toBeDefined();
+    // Le motif exclut le bandeau, qui nomme lui aussi l exercice ecarte : ce
+    // qui doit manquer, c est la *ligne* d exercice.
+    expect(screen.queryByRole('button', { name: /^Push-ups(to do|[0-9]+ )/ })).toBeNull();
+  });
+
+  it('ne dit rien quand tout a pu être repris', async () => {
+    const user = userEvent.setup();
+    await finishedSession();
+
+    render(<ActiveSessionScreen />);
+    await user.click(
+      await screen.findByRole('button', { name: /Start the same session again/ }),
+    );
+
+    await screen.findByRole('button', { name: /^Squat/ });
+    expect(screen.queryByText(/archived since/)).toBeNull();
   });
 });

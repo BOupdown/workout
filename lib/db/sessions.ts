@@ -130,6 +130,64 @@ export async function startSession(input: NewSessionInput = {}): Promise<StartSe
   });
 }
 
+export interface StartFromSessionResult extends StartSessionResult {
+  /** Exercises carried over, in their original order. */
+  copied: number;
+  /**
+   * Names of exercises left behind because they have since been archived.
+   * Returned rather than dropped quietly: the new session is visibly shorter
+   * than the one it came from, and the screen has to be able to say why.
+   */
+  skipped: string[];
+}
+
+/**
+ * Starts a session laid out like an earlier one.
+ *
+ * Only the exercises are carried, never the sets: this is a plan, not a copy.
+ * The notes stay behind too — "bench set too high" was true of that day, and
+ * re-attaching it to a session that has not happened yet would be a lie.
+ *
+ * Everything runs in one transaction, so a session is never left half built:
+ * either it opens with its whole layout, or nothing is written.
+ */
+export async function startSessionFrom(sourceId: Id): Promise<StartFromSessionResult> {
+  return db.transaction(
+    'rw',
+    db.sessions,
+    db.sets,
+    db.sessionExercises,
+    db.exercises,
+    async () => {
+      const source = await db.sessions.get(sourceId);
+      if (!source) throw new Error(`Session not found: ${sourceId}`);
+
+      const blocks = await listSessionExercises(sourceId);
+      const started = await startSession();
+
+      const skipped: string[] = [];
+      let copied = 0;
+
+      for (const block of blocks) {
+        const exercise = await db.exercises.get(block.exerciseId);
+        if (!exercise) continue;
+
+        // Archived on purpose since that session: putting it back would undo a
+        // decision the user made, and `addExerciseToSession` refuses it anyway.
+        if (exercise.archivedAt !== undefined) {
+          skipped.push(exercise.name);
+          continue;
+        }
+
+        await addExerciseToSession(started.session.id, exercise.id);
+        copied += 1;
+      }
+
+      return { ...started, copied, skipped };
+    },
+  );
+}
+
 /**
  * Closes a session. Idempotent: closing an already-finished session returns it
  * unchanged, so a double tap on "Finish" produces no error.
