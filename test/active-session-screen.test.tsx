@@ -459,7 +459,8 @@ describe('un exercice compté par côté', () => {
       { name: /^Edit set 1/ },
       { timeout: 5000 },
     );
-    expect(tile.getAttribute('aria-label')).toMatch(/10\/side/);
+    // La mention ferme la lecture : « 10 × 22/side », comme la série se dit.
+    expect(tile.getAttribute('aria-label')).toContain('10 × 22/side');
   });
 
   it('ne dit rien sur un exercice bilatéral', async () => {

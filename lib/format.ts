@@ -122,11 +122,14 @@ export function describeSet(
   const sign = exercise.loadType === 'assisted' ? '-' : '';
   const weight = formatNumber(toDisplayWeight(set.weightKg, unit));
 
-  // "/side" stays glued to the reps it qualifies. Trailing it after the load
-  // would read as 100 kg a side, which is a different session entirely.
+  // "/side" trails the whole reading rather than sitting inside it: "5 × 22/side"
+  // is how the set is said out loud, and breaking the two numbers apart to
+  // qualify only the first one reads worse than the ambiguity it removes. On a
+  // dumbbell the load is per side too; on a barbell split squat it is not, and
+  // the exercise's own "· per side" label in the picker carries that.
   return [
-    { text: `${set.reps}${perSide} ×`, strong: false },
-    { text: `${sign}${weight}`, strong: true },
+    { text: `${set.reps} ×`, strong: false },
+    { text: `${sign}${weight}${perSide}`, strong: true },
   ];
 }
 
