@@ -3,7 +3,8 @@
 import { Check, TrendUp } from '@phosphor-icons/react';
 import type { SetDraftController } from '@/hooks/use-set-draft';
 import type { FieldMessages } from '@/lib/errors';
-import type { SessionExerciseWithSets, SetKind } from '@/lib/db/types';
+import type { Exercise, SessionExerciseWithSets, SetKind } from '@/lib/db/types';
+import type { SetFieldRequirements } from '@/lib/db/validation';
 import { stepDraftValue, stepForField, type DraftField } from '@/lib/set-draft';
 import type { WeightUnit } from '@/lib/units';
 import { NumericField } from './numeric-field';
@@ -39,6 +40,23 @@ const ORIGIN_LABELS: Record<string, string | null> = {
   session: 'previous set',
   history: 'last session',
 };
+
+/**
+ * The label a field wears for this exercise.
+ *
+ * Reps say "per side" on a unilateral movement, because that is the moment it
+ * matters: it decides what number you are about to type, and getting it wrong
+ * halves or doubles a year of history.
+ */
+function fieldLabel(
+  field: DraftField,
+  requirements: SetFieldRequirements,
+  exercise: Pick<Exercise, 'perSide'>,
+): string {
+  if (field === 'weightKg') return requirements.weightLabel ?? FIELD_LABELS.weightKg;
+  if (field === 'reps' && exercise.perSide) return 'Reps / side';
+  return FIELD_LABELS[field];
+}
 
 /**
  * The entry area, anchored at the bottom within thumb reach.
@@ -108,11 +126,7 @@ export function SetEntryPanel({
         {visibleFields.map((field) => (
           <NumericField
             key={field}
-            label={
-              field === 'weightKg'
-                ? (requirements.weightLabel ?? FIELD_LABELS.weightKg)
-                : FIELD_LABELS[field]
-            }
+            label={fieldLabel(field, requirements, entry.exercise)}
             unit={fieldUnits[field]}
             mode={FIELD_MODES[field]}
             value={draft[field]}

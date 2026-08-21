@@ -152,6 +152,9 @@ export function ExerciseIndexScreen() {
                   <span className="min-w-0 flex-1">
                     <span className="block truncate text-[0.9375rem] font-medium text-ink">
                       {exercise.name}
+                      {exercise.perSide ? (
+                        <span className="font-normal text-muted"> · per side</span>
+                      ) : null}
                     </span>
                     <span className="mt-0.5 block font-mono text-xs text-muted tabular-nums">
                       {setCount > 0
