@@ -130,3 +130,80 @@ describe('le minuteur de repos et la zone du pouce', () => {
     await expect.poll(() => window.localStorage.getItem('workout.rest-timer')).toBeNull();
   });
 });
+
+describe('le record personnel', () => {
+  it('marque la série qui détient le record', async () => {
+    const { session } = await startSession();
+    const block = await addExerciseToSession(session.id, squat.id);
+    await createSet({ sessionExerciseId: block.id, weightKg: 100, reps: 5, kind: 'work' });
+    await createSet({ sessionExerciseId: block.id, weightKg: 110, reps: 3, kind: 'work' });
+
+    render(<ActiveSessionScreen />);
+
+    await expect
+      .poll(() => screen.queryAllByRole('button', { name: /personal record/ }).length)
+      .toBe(1);
+
+    const marked = screen.getByRole('button', { name: /personal record/ });
+    expect(marked.getAttribute('aria-label')).toContain('110');
+  });
+
+  it('déplace la marque quand une série plus lourde arrive', async () => {
+    // Le point de la dérivation : rien n'est mémorisé au moment de l'écriture.
+    const user = userEvent.setup();
+    const { session } = await startSession();
+    const block = await addExerciseToSession(session.id, squat.id);
+    await createSet({ sessionExerciseId: block.id, weightKg: 100, reps: 5, kind: 'work' });
+
+    render(<ActiveSessionScreen />);
+
+    await expect
+      .poll(() => screen.queryByRole('button', { name: /personal record/ })?.getAttribute('aria-label'))
+      .toContain('100');
+
+    const panel = await screen.findByRole('region', { name: /Log a set of Squat/ });
+    const load = within(panel).getByLabelText('Load') as HTMLInputElement;
+    await user.clear(load);
+    await user.type(load, '120');
+    await user.click(screen.getByRole('button', { name: /Save set/ }));
+
+    await expect
+      .poll(() => screen.queryByRole('button', { name: /personal record/ })?.getAttribute('aria-label'))
+      .toContain('120');
+    expect(screen.queryAllByRole('button', { name: /personal record/ })).toHaveLength(1);
+  });
+
+  it('ne marque aucun échauffement, si lourd soit-il', async () => {
+    // Volontairement modeste. L'exclusion des échauffements est prouvée sur
+    // `recordSet` dans progression.test.ts, seul endroit où elle est
+    // atteignable : ici `recentSetsForExercise` les a déjà écartés avant que la
+    // règle ne s'applique. Ce test constate le résultat, il ne prouve pas la
+    // règle — vérifié par mutation, il ne tombe pas si la règle disparaît.
+    const { session } = await startSession();
+    const block = await addExerciseToSession(session.id, squat.id);
+    await createSet({ sessionExerciseId: block.id, weightKg: 100, reps: 5, kind: 'work' });
+    await createSet({ sessionExerciseId: block.id, weightKg: 200, reps: 1, kind: 'warmup' });
+
+    render(<ActiveSessionScreen />);
+
+    await expect
+      .poll(() => screen.queryAllByRole('button', { name: /personal record/ }).length)
+      .toBe(1);
+    expect(
+      screen.getByRole('button', { name: /personal record/ }).getAttribute('aria-label'),
+    ).toContain('100');
+  });
+
+  it('ne marque rien quand aucune série de travail n existe', async () => {
+    const { session } = await startSession();
+    const block = await addExerciseToSession(session.id, squat.id);
+    await createSet({ sessionExerciseId: block.id, weightKg: 60, reps: 10, kind: 'warmup' });
+
+    render(<ActiveSessionScreen />);
+
+    await screen.findByRole('button', { name: /^Squat/ });
+    await expect
+      .poll(() => screen.queryAllByRole('button', { name: /personal record/ }).length)
+      .toBe(0);
+  });
+});

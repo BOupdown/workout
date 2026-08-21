@@ -1,6 +1,6 @@
 'use client';
 
-import { ArrowLeft, PencilSimple, TrendUp } from '@phosphor-icons/react';
+import { ArrowLeft, Medal, PencilSimple, TrendUp } from '@phosphor-icons/react';
 import { useExerciseProgression } from '@/hooks/use-exercise-progression';
 import { useWeightUnit } from '@/hooks/use-weight-unit';
 import type { Exercise } from '@/lib/db/types';
@@ -126,11 +126,23 @@ export function ProgressionSheet({ exercise, onEdit, onClose }: ProgressionSheet
                     {format(delta)} {label}
                   </span>
                 ) : null}
-                <span>
-                  {delta !== null ? 'vs previous session · ' : ''}
-                  best {best ? format(best.value) : '—'} {label}
-                </span>
+                {delta !== null ? <span>vs previous session</span> : null}
               </p>
+
+              {/* The record deserves its own line rather than a trailing aside:
+                  seeing progression over time is the point of the app, and this
+                  is the single number that says how far it got. */}
+              {best ? (
+                <p className="mt-3 flex items-baseline gap-1.5 border-t border-line pt-3 text-sm">
+                  <Medal size={15} weight="fill" aria-hidden className="self-center text-chart" />
+                  <span className="text-muted">Record</span>
+                  <span className="font-mono font-semibold text-ink tabular-nums">
+                    {format(best.value)} {label}
+                    {best.reps !== undefined ? ` × ${best.reps}` : ''}
+                  </span>
+                  <span className="text-muted">{DATE_FORMAT.format(best.performedAt)}</span>
+                </p>
+              ) : null}
             </section>
 
             {points.length > 1 ? (
