@@ -1,7 +1,9 @@
 'use client';
 
 import { NotePencil } from '@phosphor-icons/react';
+import { useLiveQuery } from 'dexie-react-hooks';
 import { useEffect, useState } from 'react';
+import { getBodyWeight } from '@/lib/db/bodyweight';
 import { formatElapsed, formatNumber } from '@/lib/format';
 import type { SessionDetail } from '@/lib/db/types';
 import { toDisplayWeight, type WeightUnit } from '@/lib/units';
@@ -26,6 +28,10 @@ export function SessionHeader({
   onEditNotes,
 }: SessionHeaderProps) {
   const [confirming, setConfirming] = useState(false);
+
+  // Read from the timeline rather than from the session: the session holds no
+  // copy, so the header and the calendar cannot show different numbers.
+  const bodyweight = useLiveQuery(() => getBodyWeight(detail.date), [detail.date]);
   const [elapsed, setElapsed] = useState(() => Date.now() - detail.startedAt);
 
   useEffect(() => {
@@ -69,8 +75,8 @@ export function SessionHeader({
               onClick={onEditBodyweight}
               className="relative font-sans font-medium text-ink underline decoration-line underline-offset-4 transition-transform active:scale-95 after:absolute after:-inset-x-3 after:-inset-y-3 after:content-['']"
             >
-              {detail.bodyweightKg !== undefined
-                ? `${formatNumber(toDisplayWeight(detail.bodyweightKg, unit))} ${unit}`
+              {bodyweight !== undefined
+                ? `${formatNumber(toDisplayWeight(bodyweight.weightKg, unit))} ${unit}`
                 : 'Bodyweight'}
             </button>
           </p>

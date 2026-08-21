@@ -1,15 +1,16 @@
 'use client';
 
 import { useState } from 'react';
-import { setSessionBodyweight } from '@/lib/db/sessions';
-import type { Id } from '@/lib/db/types';
+import { setBodyWeight } from '@/lib/db/bodyweight';
+import type { LocalDate } from '@/lib/db/types';
 import { ValidationError } from '@/lib/db/validation';
 import { formatNumber, parseNumberInput } from '@/lib/format';
 import { fromDisplayWeight, toDisplayWeight, type WeightUnit } from '@/lib/units';
 import { NumericField } from './numeric-field';
 
 interface BodyweightSheetProps {
-  sessionId: Id;
+  /** The day being weighed — the session's, here. */
+  date: LocalDate;
   /** Current value, in kilograms — the stored unit. */
   bodyweightKg: number | undefined;
   unit: WeightUnit;
@@ -19,13 +20,15 @@ interface BodyweightSheetProps {
 /**
  * Recording the bodyweight of the day.
  *
- * It belongs to the session and not to the user: on a bodyweight, weighted or
- * assisted exercise, ten pull-ups four kilos lighter is not the same
- * performance, and only a value dated alongside the sets can say so.
+ * It belongs to the **day**, not to the session: ten pull-ups four kilos
+ * lighter is not the same performance, and what makes that readable is the
+ * weight being dated alongside the sets — not being owned by them. Written to
+ * the same timeline the calendar reads, so a session and a calendar entry for
+ * one day can never hold different numbers.
  *
  * Entered in the display unit, stored in kilograms, like every other load.
  */
-export function BodyweightSheet({ sessionId, bodyweightKg, unit, onClose }: BodyweightSheetProps) {
+export function BodyweightSheet({ date, bodyweightKg, unit, onClose }: BodyweightSheetProps) {
   const [value, setValue] = useState(() =>
     bodyweightKg === undefined ? '' : formatNumber(toDisplayWeight(bodyweightKg, unit)),
   );
@@ -39,7 +42,7 @@ export function BodyweightSheet({ sessionId, bodyweightKg, unit, onClose }: Body
   const write = async (next: number | undefined) => {
     setBusy(true);
     try {
-      await setSessionBodyweight(sessionId, next);
+      await setBodyWeight(date, next);
       onClose();
     } catch (thrown) {
       setError(

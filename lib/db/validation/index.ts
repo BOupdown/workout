@@ -1,3 +1,4 @@
+export * from './bodyweight';
 export * from './common';
 export * from './exercise';
 export * from './set';

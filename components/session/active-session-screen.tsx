@@ -26,6 +26,7 @@ import {
   startSession,
   startSessionFrom,
 } from '@/lib/db/sessions';
+import { getBodyWeight } from '@/lib/db/bodyweight';
 import { listSessionSummaries } from '@/lib/db/queries';
 import { createSet } from '@/lib/db/sets';
 import { formatElapsed } from '@/lib/format';
@@ -87,6 +88,11 @@ export function ActiveSessionScreen() {
   const rest = useRestTimer();
   const recordSetIds = useSessionRecords(entries);
   const storage = useStorageStatus();
+  // Only needed to prefill the sheet; the header reads it for itself.
+  const bodyweight = useLiveQuery(
+    () => (detail ? getBodyWeight(detail.date) : undefined),
+    [detail?.date],
+  );
 
   // Resolved from the loaded session: no extra query, and the sheet closes by
   // itself if the block disappears.
@@ -398,8 +404,8 @@ export function ActiveSessionScreen() {
 
       {bodyweightOpen ? (
         <BodyweightSheet
-          sessionId={state.detail.id}
-          bodyweightKg={state.detail.bodyweightKg}
+          date={state.detail.date}
+          bodyweightKg={bodyweight?.weightKg}
           unit={unit}
           onClose={() => setBodyweightOpen(false)}
         />

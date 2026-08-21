@@ -13,7 +13,14 @@
  */
 
 import { db } from './db';
-import type { Exercise, Session, SessionExercise, SetEntry, Timestamp } from './types';
+import type {
+  BodyWeight,
+  Exercise,
+  Session,
+  SessionExercise,
+  SetEntry,
+  Timestamp,
+} from './types';
 
 export const BACKUP_FORMAT = 'workout-backup';
 export const BACKUP_VERSION = 1;
@@ -26,6 +33,16 @@ export interface BackupFile {
   sessions: Session[];
   sessionExercises: SessionExercise[];
   sets: SetEntry[];
+  /**
+   * Optional, and deliberately **not** counted among the required tables.
+   *
+   * Bodyweight moved into its own timeline after this format was set. Making
+   * it required would bump the version, and the version check is strict — every
+   * backup a user already holds would stop being readable, which is a far worse
+   * failure than a missing field. Files written before the change carry their
+   * weights on the sessions instead, and the import reads them from there.
+   */
+  bodyweights?: BodyWeight[];
 }
 
 export interface BackupSummary {
@@ -50,12 +67,14 @@ export async function exportDatabase(): Promise<BackupFile> {
     db.sessions,
     db.sessionExercises,
     db.sets,
+    db.bodyweights,
     async () => {
-      const [exercises, sessions, sessionExercises, sets] = await Promise.all([
+      const [exercises, sessions, sessionExercises, sets, bodyweights] = await Promise.all([
         db.exercises.toArray(),
         db.sessions.toArray(),
         db.sessionExercises.toArray(),
         db.sets.toArray(),
+        db.bodyweights.toArray(),
       ]);
 
       return {
@@ -66,6 +85,7 @@ export async function exportDatabase(): Promise<BackupFile> {
         sessions,
         sessionExercises,
         sets,
+        bodyweights,
       };
     },
   );
@@ -113,6 +133,12 @@ export function readBackup(value: unknown): BackupFile {
     }
   }
 
+  // Absent is fine — older files predate the timeline. Present but not a list
+  // is not: that is a corrupt file claiming to carry weights.
+  if (candidate.bodyweights !== undefined && !Array.isArray(candidate.bodyweights)) {
+    throw new BackupFormatError('Incomplete backup: bodyweights is unreadable.');
+  }
+
   return candidate as unknown as BackupFile;
 }
 
@@ -135,21 +161,57 @@ export function parseBackup(json: string): BackupFile {
  * backup therefore cannot destroy what is already there.
  */
 export async function importDatabase(backup: BackupFile): Promise<BackupSummary> {
-  await db.transaction('rw', db.exercises, db.sessions, db.sessionExercises, db.sets, async () => {
-    await Promise.all([
-      db.exercises.clear(),
-      db.sessions.clear(),
-      db.sessionExercises.clear(),
-      db.sets.clear(),
-    ]);
+  await db.transaction(
+    'rw',
+    db.exercises,
+    db.sessions,
+    db.sessionExercises,
+    db.sets,
+    db.bodyweights,
+    async () => {
+      await Promise.all([
+        db.exercises.clear(),
+        db.sessions.clear(),
+        db.sessionExercises.clear(),
+        db.sets.clear(),
+        db.bodyweights.clear(),
+      ]);
 
-    await db.exercises.bulkAdd(backup.exercises);
-    await db.sessions.bulkAdd(backup.sessions);
-    await db.sessionExercises.bulkAdd(backup.sessionExercises);
-    await db.sets.bulkAdd(backup.sets);
-  });
+      await db.exercises.bulkAdd(backup.exercises);
+      await db.sessions.bulkAdd(backup.sessions);
+      await db.sessionExercises.bulkAdd(backup.sessionExercises);
+      await db.sets.bulkAdd(backup.sets);
+      await db.bodyweights.bulkPut(bodyWeightsFrom(backup));
+    },
+  );
 
   return summarise(backup);
+}
+
+/**
+ * The weights a backup carries, wherever it keeps them.
+ *
+ * A file written before the timeline existed has them on its sessions, so they
+ * are lifted across rather than dropped — restoring an old backup must not
+ * quietly lose a year of weigh-ins. Where two sessions share a day, the later
+ * one wins, exactly as the schema upgrade decided.
+ */
+function bodyWeightsFrom(backup: BackupFile): BodyWeight[] {
+  if (backup.bodyweights !== undefined) return backup.bodyweights;
+
+  const byDate = new Map<string, Session>();
+  for (const session of backup.sessions) {
+    if (session.bodyweightKg === undefined) continue;
+
+    const seen = byDate.get(session.date);
+    if (!seen || session.startedAt > seen.startedAt) byDate.set(session.date, session);
+  }
+
+  return [...byDate.values()].map((session) => ({
+    date: session.date,
+    weightKg: session.bodyweightKg as number,
+    recordedAt: session.startedAt,
+  }));
 }
 
 /** Dated file name, so several backups can coexist. */

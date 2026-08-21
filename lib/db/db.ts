@@ -1,8 +1,9 @@
 import Dexie, { type Table } from 'dexie';
 import { toNameKey } from './keys';
 import { buildSeedExercises, CATALOGUE_RENAMES } from './seed';
-import type { Exercise, Session, SessionExercise, SetEntry } from './types';
+import type { BodyWeight, Exercise, Session, SessionExercise, SetEntry } from './types';
 import {
+  assertBodyWeightShape,
   assertExerciseShape,
   assertSessionExerciseShape,
   assertSessionShape,
@@ -28,6 +29,8 @@ export class WorkoutDB extends Dexie {
   sessions!: Table<Session, string>;
   sessionExercises!: Table<SessionExercise, string>;
   sets!: Table<SetEntry, string>;
+  // Keyed by `LocalDate`, not by an id: one weight per day.
+  bodyweights!: Table<BodyWeight, string>;
 
   constructor() {
     super('workout');
@@ -97,6 +100,50 @@ export class WorkoutDB extends Dexie {
       }
     });
 
+    /**
+     * Bodyweight moves out of `Session` and into its own dated timeline.
+     *
+     * It hung off the session because that is where it was entered, which had
+     * the effect of making it impossible to weigh yourself on a rest day. The
+     * weight of a day is a fact about the day, not about the training.
+     *
+     * Existing values are carried across and then removed from the sessions,
+     * rather than left behind: a second copy nobody reads is a second copy
+     * somebody will eventually read by mistake. The whole thing runs in the
+     * upgrade transaction, so it either lands completely or not at all.
+     *
+     * Where two sessions share a day — rare, but the model allows it — the
+     * later one wins, since it was weighed last.
+     */
+    this.version(3)
+      .stores({ bodyweights: 'date' })
+      .upgrade(async (transaction) => {
+        const sessions = transaction.table<Session, string>('sessions');
+        const bodyweights = transaction.table<BodyWeight, string>('bodyweights');
+
+        const withWeight = await sessions
+          .filter((session) => session.bodyweightKg !== undefined)
+          .toArray();
+
+        const byDate = new Map<string, Session>();
+        for (const session of withWeight) {
+          const seen = byDate.get(session.date);
+          if (!seen || session.startedAt > seen.startedAt) byDate.set(session.date, session);
+        }
+
+        await bodyweights.bulkPut(
+          [...byDate.values()].map((session) => ({
+            date: session.date,
+            weightKg: session.bodyweightKg as number,
+            recordedAt: session.startedAt,
+          })),
+        );
+
+        for (const session of withWeight) {
+          await sessions.update(session.id, { bodyweightKg: undefined });
+        }
+      });
+
     // Starting catalogue, once, when the database is created.
     this.on('populate', (transaction) => {
       transaction.table<Exercise, string>('exercises').bulkAdd(buildSeedExercises());
@@ -115,6 +162,7 @@ export class WorkoutDB extends Dexie {
     installShapeGuard(this.sets, assertSetShape);
     installShapeGuard(this.sessions, assertSessionShape);
     installShapeGuard(this.sessionExercises, assertSessionExerciseShape);
+    installShapeGuard(this.bodyweights, assertBodyWeightShape);
   }
 }
 
