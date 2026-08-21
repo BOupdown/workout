@@ -103,28 +103,36 @@ export function CalendarView() {
             const weight = weightFor(day.date);
             const trained = (sessions?.get(day.date) ?? 0) > 0;
             const isToday = day.date === today;
-            // Only the block running now is tinted, and in the app's one accent
-            // rather than a colour per block: a palette per cycle would turn
-            // the month into a spreadsheet and break the single-accent rule the
-            // whole interface is built on.
-            const inCurrentBlock =
-              current !== null && blockOn(blocks ?? [], day.date)?.id === current.block.id;
+            // Every block is tinted, not only the one running: a past block
+            // shown like an empty day makes the month unreadable, which was the
+            // whole reason for having blocks on a calendar.
+            //
+            // Still one accent, never a colour per block — a palette per cycle
+            // would read as a spreadsheet. What separates two blocks is a seam
+            // on the first day of each, which works even when one starts the
+            // day after another ends.
+            const dayBlock = blockOn(blocks ?? [], day.date);
+            const startsBlock = dayBlock !== null && dayBlock.startsOn === day.date;
 
             return (
               <button
                 key={day.date}
                 type="button"
                 onClick={() => setEditing(day.date)}
-                aria-label={`${day.date}${trained ? ', trained' : ''}${
+                aria-label={`${day.date}${dayBlock ? `, ${dayBlock.label}` : ''}${
+                  trained ? ', trained' : ''
+                }${
                   weight !== undefined ? `, ${formatNumber(toDisplayWeight(weight, unit))} ${unit}` : ''
                 }`}
                 className={`flex min-h-[3.25rem] flex-col items-center justify-center gap-0.5 rounded-control px-0.5 transition-transform active:scale-95 ${
                   day.inMonth
-                    ? inCurrentBlock
+                    ? dayBlock
                       ? 'bg-accent-wash'
                       : 'bg-raised'
                     : 'bg-transparent'
-                } ${isToday ? 'ring-2 ring-ink' : ''}`}
+                } ${startsBlock ? 'border-l-2 border-ink' : ''} ${
+                  isToday ? 'ring-2 ring-ink' : ''
+                }`}
               >
                 <span
                   className={`text-xs tabular-nums ${
@@ -152,7 +160,7 @@ export function CalendarView() {
 
         <p className="mt-4 px-1 text-xs text-muted">
           Tap any day to record what you weighed. A day you trained is marked, and the
-          block you are in is tinted.
+          blocks you have run are tinted, each starting at a marked edge.
         </p>
       </div>
 
