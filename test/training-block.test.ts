@@ -7,6 +7,8 @@ import {
   daysBetween,
   orderBlocks,
   overlaps,
+  tintByBlock,
+  CYCLE_TINTS,
   type TrainingBlock,
 } from '../lib/training-block';
 
@@ -205,5 +207,52 @@ describe('orderBlocks', () => {
     const input = [hypertrophy, strength];
     orderBlocks(input);
     expect(input.map((b) => b.label)).toEqual(['Hypertrophy', 'Strength']);
+  });
+});
+
+describe('tintByBlock', () => {
+  it('donne une teinte différente à deux blocs voisins', () => {
+    // C'est tout le travail : distinguer une période de la suivante.
+    const tints = tintByBlock([strength, hypertrophy]);
+    expect(tints.get(strength.id)).not.toBe(tints.get(hypertrophy.id));
+  });
+
+  it('attribue dans l’ordre chronologique, pas d’arrivée', () => {
+    const forward = tintByBlock([strength, hypertrophy]);
+    const backward = tintByBlock([hypertrophy, strength]);
+
+    expect(backward.get(strength.id)).toBe(forward.get(strength.id));
+    expect(backward.get(hypertrophy.id)).toBe(forward.get(hypertrophy.id));
+  });
+
+  it('donne au premier bloc la teinte d’accent déjà présente', () => {
+    // Quelqu'un avec un seul cycle voit exactement ce qu'il voyait avant.
+    expect(tintByBlock([strength]).get(strength.id)).toBe(CYCLE_TINTS[0]);
+  });
+
+  it('reboucle au-delà de la palette, sans laisser un bloc sans teinte', () => {
+    const many = Array.from({ length: 15 }, (_, i) => {
+      const day = String(i + 1).padStart(2, '0');
+      return block(`B${i}`, `2026-01-${day}`, `2026-01-${day}`);
+    });
+
+    const tints = tintByBlock(many);
+    expect(tints.size).toBe(15);
+    for (const value of tints.values()) {
+      expect(CYCLE_TINTS).toContain(value);
+    }
+  });
+
+  it('ne fait jamais se suivre deux fois la même teinte', () => {
+    const many = Array.from({ length: 13 }, (_, i) => {
+      const day = String(i + 1).padStart(2, '0');
+      return block(`B${i}`, `2026-01-${day}`, `2026-01-${day}`);
+    });
+
+    const tints = tintByBlock(many);
+    const inOrder = orderBlocks(many).map((b) => tints.get(b.id));
+    for (let i = 1; i < inOrder.length; i += 1) {
+      expect(inOrder[i]).not.toBe(inOrder[i - 1]);
+    }
   });
 });

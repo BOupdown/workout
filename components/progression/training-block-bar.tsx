@@ -10,7 +10,12 @@ import {
 import { localMidnight } from '@/lib/db/keys';
 import type { LocalDate } from '@/lib/db/types';
 import { ValidationError } from '@/lib/db/validation';
-import { orderBlocks, type BlockProgress, type TrainingBlock } from '@/lib/training-block';
+import {
+  orderBlocks,
+  tintByBlock,
+  type BlockProgress,
+  type TrainingBlock,
+} from '@/lib/training-block';
 
 interface TrainingBlockBarProps {
   blocks: TrainingBlock[];
@@ -48,6 +53,10 @@ export function TrainingBlockBar({ blocks, current, today }: TrainingBlockBarPro
   const [endsOn, setEndsOn] = useState<LocalDate>(() => addDays(today, 27));
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+
+  // The same assignment the grid uses, so the swatch here names the colour
+  // seen there rather than a second, drifting opinion.
+  const tints = tintByBlock(blocks);
 
   const handleStart = async () => {
     setBusy(true);
@@ -175,6 +184,12 @@ export function TrainingBlockBar({ blocks, current, today }: TrainingBlockBarPro
                       key={block.id}
                       className="flex items-center gap-2 rounded-control bg-surface px-3 py-2"
                     >
+                      <span
+                        aria-hidden
+                        className={`h-4 w-4 shrink-0 rounded-full border border-line ${
+                          tints.get(block.id) ?? ''
+                        }`}
+                      />
                       <span className="min-w-0 flex-1 truncate text-sm text-ink">
                         {block.label}
                       </span>

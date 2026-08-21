@@ -100,6 +100,38 @@ export function blockOn(
   return orderBlocks(blocks).find((block) => covers(block, date)) ?? null;
 }
 
+/**
+ * The tint classes, in the order blocks take them.
+ *
+ * Written out in full rather than assembled from a template because Tailwind
+ * reads the source for class names: a string built at runtime would never make
+ * it into the stylesheet, and every cycle would come out colourless.
+ */
+export const CYCLE_TINTS = [
+  'bg-cycle-1',
+  'bg-cycle-2',
+  'bg-cycle-3',
+  'bg-cycle-4',
+  'bg-cycle-5',
+  'bg-cycle-6',
+] as const;
+
+/**
+ * A tint for every block, in the order they run.
+ *
+ * Chronological rather than by identifier, so two blocks side by side never
+ * share a colour — which is the whole job. Past six the palette repeats, and by
+ * then the two blocks wearing one colour are half a year apart.
+ */
+export function tintByBlock(blocks: readonly TrainingBlock[]): Map<Id, string> {
+  return new Map(
+    orderBlocks(blocks).map((block, index) => [
+      block.id,
+      CYCLE_TINTS[index % CYCLE_TINTS.length],
+    ]),
+  );
+}
+
 /** How far into its block a day is, or `null` when it belongs to none. */
 export function blockProgressOn(
   blocks: readonly TrainingBlock[],
