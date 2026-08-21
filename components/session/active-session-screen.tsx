@@ -1,6 +1,13 @@
 'use client';
 
-import { Barbell, CaretRight, ClockCounterClockwise, Plus } from '@phosphor-icons/react';
+import {
+  Barbell,
+  CaretRight,
+  ClockCounterClockwise,
+  LinkSimple,
+  LinkSimpleBreak,
+  Plus,
+} from '@phosphor-icons/react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { useState } from 'react';
 import { useActiveSession } from '@/hooks/use-active-session';
@@ -13,6 +20,7 @@ import {
   endSession,
   removeExerciseFromSession,
   reorderSessionExercises,
+  toggleSupersetWithNext,
   SessionExerciseNotEmptyError,
   startSession,
   startSessionFrom,
@@ -23,6 +31,7 @@ import { formatElapsed } from '@/lib/format';
 import type { Id, SetEntry, SetKind } from '@/lib/db/types';
 import { NO_MESSAGES, toFieldMessages, type FieldMessages } from '@/lib/errors';
 import { moveBlock } from '@/lib/session-order';
+import { isJoinedWithNext, lastOfGroup, nextInGroup } from '@/lib/superset';
 import { draftToSetInput } from '@/lib/set-draft';
 import { ProgressionSheet } from '@/components/progression/progression-sheet';
 import { SessionDetailSheet } from '@/components/history/session-detail-sheet';
@@ -167,6 +176,10 @@ export function ActiveSessionScreen() {
     await reorderSessionExercises(detail.id, next);
   };
 
+  const handleToggleSuperset = async (blockId: Id) => {
+    await toggleSupersetWithNext(blockId);
+  };
+
   const handleSave = async () => {
     if (!activeEntry) return;
 
@@ -177,9 +190,17 @@ export function ActiveSessionScreen() {
       );
       setMessages(NO_MESSAGES);
       setJustLoggedSetId(set.id);
+
+      // Inside a superset the next exercise comes straight away, and the rest
+      // belongs after the round rather than between its members — that is what
+      // a superset *is*. Outside one, nothing moves: the panel has to stay put
+      // for the one-tap repeat.
+      const following = nextInGroup(entries, activeEntry.id);
+      if (following !== null) setSelectedBlockId(following);
+
       // Only once the set is in the database: a rejected set is a correction to
       // make, not a rest to take.
-      rest.start();
+      if (lastOfGroup(entries, activeEntry.id) === activeEntry.id) rest.start();
     } catch (error) {
       setMessages(toFieldMessages(error, controller.visibleFields));
     } finally {
@@ -282,8 +303,8 @@ export function ActiveSessionScreen() {
         ) : null}
 
         {entries.map((entry, index) => (
+          <div key={entry.id} className="space-y-2">
           <ExerciseRow
-            key={entry.id}
             entry={entry}
             isActive={entry.id === activeEntry?.id}
             onSelect={() => {
@@ -301,6 +322,18 @@ export function ActiveSessionScreen() {
             recordSetIds={recordSetIds}
             justLoggedSetId={justLoggedSetId}
           />
+
+          {/* Between two rows, never inside one: a superset is a relation, and
+              the only thing that can express it is the gap it closes. */}
+          {index < entries.length - 1 ? (
+            <SupersetLink
+              joined={isJoinedWithNext(entries, entry.id)}
+              from={entry.exercise.name}
+              to={entries[index + 1].exercise.name}
+              onToggle={() => handleToggleSuperset(entry.id)}
+            />
+          ) : null}
+          </div>
         ))}
 
         {entries.length === 0 ? (
@@ -477,5 +510,49 @@ function LastSessionCard() {
 
     {open ? <SessionDetailSheet sessionId={last.id} onClose={() => setOpen(false)} /> : null}
     </>
+  );
+}
+
+/**
+ * The seam between two exercises, and the only way to make a superset.
+ *
+ * Deliberately quiet when nothing is linked: this sits between every pair of
+ * rows, and a loud control repeated four times down a session screen would
+ * compete with the sets themselves for attention.
+ */
+function SupersetLink({
+  joined,
+  from,
+  to,
+  onToggle,
+}: {
+  joined: boolean;
+  from: string;
+  to: string;
+  onToggle: () => void;
+}) {
+  return (
+    <div className="flex items-center gap-2 px-2">
+      <button
+        type="button"
+        onClick={onToggle}
+        aria-pressed={joined}
+        aria-label={joined ? `Split ${from} from ${to}` : `Superset ${from} with ${to}`}
+        className={`flex min-h-11 items-center gap-1.5 rounded-control px-2 text-xs font-semibold transition-transform active:scale-95 ${
+          joined ? 'text-ink' : 'text-muted'
+        }`}
+      >
+        {joined ? (
+          <LinkSimple size={14} weight="bold" />
+        ) : (
+          <LinkSimpleBreak size={14} weight="bold" />
+        )}
+        {joined ? 'Superset' : 'Link'}
+      </button>
+
+      {/* Drawn only when joined: an empty rule between every pair would read as
+          a divider, which is the opposite of what a superset means. */}
+      {joined ? <span aria-hidden className="h-px flex-1 bg-ink/25" /> : null}
+    </div>
   );
 }

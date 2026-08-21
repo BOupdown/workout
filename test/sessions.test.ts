@@ -15,6 +15,7 @@ import {
   setSessionExerciseNotes,
   startSession,
   startSessionFrom,
+  toggleSupersetWithNext,
   updateSessionDate,
   updateSessionText,
 } from '../lib/db/sessions';
@@ -612,5 +613,92 @@ describe('startSessionFrom', () => {
     const before = await db.sessions.count();
     await expect(startSessionFrom('nope')).rejects.toThrow();
     expect(await db.sessions.count()).toBe(before);
+  });
+});
+
+describe('toggleSupersetWithNext', () => {
+  async function threeBlocks() {
+    const { session } = await startSession();
+    const a = await addExerciseToSession(session.id, squat.id);
+    const b = await addExerciseToSession(session.id, pushUps.id);
+    const c = await addExerciseToSession(session.id, plank.id);
+    return { session, a, b, c };
+  }
+
+  it('joint deux exercices voisins', async () => {
+    const { a, b } = await threeBlocks();
+    const blocks = await toggleSupersetWithNext(a.id);
+
+    const groups = new Map(blocks.map((x) => [x.id, x.supersetGroup]));
+    expect(groups.get(a.id)).toBeTypeOf('number');
+    expect(groups.get(a.id)).toBe(groups.get(b.id));
+  });
+
+  it('sépare ce qui était joint', async () => {
+    const { a } = await threeBlocks();
+    await toggleSupersetWithNext(a.id);
+    const blocks = await toggleSupersetWithNext(a.id);
+
+    expect(blocks.every((x) => x.supersetGroup === undefined)).toBe(true);
+  });
+
+  it('persiste réellement le groupe', async () => {
+    const { a, b } = await threeBlocks();
+    await toggleSupersetWithNext(a.id);
+
+    const stored = await db.sessionExercises.get(a.id);
+    const storedNext = await db.sessionExercises.get(b.id);
+    expect(stored?.supersetGroup).toBeTypeOf('number');
+    expect(stored?.supersetGroup).toBe(storedNext?.supersetGroup);
+  });
+
+  it('efface la clé plutôt que d écrire undefined comme valeur', async () => {
+    const { a } = await threeBlocks();
+    await toggleSupersetWithNext(a.id);
+    await toggleSupersetWithNext(a.id);
+
+    const stored = await db.sessionExercises.get(a.id);
+    expect(stored).toBeDefined();
+    expect('supersetGroup' in stored!).toBe(false);
+  });
+
+  it('étend le groupe au troisième', async () => {
+    const { a, b, c } = await threeBlocks();
+    await toggleSupersetWithNext(a.id);
+    const blocks = await toggleSupersetWithNext(b.id);
+
+    const groups = new Map(blocks.map((x) => [x.id, x.supersetGroup]));
+    expect(groups.get(a.id)).toBe(groups.get(b.id));
+    expect(groups.get(b.id)).toBe(groups.get(c.id));
+  });
+
+  it('ne change rien sur le dernier exercice', async () => {
+    const { c } = await threeBlocks();
+    const blocks = await toggleSupersetWithNext(c.id);
+
+    expect(blocks.every((x) => x.supersetGroup === undefined)).toBe(true);
+  });
+
+  it('laisse le rang intact', async () => {
+    // Un superset ne réordonne rien : il marque des voisins.
+    const { a, b, c } = await threeBlocks();
+    const before = [a.order, b.order, c.order];
+    const blocks = await toggleSupersetWithNext(a.id);
+
+    expect(blocks.map((x) => x.order)).toEqual(before);
+  });
+
+  it('refuse un bloc inconnu', async () => {
+    await expect(toggleSupersetWithNext('nope')).rejects.toThrow();
+  });
+
+  it('reste dans sa séance', async () => {
+    const { a } = await threeBlocks();
+    const other = await startSession();
+    const foreign = await addExerciseToSession(other.session.id, squat.id);
+
+    await toggleSupersetWithNext(a.id);
+
+    expect((await db.sessionExercises.get(foreign.id))?.supersetGroup).toBeUndefined();
   });
 });
