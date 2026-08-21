@@ -1,7 +1,14 @@
-import Dexie, { type Table } from 'dexie';
+import Dexie, { type Table, type Transaction } from 'dexie';
 import { toNameKey } from './keys';
 import { buildSeedExercises, CATALOGUE_RENAMES } from './seed';
-import type { BodyWeight, Exercise, Session, SessionExercise, SetEntry } from './types';
+import type {
+  BodyWeight,
+  Exercise,
+  RetiredExercise,
+  Session,
+  SessionExercise,
+  SetEntry,
+} from './types';
 import type { TrainingBlock } from '../training-block';
 import {
   assertBodyWeightShape,
@@ -24,6 +31,49 @@ import {
  *     *invisible* in that index (hence no index on `endedAt`)
  *   • a compound index can only be queried by prefix, in declaration order
  */
+/**
+ * Adds catalogue entries an existing database does not have.
+ *
+ * `on('populate')` fires once, when the database is created, so a bigger seed
+ * alone would only ever reach new installs. Every version that grows the
+ * catalogue runs this.
+ *
+ * Exported so the property that matters can be tested directly: the version
+ * that next grows the catalogue does not exist yet, and a test that reopens the
+ * database at the current version never replays a migration at all.
+ *
+ * Two things are left alone: a name already taken, whoever owns it — a user's
+ * own "Front squat" keeps its history, and `&nameKey` is unique, so overwriting
+ * would abort the upgrade as well — and anything the user deleted. Both make
+ * this safe to re-run.
+ */
+export async function addMissingSeedExercises(transaction: Transaction): Promise<void> {
+  const exercises = transaction.table<Exercise, string>('exercises');
+  const retired = await retiredNameKeys(transaction);
+
+  for (const candidate of buildSeedExercises()) {
+    if (retired.has(candidate.nameKey)) continue;
+
+    const taken = await exercises.where('nameKey').equals(candidate.nameKey).first();
+    if (taken) continue;
+
+    await exercises.add(candidate);
+  }
+}
+
+/** Tombstones, tolerating the schema versions that predate them. */
+async function retiredNameKeys(transaction: Transaction): Promise<Set<string>> {
+  try {
+    const rows = await transaction.table<RetiredExercise, string>('retiredExercises').toArray();
+    return new Set(rows.map((row) => row.nameKey));
+  } catch {
+    // The table does not exist at this version — which is exactly the range of
+    // versions where nothing can have been retired, since deleting arrived with
+    // it. An empty set is the truth here, not a fallback.
+    return new Set();
+  }
+}
+
 export class WorkoutDB extends Dexie {
   // `Table` rather than `EntityTable`: ids come from `newId()`, they are not
   // auto-generated, so `add()` must require them.
@@ -34,6 +84,7 @@ export class WorkoutDB extends Dexie {
   // Keyed by `LocalDate`, not by an id: one weight per day.
   bodyweights!: Table<BodyWeight, string>;
   trainingBlocks!: Table<TrainingBlock, string>;
+  retiredExercises!: Table<RetiredExercise, string>;
 
   constructor() {
     super('workout');
@@ -184,16 +235,16 @@ export class WorkoutDB extends Dexie {
      * history: `&nameKey` is unique, and overwriting it would be both a lost
      * exercise and an aborted upgrade. That also makes this safe to re-run.
      */
-    this.version(6).upgrade(async (transaction) => {
-      const exercises = transaction.table<Exercise, string>('exercises');
+    this.version(6).upgrade(addMissingSeedExercises);
 
-      for (const candidate of buildSeedExercises()) {
-        const taken = await exercises.where('nameKey').equals(candidate.nameKey).first();
-        if (taken) continue;
-
-        await exercises.add(candidate);
-      }
-    });
+    /**
+     * Deleting an exercise leaves a tombstone.
+     *
+     * Without one, `addMissingSeedExercises` would hand back every shipped
+     * exercise the user removed the next time the catalogue grows — which is
+     * to say, deletion would quietly undo itself.
+     */
+    this.version(7).stores({ retiredExercises: 'nameKey' });
 
     // Starting catalogue, once, when the database is created.
     this.on('populate', (transaction) => {

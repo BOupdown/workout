@@ -191,6 +191,11 @@ export function ExerciseIndexScreen() {
             setOpenExercise((current) => (current?.id === saved.id ? saved : current));
             setEditing(null);
           }}
+          onDeleted={() => {
+            // The progression sheet underneath still holds the deleted row.
+            setOpenExercise(null);
+            setEditing(null);
+          }}
           onClose={() => setEditing(null)}
         />
       ) : null}

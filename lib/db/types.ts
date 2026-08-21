@@ -69,6 +69,19 @@ export type MuscleGroup =
  * The movement itself. A first-class entity: it is the keystone of progression
  * over time, so never a name copied into a set.
  */
+/**
+ * An exercise the user deleted from the catalogue.
+ *
+ * Kept as a tombstone, not out of tidiness: the seed backfill adds any shipped
+ * exercise whose name is free, so without this the next catalogue update would
+ * quietly hand back everything that was removed.
+ */
+export interface RetiredExercise {
+  /** Normalised name — the exercise row itself is gone. */
+  nameKey: string;
+  retiredAt: Timestamp;
+}
+
 export interface Exercise {
   id: Id;
 
