@@ -78,12 +78,6 @@ export function describeSet(
   exercise: Pick<Exercise, 'loadType' | 'metric' | 'perSide'>,
   unit: WeightUnit = 'kg',
 ): SetDescription {
-  if (exercise.metric === 'time') {
-    return { primary: set.durationSec !== undefined ? formatDuration(set.durationSec) : '?' };
-  }
-
-  if (set.reps === undefined) return { primary: '?' };
-
   /*
    * "Ten reps" means ten on a bench and twenty on a one-arm row, and the model
    * has carried `perSide` from the first schema to settle exactly that. It was
@@ -96,6 +90,18 @@ export function describeSet(
    * up stated four different ways.
    */
   const perSide = exercise.perSide ? '/side' : '';
+
+  // A held position is just as ambiguous as a counted one: 45 seconds of side
+  // plank is 90 seconds of work, and reads like a front plank without this.
+  if (exercise.metric === 'time') {
+    if (set.durationSec === undefined) return { primary: '?' };
+    return {
+      primary: formatDuration(set.durationSec),
+      secondary: exercise.perSide ? 'per side' : undefined,
+    };
+  }
+
+  if (set.reps === undefined) return { primary: '?' };
 
   // Bodyweight, or zero added/assisted load: showing "0 × 8" teaches nothing,
   // the reps carry all the information.
