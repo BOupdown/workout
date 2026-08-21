@@ -9,6 +9,7 @@
  */
 
 import { db } from './db';
+import { toggleJoinWithNext } from '../superset';
 import { localMidnight, newId, toLocalDate } from './keys';
 import type { Id, LocalDate, Session, SessionExercise, Timestamp } from './types';
 import { assertExerciseSelectable } from './validation';
@@ -422,6 +423,35 @@ export async function removeExerciseFromSession(
     await db.sessionExercises.delete(sessionExerciseId);
 
     return { deletedSets: setCount };
+  });
+}
+
+/**
+ * Joins an exercise to the one after it in a superset, or splits them apart.
+ *
+ * The only gesture offered, and that is deliberate: a superset built one
+ * neighbour at a time can never have a hole in it, so contiguity is a property
+ * of the model rather than a rule someone has to remember to check.
+ *
+ * Returns the session's blocks as they now stand. A block with no neighbour
+ * after it changes nothing.
+ */
+export async function toggleSupersetWithNext(blockId: Id): Promise<SessionExercise[]> {
+  return db.transaction('rw', db.sessionExercises, async () => {
+    const block = await db.sessionExercises.get(blockId);
+    if (!block) throw new Error(`Session exercise not found: ${blockId}`);
+
+    const blocks = await listSessionExercises(block.sessionId);
+    const changes = toggleJoinWithNext(blocks, blockId);
+    if (changes === null) return blocks;
+
+    await Promise.all(
+      changes.map((change) =>
+        db.sessionExercises.update(change.id, { supersetGroup: change.supersetGroup }),
+      ),
+    );
+
+    return listSessionExercises(block.sessionId);
   });
 }
 
