@@ -89,3 +89,8 @@ Data lives in one browser, on one device. Clearing site data erases it for good.
 The **Settings** tab exports the whole database as a JSON file and restores it.
 Restoring replaces everything and runs in a single transaction: if the file
 holds one invalid row, nothing is written and existing data stays intact.
+
+## Licence
+
+MIT. Use it, change it, ship it — keep the copyright notice, and understand it
+comes with no warranty of any kind.
