@@ -121,3 +121,43 @@ describe('le compte des semaines', () => {
     await expect.poll(async () => (await blockBar()).textContent).toMatch(/week 2/);
   });
 });
+
+describe('les blocs sur la grille', () => {
+  const cellFor = (date: string) =>
+    screen.getByRole('button', { name: new RegExp(`^${date}`) }).getAttribute('aria-label');
+
+  it('marque aussi un bloc déjà terminé', async () => {
+    // Le défaut signalé : un bloc passé s'affichait comme un jour vide, donc on
+    // ne pouvait pas lire la structure du mois — la raison d'être des blocs
+    // sur un calendrier.
+    await createTrainingBlock('Peaking', daysAgo(20), daysAgo(11));
+    await createTrainingBlock('Strength', daysAgo(10), daysAgo(-17));
+
+    render(<CalendarView />);
+    await screen.findByRole('button', { name: new RegExp(`^${today()}`) }, { timeout: 5000 });
+
+    await expect.poll(() => cellFor(daysAgo(15))).toMatch(/Peaking/);
+    expect(cellFor(today())).toMatch(/Strength/);
+  });
+
+  it('laisse nu un jour hors de tout bloc', async () => {
+    await createTrainingBlock('Strength', daysAgo(10), daysAgo(-17));
+
+    render(<CalendarView />);
+    await screen.findByRole('button', { name: new RegExp(`^${today()}`) }, { timeout: 5000 });
+
+    // Le bloc en cours sert de témoin que les requêtes ont répondu.
+    await expect.poll(() => cellFor(today())).toMatch(/Strength/);
+    expect(cellFor(daysAgo(20))).not.toMatch(/Strength/);
+  });
+
+  it('nomme le bloc auquel chaque jour appartient', async () => {
+    // Ce que le lecteur d'écran reçoit à la place de la teinte.
+    await createTrainingBlock('Deload', daysAgo(3), daysAgo(-3));
+
+    render(<CalendarView />);
+    await screen.findByRole('button', { name: new RegExp(`^${today()}`) }, { timeout: 5000 });
+
+    await expect.poll(() => cellFor(today())).toMatch(/Deload/);
+  });
+});
