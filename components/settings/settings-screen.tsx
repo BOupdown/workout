@@ -13,11 +13,10 @@ import { useRef, useState } from 'react';
 import { useInstallPrompt } from '@/hooks/use-install-prompt';
 import { useWeightUnit } from '@/hooks/use-weight-unit';
 import { useStorageStatus } from '@/hooks/use-storage-status';
+import { useBackupExport } from '@/hooks/use-backup';
 import { useRestTimer } from '@/hooks/use-rest-timer';
 import {
-  backupFileName,
   BackupFormatError,
-  exportDatabase,
   importDatabase,
   parseBackup,
   type BackupSummary,
@@ -25,6 +24,12 @@ import {
 import { formatDuration } from '@/lib/format';
 import { REST_DURATIONS_SEC } from '@/lib/rest-timer';
 import { WEIGHT_UNITS } from '@/lib/units';
+
+const DATE_FORMAT = new Intl.DateTimeFormat('en-GB', {
+  day: 'numeric',
+  month: 'short',
+  year: 'numeric',
+});
 
 function formatBytes(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`;
@@ -37,6 +42,7 @@ export function SettingsScreen() {
   const install = useInstallPrompt();
   const [unit, setUnit] = useWeightUnit();
   const rest = useRestTimer();
+  const backup = useBackupExport();
   const fileInput = useRef<HTMLInputElement>(null);
 
   const [busy, setBusy] = useState(false);
@@ -44,29 +50,6 @@ export function SettingsScreen() {
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  const handleExport = async () => {
-    setBusy(true);
-    setError(null);
-    try {
-      const backup = await exportDatabase();
-      const blob = new Blob([JSON.stringify(backup)], { type: 'application/json' });
-      const url = URL.createObjectURL(blob);
-
-      const link = document.createElement('a');
-      link.href = url;
-      link.download = backupFileName(backup.exportedAt);
-      link.click();
-      URL.revokeObjectURL(url);
-
-      setMessage(
-        `Backup of ${backup.sessions.length} session${backup.sessions.length > 1 ? 's' : ''} downloaded.`,
-      );
-    } catch {
-      setError('The backup failed.');
-    } finally {
-      setBusy(false);
-    }
-  };
 
   const handleFile = async (file: File) => {
     setBusy(true);
@@ -247,14 +230,31 @@ export function SettingsScreen() {
             changing phone.
           </p>
 
+          {/* Stated even when it was never done: "never" is the answer that
+              matters most, and an empty line would read as reassurance. */}
+          <p className="mt-2 font-mono text-xs text-muted tabular-nums">
+            Last backup:{' '}
+            {backup.lastBackupAt === null
+              ? 'never'
+              : DATE_FORMAT.format(backup.lastBackupAt)}
+          </p>
+
           <button
             type="button"
-            onClick={handleExport}
-            disabled={busy}
+            onClick={backup.exportNow}
+            disabled={busy || backup.running}
             className="mt-3 h-14 w-full rounded-control bg-accent text-[0.9375rem] font-semibold text-accent-ink transition-transform active:scale-[0.98] disabled:opacity-50"
           >
-            {busy ? 'One moment…' : 'Export my data'}
+            {backup.running ? 'One moment…' : 'Export my data'}
           </button>
+
+          {backup.error ? (
+            <p role="alert" className="mt-2 text-sm text-danger">
+              {backup.error}
+            </p>
+          ) : backup.message ? (
+            <p className="mt-2 text-sm text-ink">{backup.message}</p>
+          ) : null}
         </section>
 
         <section className="rounded-panel bg-raised px-4 py-3.5">
