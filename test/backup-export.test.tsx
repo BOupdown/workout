@@ -2,6 +2,7 @@ import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { BackupReminderCard } from '../components/session/backup-reminder-card';
+import { SettingsScreen } from '../components/settings/settings-screen';
 import { addExerciseToSession, endSession, startSession } from '../lib/db/sessions';
 import { FIRST_REMINDER_SESSIONS } from '../lib/backup-reminder';
 import type { Exercise } from '../lib/db/types';
@@ -37,15 +38,15 @@ async function recordSessions(count: number) {
   }
 }
 
-describe('le rappel de sauvegarde', () => {
+describe('le rappel sur l’accueil', () => {
   it('reste muet tant que rien n’a été enregistré', async () => {
     render(<BackupReminderCard />);
 
     await new Promise((resolve) => setTimeout(resolve, 300));
-    expect(screen.queryByRole('region', { name: 'Backup reminder' })).toBeNull();
+    expect(screen.queryByLabelText('Backup reminder')).toBeNull();
   });
 
-  it('se manifeste quand rien n’a jamais été sauvegardé', async () => {
+  it('signale une base jamais sauvegardée', async () => {
     await recordSessions(FIRST_REMINDER_SESSIONS);
     render(<BackupReminderCard />);
 
@@ -54,13 +55,39 @@ describe('le rappel de sauvegarde', () => {
     ).toBeDefined();
   });
 
-  it('passe par la feuille de partage quand elle existe', async () => {
-    // Un fichier téléchargé finit dans Téléchargements et n'en sort jamais.
-    const user = userEvent.setup();
+  it('renvoie vers les réglages plutôt que d’agir lui-même', async () => {
+    // Sauvegarder vit avec la restauration qu'elle reflète : l'accueil informe,
+    // il n'exécute pas.
     await recordSessions(FIRST_REMINDER_SESSIONS);
     render(<BackupReminderCard />);
 
-    await user.click(await screen.findByRole('button', { name: /Back up now/ }, { timeout: 5000 }));
+    const line = await screen.findByLabelText('Backup reminder', {}, { timeout: 5000 });
+    expect(line.textContent).toMatch(/Settings/);
+    expect(screen.queryByRole('button', { name: /Back up/ })).toBeNull();
+  });
+
+  it('se tait une fois la sauvegarde faite', async () => {
+    await recordSessions(FIRST_REMINDER_SESSIONS);
+    window.localStorage.setItem(KEY, String(Date.now()));
+
+    render(<BackupReminderCard />);
+
+    await new Promise((resolve) => setTimeout(resolve, 400));
+    expect(screen.queryByLabelText('Backup reminder')).toBeNull();
+  });
+});
+
+describe('l’export, dans les réglages', () => {
+  const exportButton = () =>
+    screen.findByRole('button', { name: /Export my data/ }, { timeout: 5000 });
+
+  it('passe par la feuille de partage quand elle existe', async () => {
+    // Un fichier téléchargé finit dans Téléchargements et n'en sort jamais.
+    const user = userEvent.setup();
+    await recordSessions(1);
+    render(<SettingsScreen />);
+
+    await user.click(await exportButton());
 
     await expect.poll(() => share.mock.calls.length).toBe(1);
     const shared = share.mock.calls[0][0] as { files: File[] };
@@ -69,10 +96,10 @@ describe('le rappel de sauvegarde', () => {
 
   it('enregistre la date une fois le partage abouti', async () => {
     const user = userEvent.setup();
-    await recordSessions(FIRST_REMINDER_SESSIONS);
-    render(<BackupReminderCard />);
+    await recordSessions(1);
+    render(<SettingsScreen />);
 
-    await user.click(await screen.findByRole('button', { name: /Back up now/ }, { timeout: 5000 }));
+    await user.click(await exportButton());
 
     await expect.poll(() => window.localStorage.getItem(KEY)).not.toBeNull();
   });
@@ -84,25 +111,13 @@ describe('le rappel de sauvegarde', () => {
     share.mockRejectedValue(new DOMException('cancelled', 'AbortError'));
 
     const user = userEvent.setup();
-    await recordSessions(FIRST_REMINDER_SESSIONS);
-    render(<BackupReminderCard />);
+    await recordSessions(1);
+    render(<SettingsScreen />);
 
-    await user.click(await screen.findByRole('button', { name: /Back up now/ }, { timeout: 5000 }));
+    await user.click(await exportButton());
 
     await new Promise((resolve) => setTimeout(resolve, 400));
     expect(window.localStorage.getItem(KEY)).toBeNull();
-    expect(screen.getByRole('button', { name: /Back up now/ })).toBeDefined();
-  });
-
-  it('se tait une fois la sauvegarde faite', async () => {
-    const user = userEvent.setup();
-    await recordSessions(FIRST_REMINDER_SESSIONS);
-    render(<BackupReminderCard />);
-
-    await user.click(await screen.findByRole('button', { name: /Back up now/ }, { timeout: 5000 }));
-
-    expect(await screen.findByText(/sent\./, {}, { timeout: 5000 })).toBeDefined();
-    expect(screen.queryByText(/only on this phone/)).toBeNull();
   });
 
   it('retombe sur le téléchargement là où le partage n’existe pas', async () => {
@@ -110,13 +125,29 @@ describe('le rappel de sauvegarde', () => {
     const clicked = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {});
 
     const user = userEvent.setup();
-    await recordSessions(FIRST_REMINDER_SESSIONS);
-    render(<BackupReminderCard />);
+    await recordSessions(1);
+    render(<SettingsScreen />);
 
-    await user.click(await screen.findByRole('button', { name: /Back up now/ }, { timeout: 5000 }));
+    await user.click(await exportButton());
 
     await expect.poll(() => clicked.mock.calls.length).toBe(1);
     expect(share).not.toHaveBeenCalled();
     clicked.mockRestore();
+  });
+
+  it('affiche « never » tant que rien n’a été exporté, puis la date', async () => {
+    // « never » est la réponse qui compte : une ligne vide se lirait comme une
+    // assurance.
+    const user = userEvent.setup();
+    await recordSessions(1);
+    render(<SettingsScreen />);
+
+    expect(await screen.findByText(/Last backup:\s*never/, {}, { timeout: 5000 })).toBeDefined();
+
+    await user.click(await exportButton());
+
+    await expect
+      .poll(() => screen.queryByText(/Last backup:\s*never/) === null, { timeout: 5000 })
+      .toBe(true);
   });
 });
