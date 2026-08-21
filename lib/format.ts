@@ -75,7 +75,7 @@ export interface SetDescription {
 
 export function describeSet(
   set: Pick<SetEntry, 'weightKg' | 'reps' | 'durationSec'>,
-  exercise: Pick<Exercise, 'loadType' | 'metric'>,
+  exercise: Pick<Exercise, 'loadType' | 'metric' | 'perSide'>,
   unit: WeightUnit = 'kg',
 ): SetDescription {
   if (exercise.metric === 'time') {
@@ -84,21 +84,34 @@ export function describeSet(
 
   if (set.reps === undefined) return { primary: '?' };
 
+  /*
+   * "Ten reps" means ten on a bench and twenty on a one-arm row, and the model
+   * has carried `perSide` from the first schema to settle exactly that. It was
+   * never shown anywhere, so the ambiguity it exists to remove survived intact:
+   * a unilateral exercise read identically to any other.
+   *
+   * Said here rather than in each screen, because every place a set is
+   * rendered goes through this function — the session, the history, the
+   * progression table — and a rule stated four times is a rule that will end
+   * up stated four different ways.
+   */
+  const perSide = exercise.perSide ? '/side' : '';
+
   // Bodyweight, or zero added/assisted load: showing "0 × 8" teaches nothing,
   // the reps carry all the information.
   if (exercise.loadType === 'bodyweight' || !set.weightKg) {
-    return { primary: String(set.reps), secondary: 'reps' };
+    return { primary: String(set.reps), secondary: `reps${perSide}` };
   }
 
   const sign = exercise.loadType === 'assisted' ? '-' : '';
   const weight = formatNumber(toDisplayWeight(set.weightKg, unit));
-  return { primary: `${sign}${weight}`, secondary: `× ${set.reps}` };
+  return { primary: `${sign}${weight}`, secondary: `× ${set.reps}${perSide}` };
 }
 
 /** One-line compact form, derived from the same rules. */
 export function formatSetSummary(
   set: Pick<SetEntry, 'weightKg' | 'reps' | 'durationSec'>,
-  exercise: Pick<Exercise, 'loadType' | 'metric'>,
+  exercise: Pick<Exercise, 'loadType' | 'metric' | 'perSide'>,
   unit: WeightUnit = 'kg',
 ): string {
   const { primary, secondary } = describeSet(set, exercise, unit);

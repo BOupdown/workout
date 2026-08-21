@@ -13,7 +13,8 @@ import type { Exercise } from '../lib/db/types';
 const rules = (
   loadType: Exercise['loadType'],
   metric: Exercise['metric'],
-): Pick<Exercise, 'loadType' | 'metric'> => ({ loadType, metric });
+  perSide = false,
+): Pick<Exercise, 'loadType' | 'metric' | 'perSide'> => ({ loadType, metric, perSide });
 
 describe('parseNumberInput', () => {
   it('accepte la virgule décimale française', () => {
@@ -117,6 +118,35 @@ describe('describeSet', () => {
     expect(describeSet({ reps: 25 }, rules('bodyweight', 'reps'))).toEqual({
       primary: '25',
       secondary: 'reps',
+    });
+  });
+
+  it('signale un exercice compté par côté, avec charge', () => {
+    // Le modèle porte `perSide` depuis le premier schéma pour trancher
+    // « 10 reps : 10 ou 20 ? ». Tant qu'il n'était affiché nulle part,
+    // l'ambiguïté qu'il existe pour lever restait entière.
+    expect(describeSet({ weightKg: 20, reps: 10 }, rules('external', 'reps', true))).toEqual({
+      primary: '20',
+      secondary: '× 10/side',
+    });
+  });
+
+  it('le signale aussi au poids du corps', () => {
+    expect(describeSet({ reps: 12 }, rules('bodyweight', 'reps', true))).toEqual({
+      primary: '12',
+      secondary: 'reps/side',
+    });
+  });
+
+  it('ne dit rien quand l’exercice est bilatéral', () => {
+    expect(describeSet({ weightKg: 100, reps: 5 }, rules('external', 'reps')).secondary).toBe(
+      '× 5',
+    );
+  });
+
+  it('n’encombre pas une durée, qui n’a pas de côtés', () => {
+    expect(describeSet({ durationSec: 60 }, rules('bodyweight', 'time', true))).toEqual({
+      primary: '1:00',
     });
   });
 

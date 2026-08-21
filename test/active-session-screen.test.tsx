@@ -427,3 +427,49 @@ describe('les supersets', () => {
     ).toBeDefined();
   });
 });
+
+describe('un exercice compté par côté', () => {
+  it('le dit sur le champ de saisie, où ça décide du chiffre tapé', async () => {
+    // Le retour d'usage : rien ne distinguait un unilatéral d'un autre
+    // exercice, alors que « 10 reps » y vaut vingt répétitions.
+    const oneArm = await exerciseByKey('one arm dumbbell row');
+    const { session } = await startSession();
+    await addExerciseToSession(session.id, oneArm.id);
+
+    render(<ActiveSessionScreen />);
+
+    const panel = await screen.findByRole(
+      'region',
+      { name: /Log a set of One-arm dumbbell row/ },
+      { timeout: 5000 },
+    );
+    expect(within(panel).getByLabelText('Reps / side')).toBeDefined();
+  });
+
+  it('le dit sur la série une fois enregistrée', async () => {
+    const oneArm = await exerciseByKey('one arm dumbbell row');
+    const { session } = await startSession();
+    const block = await addExerciseToSession(session.id, oneArm.id);
+    await createSet({ sessionExerciseId: block.id, weightKg: 22, reps: 10, kind: 'work' });
+
+    render(<ActiveSessionScreen />);
+
+    const tile = await screen.findByRole(
+      'button',
+      { name: /^Edit set 1/ },
+      { timeout: 5000 },
+    );
+    expect(tile.getAttribute('aria-label')).toMatch(/10\/side/);
+  });
+
+  it('ne dit rien sur un exercice bilatéral', async () => {
+    const { session } = await startSession();
+    const block = await addExerciseToSession(session.id, squat.id);
+    await createSet({ sessionExerciseId: block.id, weightKg: 100, reps: 5, kind: 'work' });
+
+    render(<ActiveSessionScreen />);
+
+    const tile = await screen.findByRole('button', { name: /^Edit set 1/ }, { timeout: 5000 });
+    expect(tile.getAttribute('aria-label')).not.toMatch(/side/);
+  });
+});

@@ -85,8 +85,14 @@ export function ExercisePicker({ onPick, onClose }: ExercisePickerProps) {
                 onClick={() => onPick(exercise.id)}
                 className="flex min-h-14 w-full items-center justify-between gap-3 border-b border-line/60 text-left transition-transform active:scale-[0.99]"
               >
-                <span className="truncate text-[0.9375rem] font-medium text-ink">
+                <span className="min-w-0 flex-1 truncate text-[0.9375rem] font-medium text-ink">
                   {exercise.name}
+                  {/* Said on the exercise, not only on its sets: this is where
+                      you decide which one you are about to do, and a one-arm
+                      row read exactly like any other until now. */}
+                  {exercise.perSide ? (
+                    <span className="font-normal text-muted"> · per side</span>
+                  ) : null}
                 </span>
                 {exercise.muscleGroup ? (
                   <span className="shrink-0 text-xs text-muted">{exercise.muscleGroup}</span>

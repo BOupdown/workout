@@ -66,6 +66,9 @@ export function ProgressionSheet({ exercise, onEdit, onClose }: ProgressionSheet
           <h2 className="truncate text-[0.9375rem] font-semibold text-ink">{exercise.name}</h2>
           <p className="text-xs text-muted">
             {exercise.archivedAt !== undefined ? 'Archived' : 'Progression'}
+            {/* The curve plots reps for some exercises, and "12" means twelve a
+                side on a unilateral one. Without this the axis is ambiguous. */}
+            {exercise.perSide ? ' · counted per side' : ''}
           </p>
         </div>
 
