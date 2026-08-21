@@ -143,15 +143,18 @@ describe('describeSet', () => {
     // « 10 reps : 10 ou 20 ? ». Tant qu'il n'était affiché nulle part,
     // l'ambiguïté qu'il existe pour lever restait entière.
     expect(reading({ weightKg: 20, reps: 10 }, rules('external', 'reps', true))).toBe(
-      '10/side × 20',
+      '10 × 20/side',
     );
   });
 
-  it('colle « /side » aux répétitions, jamais à la charge', () => {
-    // « 10 × 20/side » se lirait 20 kg par côté, ce qui est une autre
-    // séance : sur un squat bulgare à la barre, la charge n'est pas par côté.
+  it('met « /side » à la fin, pas au milieu', () => {
+    // Cette assertion disait l'inverse, au motif que « 20/side » pourrait se
+    // lire 20 kg par côté. En salle la série se dit « 10 fois 20, par côté »,
+    // et couper les deux nombres pour n'en qualifier qu'un se lit plus mal que
+    // l'ambiguïté que ça évite.
     const parts = describeSet({ weightKg: 20, reps: 10 }, rules('external', 'reps', true));
-    expect(parts.find((part) => part.text.includes('/side'))?.text).toBe('10/side ×');
+    expect(parts.at(-1)?.text).toBe('20/side');
+    expect(parts.some((part) => part.text.startsWith('10/side'))).toBe(false);
   });
 
   it('le signale aussi au poids du corps', () => {
