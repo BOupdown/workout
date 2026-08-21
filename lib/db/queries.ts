@@ -21,6 +21,7 @@ import type {
   SessionExerciseWithSets,
   SessionSummary,
   SetEntry,
+  LocalDate,
   Timestamp,
 } from './types';
 
@@ -112,6 +113,27 @@ export interface SessionHistoryPage {
    * overlap.
    */
   before?: Timestamp;
+}
+
+/**
+ * How many sessions fall on each day of a range.
+ *
+ * An indexed range over `date`, which is exactly what that index was declared
+ * for. A whole calendar month is one scan of a handful of rows, and the map is
+ * keyed the same way the grid is, so the screen looks a day up rather than
+ * filtering a list per cell.
+ */
+export async function countSessionsByDate(
+  from: LocalDate,
+  to: LocalDate,
+): Promise<Map<LocalDate, number>> {
+  const sessions = await db.sessions.where('date').between(from, to, true, true).toArray();
+
+  const byDate = new Map<LocalDate, number>();
+  for (const session of sessions) {
+    byDate.set(session.date, (byDate.get(session.date) ?? 0) + 1);
+  }
+  return byDate;
 }
 
 /**

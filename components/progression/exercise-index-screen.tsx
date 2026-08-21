@@ -9,6 +9,7 @@ import { countSetsForExercise } from '@/lib/db/sets';
 import type { Exercise } from '@/lib/db/types';
 import { ExerciseEditSheet } from '@/components/exercises/exercise-edit-sheet';
 import { ExerciseFormSheet } from '@/components/exercises/exercise-form-sheet';
+import { CalendarView } from './calendar-view';
 import { ProgressionSheet } from './progression-sheet';
 
 /**
@@ -18,6 +19,7 @@ import { ProgressionSheet } from './progression-sheet';
  * progress, whereas you mostly look at it **before** training.
  */
 export function ExerciseIndexScreen() {
+  const [view, setView] = useState<'exercises' | 'calendar'>('exercises');
   const [search, setSearch] = useState('');
   const [openExercise, setOpenExercise] = useState<Exercise | null>(null);
   const [editing, setEditing] = useState<Exercise | null>(null);
@@ -51,7 +53,35 @@ export function ExerciseIndexScreen() {
 
   return (
     <div className="flex h-full flex-col">
-      <header className="shrink-0 border-b border-line bg-raised px-4 pt-[calc(env(safe-area-inset-top)+0.875rem)] pb-3">
+      {/* Two subjects rather than one scroll: exercises are a per-movement
+          question, the calendar a per-day one, and stacking them would make
+          the second permanently below the fold. */}
+      <div className="shrink-0 bg-raised px-4 pt-[calc(env(safe-area-inset-top)+0.875rem)]">
+        <div className="flex gap-1.5" role="tablist" aria-label="Progress view">
+          {(['exercises', 'calendar'] as const).map((option) => (
+            <button
+              key={option}
+              type="button"
+              role="tab"
+              aria-selected={view === option}
+              onClick={() => setView(option)}
+              className={`h-11 flex-1 rounded-control text-sm font-semibold capitalize transition-transform active:scale-[0.98] ${
+                view === option ? 'bg-ink text-surface' : 'bg-surface text-muted'
+              }`}
+            >
+              {option}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {view === 'calendar' ? (
+        <div className="min-h-0 flex-1">
+          <CalendarView />
+        </div>
+      ) : (
+      <>
+      <header className="shrink-0 border-b border-line bg-raised px-4 pt-3 pb-3">
         <div className="flex items-center justify-between gap-3">
           <h1 className="text-[0.9375rem] font-semibold text-ink">Progress</h1>
           <button
@@ -136,6 +166,9 @@ export function ExerciseIndexScreen() {
           })
         )}
       </ul>
+
+      </>
+      )}
 
       {openExercise ? (
         <ProgressionSheet
