@@ -3,7 +3,7 @@ import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { CalendarView } from '../components/progression/calendar-view';
 import { toLocalDate } from '../lib/db/keys';
-import { listTrainingBlocks, startTrainingBlock } from '../lib/db/training-blocks';
+import { createTrainingBlock, listTrainingBlocks } from '../lib/db/training-blocks';
 import { daysBetween } from '../lib/training-block';
 import { resetDatabase } from './helpers';
 
@@ -33,7 +33,7 @@ describe('la bande de bloc', () => {
 
   it('annonce le bloc en cours et sa semaine', async () => {
     // Le point de la fonctionnalité : savoir où on en est sans compter de cases.
-    await startTrainingBlock('Strength', daysAgo(9));
+    await createTrainingBlock('Strength', daysAgo(9), daysAgo(-18));
 
     render(<CalendarView />);
 
@@ -67,10 +67,10 @@ describe('la bande de bloc', () => {
     expect((start as HTMLButtonElement).disabled).toBe(true);
   });
 
-  it('supprime un bloc, et rend ses jours au précédent', async () => {
+  it('supprime un bloc sans toucher aux autres', async () => {
     const user = userEvent.setup();
-    await startTrainingBlock('Strength', daysAgo(30));
-    await startTrainingBlock('Deload', daysAgo(3));
+    await createTrainingBlock('Strength', daysAgo(30), daysAgo(11));
+    await createTrainingBlock('Deload', daysAgo(3), daysAgo(-3));
 
     render(<CalendarView />);
     await user.click(await blockBar());
@@ -83,9 +83,10 @@ describe('la bande de bloc', () => {
     ]);
   });
 
-  it('remplace un bloc démarrant le même jour', async () => {
+  it('refuse un bloc qui en chevauche un autre, et nomme le coupable', async () => {
+    // On n'est pas dans deux cycles à la fois. Le message doit être actionnable.
     const user = userEvent.setup();
-    await startTrainingBlock('Strength', today());
+    await createTrainingBlock('Strength', today(), daysAgo(-27));
 
     render(<CalendarView />);
     await user.click(await blockBar());
@@ -94,15 +95,15 @@ describe('la bande de bloc', () => {
     await user.type(within(sheet).getByLabelText('Block name'), 'Peaking');
     await user.click(within(sheet).getByRole('button', { name: /Start this block/ }));
 
-    await expect.poll(async () => (await listTrainingBlocks()).map((b) => b.label)).toEqual([
-      'Peaking',
-    ]);
+    expect(await within(sheet).findByRole('alert')).toBeDefined();
+    expect(within(sheet).getByRole('alert').textContent).toMatch(/Strength/);
+    expect((await listTrainingBlocks()).map((b) => b.label)).toEqual(['Strength']);
   });
 });
 
 describe('le compte des semaines', () => {
   it('démarre à la semaine 1 le premier jour', async () => {
-    await startTrainingBlock('Strength', today());
+    await createTrainingBlock('Strength', today(), daysAgo(-27));
 
     render(<CalendarView />);
 
@@ -112,7 +113,7 @@ describe('le compte des semaines', () => {
   it('bascule en semaine 2 le huitième jour', async () => {
     // Sept jours écoulés font encore la semaine 1 ; c'est au huitième que ça
     // change, et c'est exactement la question « dois-je passer à autre chose ».
-    await startTrainingBlock('Strength', daysAgo(7));
+    await createTrainingBlock('Strength', daysAgo(7), daysAgo(-20));
     expect(daysBetween(daysAgo(7), today())).toBe(7);
 
     render(<CalendarView />);

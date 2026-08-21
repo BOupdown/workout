@@ -1,35 +1,55 @@
 /**
  * Reading and writing training blocks.
  *
- * The pure rules — which block covers a day, what week it is in — live in
- * `../training-block`, with no database in sight. This file only persists.
+ * The pure rules — which block covers a day, what week it is in, whether two
+ * spans collide — live in `../training-block`, with no database in sight. This
+ * file persists them, and enforces the one invariant that needs to read the
+ * others: no two blocks may cover the same day.
  */
 
 import { db } from './db';
 import { newId } from './keys';
 import type { Id, LocalDate } from './types';
-import type { TrainingBlock } from '../training-block';
+import { overlaps, type TrainingBlock } from '../training-block';
 
 /**
- * Starts a block on a day.
+ * A block would have sat on top of one that already exists.
  *
- * A day can only be the start of one block, so starting a second on the same
- * date replaces the first rather than leaving two blocks claiming it. Without
- * that, "which block covers this day" would depend on insertion order — which
- * is exactly the kind of answer that changes for no visible reason.
+ * Carries the offender so the screen can name it: "Strength already covers
+ * those days" is actionable, "invalid dates" is not.
  */
-export async function startTrainingBlock(
+export class BlockOverlapError extends Error {
+  readonly conflicting: TrainingBlock;
+
+  constructor(conflicting: TrainingBlock) {
+    super(`“${conflicting.label}” already covers those days.`);
+    this.name = 'BlockOverlapError';
+    this.conflicting = conflicting;
+  }
+}
+
+/**
+ * Creates a block over a span of days, both ends included.
+ *
+ * @throws {BlockOverlapError} when the span touches an existing block.
+ */
+export async function createTrainingBlock(
   label: string,
   startsOn: LocalDate,
+  endsOn: LocalDate,
 ): Promise<TrainingBlock> {
   return db.transaction('rw', db.trainingBlocks, async () => {
-    const clashing = await db.trainingBlocks.where('startsOn').equals(startsOn).toArray();
-    await Promise.all(clashing.map((block) => db.trainingBlocks.delete(block.id)));
+    // Read and write share the transaction, so nothing can slip in between the
+    // check and the insert.
+    const existing = await db.trainingBlocks.toArray();
+    const clash = overlaps(existing, { startsOn, endsOn });
+    if (clash) throw new BlockOverlapError(clash);
 
     const block: TrainingBlock = {
       id: newId(),
       label: label.trim(),
       startsOn,
+      endsOn,
       createdAt: Date.now(),
     };
 
@@ -38,7 +58,7 @@ export async function startTrainingBlock(
   });
 }
 
-/** Removes a block. The one before it takes back the days it held. */
+/** Removes a block. Its days become ordinary days again. */
 export async function deleteTrainingBlock(id: Id): Promise<void> {
   await db.trainingBlocks.delete(id);
 }

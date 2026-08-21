@@ -3,8 +3,9 @@
 import { Flag, Plus, Trash } from '@phosphor-icons/react';
 import { useState } from 'react';
 import {
+  BlockOverlapError,
+  createTrainingBlock,
   deleteTrainingBlock,
-  startTrainingBlock,
 } from '@/lib/db/training-blocks';
 import { localMidnight } from '@/lib/db/keys';
 import type { LocalDate } from '@/lib/db/types';
@@ -19,6 +20,18 @@ interface TrainingBlockBarProps {
 
 const DAY_LABEL = new Intl.DateTimeFormat('en-GB', { day: 'numeric', month: 'short' });
 
+const isDate = (value: string) => /^\d{4}-\d{2}-\d{2}$/.test(value);
+
+/** `offset` days after a local date, staying on the local calendar. */
+function addDays(date: LocalDate, offset: number): LocalDate {
+  const [year, month, day] = date.split('-').map(Number);
+  const shifted = new Date(year, month - 1, day + offset);
+
+  const pad = (value: number) => String(value).padStart(2, '0');
+  return `${shifted.getFullYear()}-${pad(shifted.getMonth() + 1)}-${pad(shifted.getDate())}`;
+}
+
+
 /**
  * Where you are in your cycle, and how to move on.
  *
@@ -30,21 +43,26 @@ export function TrainingBlockBar({ blocks, current, today }: TrainingBlockBarPro
   const [open, setOpen] = useState(false);
   const [label, setLabel] = useState('');
   const [startsOn, setStartsOn] = useState<LocalDate>(today);
+  // Four weeks is the usual mesocycle, and it is a suggestion rather than a
+  // rule: the field is there to be changed.
+  const [endsOn, setEndsOn] = useState<LocalDate>(() => addDays(today, 27));
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
   const handleStart = async () => {
     setBusy(true);
     try {
-      await startTrainingBlock(label, startsOn);
+      await createTrainingBlock(label, startsOn, endsOn);
       setLabel('');
       setError(null);
       setOpen(false);
     } catch (thrown) {
       setError(
-        thrown instanceof ValidationError
-          ? (thrown.issues[0]?.message ?? thrown.message)
-          : 'Could not start the block. Try again.',
+        thrown instanceof BlockOverlapError
+          ? thrown.message
+          : thrown instanceof ValidationError
+            ? (thrown.issues[0]?.message ?? thrown.message)
+            : 'Could not start the block. Try again.',
       );
     } finally {
       setBusy(false);
@@ -63,7 +81,10 @@ export function TrainingBlockBar({ blocks, current, today }: TrainingBlockBarPro
         {current ? (
           <span className="min-w-0 flex-1 truncate text-sm text-ink">
             <span className="font-semibold">{current.block.label}</span>
-            <span className="text-muted"> · week {current.week}</span>
+            <span className="text-muted">
+              {' '}
+              · week {current.week} of {current.totalWeeks}
+            </span>
           </span>
         ) : (
           <span className="min-w-0 flex-1 truncate text-sm text-muted">
@@ -88,7 +109,8 @@ export function TrainingBlockBar({ blocks, current, today }: TrainingBlockBarPro
           >
             <h2 className="text-[0.9375rem] font-semibold text-ink">Training blocks</h2>
             <p className="mt-1 text-sm text-muted">
-              A block runs until the next one starts, so there is nothing to close.
+              Give it a start and an end, and the counter can tell you how far through
+              you are. Two blocks cannot cover the same day.
             </p>
 
             {error ? (
@@ -108,17 +130,30 @@ export function TrainingBlockBar({ blocks, current, today }: TrainingBlockBarPro
                 className="h-14 w-full rounded-control border-2 border-line bg-surface px-3.5 text-base text-ink outline-none placeholder:text-muted focus:border-ink"
               />
 
-              <input
-                type="date"
-                aria-label="Block start date"
-                value={startsOn}
-                onChange={(event) => {
-                  if (/^\d{4}-\d{2}-\d{2}$/.test(event.target.value)) {
+              <div className="flex gap-2">
+                <input
+                  type="date"
+                  aria-label="Block start date"
+                  value={startsOn}
+                  onChange={(event) => {
+                    if (!isDate(event.target.value)) return;
                     setStartsOn(event.target.value);
-                  }
-                }}
-                className="h-14 w-full rounded-control border-2 border-line bg-surface px-3.5 font-mono text-base text-ink tabular-nums outline-none focus:border-ink"
-              />
+                    // Dragging the start past the end would make the block run
+                    // backwards; the span follows instead of breaking.
+                    if (event.target.value > endsOn) setEndsOn(event.target.value);
+                  }}
+                  className="h-14 min-w-0 flex-1 rounded-control border-2 border-line bg-surface px-3 font-mono text-sm text-ink tabular-nums outline-none focus:border-ink"
+                />
+                <input
+                  type="date"
+                  aria-label="Block end date"
+                  value={endsOn}
+                  onChange={(event) => {
+                    if (isDate(event.target.value)) setEndsOn(event.target.value);
+                  }}
+                  className="h-14 min-w-0 flex-1 rounded-control border-2 border-line bg-surface px-3 font-mono text-sm text-ink tabular-nums outline-none focus:border-ink"
+                />
+              </div>
 
               <button
                 type="button"
@@ -144,7 +179,8 @@ export function TrainingBlockBar({ blocks, current, today }: TrainingBlockBarPro
                         {block.label}
                       </span>
                       <span className="shrink-0 font-mono text-xs text-muted tabular-nums">
-                        {DAY_LABEL.format(localMidnight(block.startsOn))}
+                        {DAY_LABEL.format(localMidnight(block.startsOn))} –{' '}
+                        {DAY_LABEL.format(localMidnight(block.endsOn))}
                       </span>
                       <button
                         type="button"

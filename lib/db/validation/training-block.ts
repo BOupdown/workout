@@ -51,6 +51,22 @@ export function checkTrainingBlockShape(value: unknown): ValidationIssue[] {
     });
   }
 
+  if (!isLocalDate(b.endsOn)) {
+    issues.push({
+      field: 'endsOn',
+      code: 'invalid_date',
+      message: 'End date must be formatted YYYY-MM-DD.',
+    });
+  } else if (isLocalDate(b.startsOn) && b.endsOn < b.startsOn) {
+    // Checked here rather than left to the screen: a block running backwards
+    // would make every week count negative, everywhere it is read.
+    issues.push({
+      field: 'endsOn',
+      code: 'end_before_start',
+      message: 'A block cannot end before it starts.',
+    });
+  }
+
   if (!isTimestamp(b.createdAt)) {
     issues.push({
       field: 'createdAt',
