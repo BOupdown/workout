@@ -62,7 +62,11 @@ export function useStorageStatus(): StorageStatus {
   const [reading, setReading] = useState(0);
 
   useEffect(() => {
-    if (!supported) return;
+    // Re-checked at call time rather than trusted from the cached snapshot:
+    // this throws *inside an effect* if it is wrong, which takes the screen
+    // down with it. Optional chaining costs nothing and the cost of being
+    // wrong is the whole app.
+    if (!supported || typeof navigator.storage?.persisted !== 'function') return;
     let cancelled = false;
 
     // Values are set inside promise callbacks, never synchronously in the
@@ -74,7 +78,7 @@ export function useStorageStatus(): StorageStatus {
       () => {},
     );
 
-    if (typeof navigator.storage.estimate === 'function') {
+    if (typeof navigator.storage?.estimate === 'function') {
       navigator.storage.estimate().then(
         (estimate) => {
           if (!cancelled) setUsageBytes(estimate.usage ?? null);
@@ -89,7 +93,7 @@ export function useStorageStatus(): StorageStatus {
   }, [supported, reading]);
 
   const requestPersist = useCallback(async () => {
-    if (!supported || typeof navigator.storage.persist !== 'function') return;
+    if (!supported || typeof navigator.storage?.persist !== 'function') return;
 
     await navigator.storage.persist();
     setReading((count) => count + 1);
@@ -105,10 +109,10 @@ export function useStorageStatus(): StorageStatus {
    */
   const ensurePersisted = useCallback(async () => {
     if (askedThisLaunch) return;
-    if (!supported || typeof navigator.storage.persist !== 'function') return;
+    if (!supported || typeof navigator.storage?.persist !== 'function') return;
 
     // Already durable: asking again would be pointless work on every set.
-    if (await navigator.storage.persisted()) {
+    if (await navigator.storage?.persisted()) {
       askedThisLaunch = true;
       return;
     }

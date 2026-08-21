@@ -115,6 +115,18 @@ export interface SessionHistoryPage {
 }
 
 /**
+ * How many sessions were recorded since a given instant, or in total when
+ * given `null`.
+ *
+ * An indexed count on `startedAt`: no session row is read, which is what makes
+ * it cheap enough to sit behind a live query on the home screen.
+ */
+export async function countSessionsSince(since: Timestamp | null): Promise<number> {
+  if (since === null) return db.sessions.count();
+  return db.sessions.where('startedAt').above(since).count();
+}
+
+/**
  * History list, most recent first.
  *
  * A page's cost does **not** depend on how many sets its sessions hold: counting

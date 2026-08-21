@@ -42,6 +42,7 @@ import { ExerciseRow } from './exercise-row';
 import { SetEditorSheet } from './set-editor-sheet';
 import { RestTimerBar } from './rest-timer-bar';
 import { SessionHeader } from './session-header';
+import { BackupReminderCard } from './backup-reminder-card';
 import { SessionNotesSheet } from './session-notes-sheet';
 import { SessionPickerSheet } from './session-picker-sheet';
 import { SessionSkeleton } from './session-skeleton';
@@ -237,6 +238,8 @@ export function ActiveSessionScreen() {
             button and nothing else. The last session answers "what did I do
             last time?" and opens straight into it. */}
         <LastSessionCard />
+
+        <BackupReminderCard />
 
         {/* Reopening a layout is offered beside starting empty, not instead of
             it: on a split, the session you want back is rarely the last one, so
