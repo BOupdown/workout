@@ -5,6 +5,7 @@ import { useLiveQuery } from 'dexie-react-hooks';
 import { useState } from 'react';
 import { useActiveSession } from '@/hooks/use-active-session';
 import { useRestTimer } from '@/hooks/use-rest-timer';
+import { useSessionRecords } from '@/hooks/use-session-records';
 import { useSetDraft } from '@/hooks/use-set-draft';
 import { useWeightUnit } from '@/hooks/use-weight-unit';
 import {
@@ -68,6 +69,7 @@ export function ActiveSessionScreen() {
   const controller = useSetDraft(activeEntry);
   const [unit] = useWeightUnit();
   const rest = useRestTimer();
+  const recordSetIds = useSessionRecords(entries);
 
   // Resolved from the loaded session: no extra query, and the sheet closes by
   // itself if the block disappears.
@@ -244,6 +246,7 @@ export function ActiveSessionScreen() {
             isFirst={index === 0}
             isLast={index === entries.length - 1}
             unit={unit}
+            recordSetIds={recordSetIds}
             justLoggedSetId={justLoggedSetId}
           />
         ))}

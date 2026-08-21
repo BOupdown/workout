@@ -5,8 +5,10 @@ import type { Exercise, SetEntry } from '../lib/db/types';
 import {
   buildChartGeometry,
   buildProgression,
+  isBetterPerformance,
   progressionDelta,
   progressionMetric,
+  recordSet,
   type SessionPoint,
 } from '../lib/progression';
 import { referenceExercises, resetDatabase } from './helpers';
@@ -237,5 +239,100 @@ describe('buildChartGeometry', () => {
     expect(ticks.length).toBeLessThanOrEqual(4);
     expect(ticks.every((t) => Number.isFinite(t.y))).toBe(true);
     expect(ticks.every((t) => t.value % 5 === 0)).toBe(true);
+  });
+});
+
+describe('isBetterPerformance', () => {
+  it('departage sur la valeur', () => {
+    expect(isBetterPerformance({ value: 102.5 }, { value: 100 }, 'weightKg')).toBe(true);
+    expect(isBetterPerformance({ value: 97.5 }, { value: 100 }, 'weightKg')).toBe(false);
+  });
+
+  it('departage a charge egale sur les reps', () => {
+    expect(
+      isBetterPerformance({ value: 100, reps: 6 }, { value: 100, reps: 5 }, 'weightKg'),
+    ).toBe(true);
+  });
+
+  it('ne departage pas sur les reps quand la charge n est pas la quantite suivie', () => {
+    // En metrique reps, la valeur *est* les reps : un second champ n a pas de sens.
+    expect(isBetterPerformance({ value: 10, reps: 99 }, { value: 10, reps: 1 }, 'reps')).toBe(
+      false,
+    );
+  });
+
+  it('est stricte : une performance egale ne detrone pas', () => {
+    expect(isBetterPerformance({ value: 100, reps: 5 }, { value: 100, reps: 5 }, 'weightKg')).toBe(
+      false,
+    );
+  });
+});
+
+describe('recordSet', () => {
+  it('rend null sans aucune serie', () => {
+    expect(recordSet([], squat)).toBeNull();
+  });
+
+  it('retient la charge la plus lourde', () => {
+    const best = set({ weightKg: 110, reps: 3, performedAt: 2000 });
+    const found = recordSet([set({ weightKg: 100, reps: 5 }), best], squat);
+    expect(found?.id).toBe(best.id);
+  });
+
+  it('departage a charge egale sur les reps', () => {
+    const best = set({ weightKg: 100, reps: 8, performedAt: 2000 });
+    const found = recordSet([set({ weightKg: 100, reps: 5 }), best], squat);
+    expect(found?.id).toBe(best.id);
+  });
+
+  it('laisse le record au premier qui l a atteint', () => {
+    // Refaire exactement la meme performance ne bat personne.
+    const first = set({ weightKg: 100, reps: 5, performedAt: 1000 });
+    const later = set({ weightKg: 100, reps: 5, performedAt: 5000 });
+    expect(recordSet([later, first], squat)?.id).toBe(first.id);
+  });
+
+  it('ignore l ordre d arrivee de la liste', () => {
+    // `recentSetsForExercise` rend l ordre antichronologique : sans tri interne,
+    // une egalite donnerait le record a la plus recente.
+    const first = set({ weightKg: 100, reps: 5, performedAt: 1000, order: 0 });
+    const second = set({ weightKg: 100, reps: 5, performedAt: 1000, order: 1 });
+    expect(recordSet([second, first], squat)?.id).toBe(first.id);
+    expect(recordSet([first, second], squat)?.id).toBe(first.id);
+  });
+
+  it('exclut les echauffements', () => {
+    // Un echauffement lourd n est pas une performance.
+    const work = set({ weightKg: 100, reps: 5 });
+    const warmup = set({ weightKg: 200, reps: 1, kind: 'warmup', performedAt: 2000 });
+    expect(recordSet([work, warmup], squat)?.id).toBe(work.id);
+  });
+
+  it('suit les reps pour un exercice au poids du corps', () => {
+    const best = set({ reps: 20, performedAt: 2000 });
+    expect(recordSet([set({ reps: 12 }), best], pushUps)?.id).toBe(best.id);
+  });
+
+  it('suit la duree pour un exercice chronometre', () => {
+    const best = set({ durationSec: 120, performedAt: 2000 });
+    expect(recordSet([set({ durationSec: 60 }), best], plank)?.id).toBe(best.id);
+  });
+
+  it('ignore une serie sans la mesure suivie', () => {
+    const usable = set({ weightKg: 80, reps: 5 });
+    expect(recordSet([set({ reps: 5 }), usable], squat)?.id).toBe(usable.id);
+  });
+
+  it('designe la meme serie que le sommet de la courbe', () => {
+    // L invariant qui justifie la regle partagee : le record ne peut pas se
+    // trouver sous le point le plus haut de sa propre courbe.
+    const sets = [
+      set({ weightKg: 100, reps: 5, sessionId: 's1', performedAt: 1000 }),
+      set({ weightKg: 110, reps: 3, sessionId: 's2', performedAt: 2000 }),
+      set({ weightKg: 105, reps: 6, sessionId: 's3', performedAt: 3000 }),
+    ];
+
+    const top = buildProgression(sets, squat).reduce((a, b) => (b.value > a.value ? b : a));
+    expect(recordSet(sets, squat)?.weightKg).toBe(top.value);
   });
 });

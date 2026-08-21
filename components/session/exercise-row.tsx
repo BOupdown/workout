@@ -1,8 +1,8 @@
 'use client';
 
-import { ArrowDown, ArrowUp, Trash } from '@phosphor-icons/react';
+import { ArrowDown, ArrowUp, Medal, Trash } from '@phosphor-icons/react';
 import { describeSet } from '@/lib/format';
-import type { Exercise, SessionExerciseWithSets, SetEntry } from '@/lib/db/types';
+import type { Exercise, Id, SessionExerciseWithSets, SetEntry } from '@/lib/db/types';
 import type { WeightUnit } from '@/lib/units';
 
 interface ExerciseRowProps {
@@ -17,6 +17,8 @@ interface ExerciseRowProps {
   isFirst?: boolean;
   isLast?: boolean;
   unit: WeightUnit;
+  /** Sets holding the record for their exercise. */
+  recordSetIds?: Set<Id>;
   /** The set just logged, to be brought in. */
   justLoggedSetId?: string;
 }
@@ -47,6 +49,7 @@ export function ExerciseRow({
   isFirst = false,
   isLast = false,
   unit,
+  recordSetIds,
   justLoggedSetId,
 }: ExerciseRowProps) {
   const { exercise, sets } = entry;
@@ -124,6 +127,7 @@ export function ExerciseRow({
               exercise={exercise}
               unit={unit}
               isActive={isActive}
+              isRecord={recordSetIds?.has(set.id) ?? false}
               justLogged={set.id === justLoggedSetId}
               onPress={() => (isActive ? onEditSet(set) : onSelect())}
             />
@@ -140,6 +144,7 @@ function SetTile({
   exercise,
   unit,
   isActive,
+  isRecord,
   justLogged,
   onPress,
 }: {
@@ -148,6 +153,7 @@ function SetTile({
   exercise: Exercise;
   unit: WeightUnit;
   isActive: boolean;
+  isRecord: boolean;
   justLogged: boolean;
   onPress: () => void;
 }) {
@@ -167,13 +173,19 @@ function SetTile({
           isActive
             ? `Edit set ${position}: ${primary}${secondary ? ` ${secondary}` : ''}${
                 isWarmup ? ', warm-up' : ''
-              }`
+              }${isRecord ? ', personal record' : ''}`
             : `Select ${exercise.name}`
         }
         className={`flex items-baseline gap-1 rounded-control px-2.5 py-1.5 font-mono tabular-nums transition-transform active:scale-95 ${background} ${
           isWarmup ? 'text-muted' : 'text-ink'
         } ${justLogged ? 'animate-set-logged' : ''}`}
       >
+        {/* A record is stated on the set that holds it, not announced when it
+            falls: correct a load or delete a set and the mark follows, because
+            it was never a fact about an event. */}
+        {isRecord ? (
+          <Medal size={13} weight="fill" aria-hidden className="self-center text-chart" />
+        ) : null}
         <span className={isWarmup ? 'text-sm' : 'text-base font-semibold'}>{primary}</span>
         {secondary ? <span className="text-xs text-muted">{secondary}</span> : null}
       </button>

@@ -27,6 +27,34 @@ export function progressionMetric(
   return 'reps';
 }
 
+/** A performance stripped down to what ranking it needs. */
+export interface Performance {
+  value: number;
+  /** Reps behind the value, when the value is a load. */
+  reps?: number;
+}
+
+/**
+ * Ranks two performances.
+ *
+ * Written once and used everywhere — the curve, the records — because two
+ * definitions of "better" would drift apart, and the day they did, a set could
+ * hold the record while sitting below the top of its own curve.
+ *
+ * Strict: an equal performance does not displace the one already there. That is
+ * what makes the *first* set to reach a value keep the record.
+ */
+export function isBetterPerformance(
+  candidate: Performance,
+  incumbent: Performance,
+  metric: ProgressionMetric,
+): boolean {
+  if (candidate.value !== incumbent.value) return candidate.value > incumbent.value;
+
+  // At equal load, the set with more reps is the better one.
+  return metric === 'weightKg' && (candidate.reps ?? 0) > (incumbent.reps ?? 0);
+}
+
 /** A session's best work set, for the tracked quantity. */
 export interface SessionPoint {
   sessionId: Id;
@@ -71,20 +99,53 @@ export function buildProgression(
 
     existing.setCount += 1;
 
-    // At equal load, the set with more reps is the better one.
-    const isBetter =
-      value > existing.value ||
-      (value === existing.value &&
-        metric === 'weightKg' &&
-        (set.reps ?? 0) > (existing.reps ?? 0));
-
-    if (isBetter) {
+    if (isBetterPerformance({ value, reps: set.reps }, existing, metric)) {
       existing.value = value;
       if (metric === 'weightKg') existing.reps = set.reps;
     }
   }
 
   return [...bySession.values()].sort((a, b) => a.performedAt - b.performedAt);
+}
+
+/**
+ * The work set holding the record for this exercise, or `null`.
+ *
+ * Sets are ranked in chronological order regardless of how they arrive, because
+ * `isBetterPerformance` is strict: on a tie the record belongs to whoever got
+ * there first, and reading the list backwards would silently hand it to the
+ * most recent instead.
+ *
+ * Warm-ups are excluded, for the reason the curve excludes them: a ramp-up is
+ * not a performance.
+ */
+export function recordSet(
+  sets: SetEntry[],
+  exercise: Pick<Exercise, 'loadType' | 'metric'>,
+): SetEntry | null {
+  const metric = progressionMetric(exercise);
+
+  const ordered = [...sets].sort(
+    (a, b) => a.performedAt - b.performedAt || a.order - b.order,
+  );
+
+  let best: SetEntry | null = null;
+  let bestPerformance: Performance | null = null;
+
+  for (const set of ordered) {
+    if (set.kind !== 'work') continue;
+
+    const value = set[metric];
+    if (value === undefined) continue;
+
+    const candidate: Performance = { value, reps: set.reps };
+    if (bestPerformance === null || isBetterPerformance(candidate, bestPerformance, metric)) {
+      best = set;
+      bestPerformance = candidate;
+    }
+  }
+
+  return best;
 }
 
 /** Gap between the last two sessions, `null` when there is nothing to compare. */
