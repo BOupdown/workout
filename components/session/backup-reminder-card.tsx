@@ -4,22 +4,23 @@ import { FloppyDisk } from '@phosphor-icons/react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { countSessionsSince } from '@/lib/db/queries';
 import { backupReminder } from '@/lib/backup-reminder';
-import { useBackupExport } from '@/hooks/use-backup';
+import { useLastBackupAt } from '@/hooks/use-backup';
 
 /**
- * The one honest answer to storing everything on one device.
+ * A line, on the screen you land on after finishing a session, saying the data
+ * is only here.
  *
- * Placed on the screen you land on after finishing a session — the phone is
- * still in your hand and something has just been created — rather than in the
- * settings, where the export sat unused for as long as it existed.
+ * Deliberately just a line. Backing up belongs in the settings with the restore
+ * it mirrors, and a panel with its own action button on the home screen would
+ * put a rarely-used gesture in front of the one people actually came for. What
+ * cannot stay in the settings is the *knowing*: an export nobody remembers is
+ * an export nobody makes, and the loss it guards against is silent.
  *
- * It says how much is at stake in sessions, not in reassuring words: "9
- * sessions since your last backup" is a number someone can weigh. It is not a
- * dialog and blocks nothing; ignoring it is a decision the user is entitled to
- * make, and the only thing that would be unforgivable is not telling them.
+ * So this says how much is at stake — in sessions, a number someone can
+ * weigh — and stops there. Settings is one tap away in the tab bar.
  */
 export function BackupReminderCard() {
-  const { lastBackupAt, running, message, error, exportNow } = useBackupExport();
+  const lastBackupAt = useLastBackupAt();
 
   // Computed inside the query, not during render: the clock is not a pure
   // input, and reading it while rendering is the same class of mistake as the
@@ -29,54 +30,21 @@ export function BackupReminderCard() {
     return backupReminder({ lastBackupAt, sessionsSince, now: Date.now() });
   }, [lastBackupAt]);
 
-  if (reminder === undefined) return null;
-  if (reminder === null && message === null && error === null) return null;
+  if (!reminder) return null;
 
   return (
-    <section
+    <p
       aria-label="Backup reminder"
-      className="mt-3 rounded-panel bg-raised px-4 py-3.5"
+      className="mt-3 flex items-start gap-2 px-1 text-xs text-muted"
     >
-      <div className="flex items-start gap-2.5">
-        <FloppyDisk size={18} weight="bold" className="mt-0.5 shrink-0 text-ink" />
-        <div className="min-w-0 flex-1">
-          {error ? (
-            <p role="alert" className="text-sm text-danger">
-              {error}
-            </p>
-          ) : message ? (
-            <p className="text-sm text-ink">{message}</p>
-          ) : reminder ? (
-            <>
-              <p className="text-sm font-medium text-ink">
-                {reminder.never
-                  ? 'Your training is only on this phone'
-                  : `${reminder.sessionsSince} session${
-                      reminder.sessionsSince > 1 ? 's' : ''
-                    } since your last backup`}
-              </p>
-              <p className="mt-1 text-sm text-muted">
-                {reminder.never
-                  ? 'Nothing has ever been backed up. Lose the phone and the history goes with it.'
-                  : `Last backup ${
-                      reminder.daysSince === 0 ? 'today' : `${reminder.daysSince} days ago`
-                    }.`}
-              </p>
-            </>
-          ) : null}
-        </div>
-      </div>
-
-      {reminder && message === null ? (
-        <button
-          type="button"
-          onClick={exportNow}
-          disabled={running}
-          className="mt-3 h-14 w-full rounded-control bg-ink text-[0.9375rem] font-semibold text-surface transition-transform active:scale-[0.98] disabled:opacity-50"
-        >
-          {running ? 'Preparing…' : 'Back up now'}
-        </button>
-      ) : null}
-    </section>
+      <FloppyDisk size={14} weight="bold" className="mt-0.5 shrink-0" />
+      <span>
+        {reminder.never
+          ? 'Your training is only on this phone. Back it up from Settings.'
+          : `${reminder.sessionsSince} session${
+              reminder.sessionsSince > 1 ? 's' : ''
+            } since your last backup. Settings has the export.`}
+      </span>
+    </p>
   );
 }

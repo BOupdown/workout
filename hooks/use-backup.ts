@@ -60,8 +60,19 @@ export interface BackupExport {
  * the device for good. Where `share` is unavailable (desktop browsers, older
  * engines) the download is still there.
  */
+/**
+ * Just when the last export happened.
+ *
+ * Split from the export itself so a screen that only wants to *mention* the
+ * state does not drag in the machinery to change it — the home screen says
+ * something is due, the settings are where it gets done.
+ */
+export function useLastBackupAt(): Timestamp | null {
+  return useSyncExternalStore(subscribe, getSnapshot, noBackup);
+}
+
 export function useBackupExport(): BackupExport {
-  const lastBackupAt = useSyncExternalStore(subscribe, getSnapshot, noBackup);
+  const lastBackupAt = useLastBackupAt();
 
   const [running, setRunning] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
