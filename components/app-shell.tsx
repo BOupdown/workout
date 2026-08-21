@@ -67,7 +67,11 @@ export function AppShell() {
   }, []);
 
   return (
-    <div className="flex h-[100dvh] flex-col">
+    /* Framed rather than stretched. The whole layout is drawn for a thumb at
+       375px; letting it fill a 1440px monitor put a 1300px-wide "Save set"
+       button on screen, which reads as unfinished rather than as a phone app.
+       The side rules only appear once there is room for them. */
+    <div className="mx-auto flex h-[100dvh] w-full max-w-[430px] flex-col border-line sm:border-x">
       <div
         ref={track}
         // `overscroll-x-contain` stops a swipe past the last tab from triggering
