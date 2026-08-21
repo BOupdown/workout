@@ -34,7 +34,8 @@ beforeEach(async () => {
 
 describe('visibleDraftFields', () => {
   it('affiche charge et répétitions pour une charge externe', () => {
-    expect(visibleDraftFields(setFieldRequirements(squat))).toEqual(['weightKg', 'reps']);
+    // Reps first: the order the fields are read and typed in.
+    expect(visibleDraftFields(setFieldRequirements(squat))).toEqual(['reps', 'weightKg']);
   });
 
   it('masque la charge au poids du corps', () => {

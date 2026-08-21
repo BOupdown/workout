@@ -26,7 +26,16 @@ export type DraftField = keyof SetDraft;
 
 export const EMPTY_DRAFT: SetDraft = { weightKg: '', reps: '', durationSec: '' };
 
-const DRAFT_FIELDS: readonly DraftField[] = ['weightKg', 'reps', 'durationSec'];
+/**
+ * The order the fields are shown in, left to right.
+ *
+ * Reps first, then the load. Asked for by people using it, and it matches how
+ * a set is spoken — "eight at a hundred", not "a hundred for eight".
+ *
+ * The same list drives the loops that build a set, where order changes
+ * nothing: an object is assembled either way.
+ */
+const DRAFT_FIELDS: readonly DraftField[] = ['reps', 'weightKg', 'durationSec'];
 
 /** An exercise reduced to what the draft needs. */
 export type DraftExercise = Pick<Exercise, 'loadType' | 'metric' | 'defaultIncrementKg'>;
