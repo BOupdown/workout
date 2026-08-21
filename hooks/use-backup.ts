@@ -39,6 +39,57 @@ function getSnapshot(): Timestamp | null {
  */
 const noBackup = () => null;
 
+/**
+ * Below this, a rejection cannot be a person deciding.
+ *
+ * `share()` reports "the user dismissed the sheet" and "this browser will not
+ * do it" with the same `AbortError`, which leaves no way to tell a deliberate
+ * cancel from a refusal — except that a human takes a moment. A rejection
+ * arriving in a few milliseconds never showed anybody anything.
+ */
+const CANCEL_FLOOR_MS = 250;
+
+type ShareOutcome = 'sent' | 'cancelled' | 'unavailable';
+
+/**
+ * Hands the file to the share sheet, and says plainly what happened.
+ *
+ * Sharing is an enhancement, never the only road out. Anything other than a
+ * genuine cancel reports `unavailable` so the caller falls back to a download:
+ * the one outcome a backup feature must never produce is a tap that does
+ * nothing at all.
+ */
+async function shareFile(json: string, name: string): Promise<ShareOutcome> {
+  const file = new File([json], name, { type: 'application/json' });
+
+  if (typeof navigator.canShare !== 'function' || !navigator.canShare({ files: [file] })) {
+    return 'unavailable';
+  }
+
+  const startedAt = Date.now();
+  try {
+    await navigator.share({ files: [file], title: name });
+    return 'sent';
+  } catch (thrown) {
+    const aborted = thrown instanceof DOMException && thrown.name === 'AbortError';
+    // A cancel keeps the date where it is — claiming a backup that never left
+    // the device would silence the reminder on a promise that is not true.
+    if (aborted && Date.now() - startedAt >= CANCEL_FLOOR_MS) return 'cancelled';
+
+    return 'unavailable';
+  }
+}
+
+/** The road that always exists. */
+function download(json: string, name: string): void {
+  const url = URL.createObjectURL(new Blob([json], { type: 'application/json' }));
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = name;
+  link.click();
+  URL.revokeObjectURL(url);
+}
+
 export interface BackupExport {
   /** When the last export completed, `null` if there has never been one. */
   lastBackupAt: Timestamp | null;
@@ -57,8 +108,13 @@ export interface BackupExport {
  * The share sheet is the point. A downloaded file lands in Downloads and then
  * has to be moved somewhere that survives the phone — which nobody does. Sharing
  * puts iCloud Drive, Google Drive and email one tap away, and the file leaves
- * the device for good. Where `share` is unavailable (desktop browsers, older
- * engines) the download is still there.
+ * the device for good.
+ *
+ * But it is an enhancement, not a requirement. A browser can advertise
+ * `canShare` and still refuse the call — which used to leave the button doing
+ * nothing at all, the worst possible outcome for the one feature standing
+ * between someone and a lost history. Every failure short of a deliberate
+ * cancel now falls back to the download.
  */
 /**
  * Just when the last export happened.
@@ -95,30 +151,13 @@ export function useBackupExport(): BackupExport {
       const count = backup.sessions.length;
       const plural = count > 1 ? 's' : '';
 
-      const file = new File([json], name, { type: 'application/json' });
+      const shared = await shareFile(json, name);
+      if (shared === 'cancelled') return;
 
-      if (typeof navigator.canShare === 'function' && navigator.canShare({ files: [file] })) {
-        try {
-          await navigator.share({ files: [file], title: name });
-        } catch (thrown) {
-          // Cancelling the share sheet is not a failure, but it is also not a
-          // backup: the date must not move, or the app would claim a safety
-          // that does not exist.
-          if (thrown instanceof DOMException && thrown.name === 'AbortError') return;
-          throw thrown;
-        }
-
-        setMessage(`Backup of ${count} session${plural} sent.`);
-      } else {
-        const url = URL.createObjectURL(new Blob([json], { type: 'application/json' }));
-        const link = document.createElement('a');
-        link.href = url;
-        link.download = name;
-        link.click();
-        URL.revokeObjectURL(url);
-
-        setMessage(`Backup of ${count} session${plural} downloaded.`);
-      }
+      if (shared === 'unavailable') download(json, name);
+      setMessage(
+        `Backup of ${count} session${plural} ${shared === 'sent' ? 'sent' : 'downloaded'}.`,
+      );
 
       window.localStorage.setItem(STORAGE_KEY, String(Date.now()));
       for (const listener of listeners) listener();

@@ -104,11 +104,20 @@ describe('l’export, dans les réglages', () => {
     await expect.poll(() => window.localStorage.getItem(KEY)).not.toBeNull();
   });
 
-  it('n’enregistre rien si le partage est annulé', async () => {
-    // Le piège : `share` rejette avec AbortError quand on ferme la feuille.
-    // Compter ça comme une sauvegarde ferait taire le rappel en promettant une
-    // sécurité qui n'existe pas.
-    share.mockRejectedValue(new DOMException('cancelled', 'AbortError'));
+  it('n’enregistre rien si l’utilisateur annule le partage', async () => {
+    // `share` rejette avec AbortError quand on ferme la feuille. Compter ça
+    // comme une sauvegarde ferait taire le rappel en promettant une sécurité
+    // qui n'existe pas.
+    //
+    // Le délai n'est pas décoratif : c'est ce qui distingue une personne qui
+    // décide d'un navigateur qui refuse, les deux rejetant avec le même nom
+    // d'erreur.
+    share.mockImplementation(
+      () =>
+        new Promise((_, reject) =>
+          setTimeout(() => reject(new DOMException('cancelled', 'AbortError')), 320),
+        ),
+    );
 
     const user = userEvent.setup();
     await recordSessions(1);
@@ -116,8 +125,42 @@ describe('l’export, dans les réglages', () => {
 
     await user.click(await exportButton());
 
-    await new Promise((resolve) => setTimeout(resolve, 400));
+    await new Promise((resolve) => setTimeout(resolve, 700));
     expect(window.localStorage.getItem(KEY)).toBeNull();
+  });
+
+  it('retombe sur le téléchargement quand le navigateur refuse le partage', async () => {
+    // Le cas signalé sur Brave : `canShare` dit oui, `share` refuse. Le bouton
+    // ne faisait alors strictement rien — le pire résultat possible pour la
+    // seule fonctionnalité qui sépare quelqu'un d'un historique perdu.
+    share.mockRejectedValue(new DOMException('not allowed', 'NotAllowedError'));
+    const clicked = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {});
+
+    const user = userEvent.setup();
+    await recordSessions(1);
+    render(<SettingsScreen />);
+
+    await user.click(await exportButton());
+
+    await expect.poll(() => clicked.mock.calls.length).toBe(1);
+    expect(window.localStorage.getItem(KEY)).not.toBeNull();
+    clicked.mockRestore();
+  });
+
+  it('retombe aussi sur le téléchargement quand le refus se déguise en annulation', async () => {
+    // Certains navigateurs rejettent avec AbortError sans avoir rien affiché.
+    // Un rejet instantané n'a montré de feuille à personne.
+    share.mockRejectedValue(new DOMException('blocked', 'AbortError'));
+    const clicked = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {});
+
+    const user = userEvent.setup();
+    await recordSessions(1);
+    render(<SettingsScreen />);
+
+    await user.click(await exportButton());
+
+    await expect.poll(() => clicked.mock.calls.length).toBe(1);
+    clicked.mockRestore();
   });
 
   it('retombe sur le téléchargement là où le partage n’existe pas', async () => {
