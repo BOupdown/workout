@@ -2,9 +2,11 @@ import Dexie, { type Table } from 'dexie';
 import { toNameKey } from './keys';
 import { buildSeedExercises, CATALOGUE_RENAMES } from './seed';
 import type { BodyWeight, Exercise, Session, SessionExercise, SetEntry } from './types';
+import type { TrainingBlock } from '../training-block';
 import {
   assertBodyWeightShape,
   assertExerciseShape,
+  assertTrainingBlockShape,
   assertSessionExerciseShape,
   assertSessionShape,
   assertSetShape,
@@ -31,6 +33,7 @@ export class WorkoutDB extends Dexie {
   sets!: Table<SetEntry, string>;
   // Keyed by `LocalDate`, not by an id: one weight per day.
   bodyweights!: Table<BodyWeight, string>;
+  trainingBlocks!: Table<TrainingBlock, string>;
 
   constructor() {
     super('workout');
@@ -144,6 +147,17 @@ export class WorkoutDB extends Dexie {
         }
       });
 
+
+    /**
+     * Training blocks — a stretch of weeks with one intent.
+     *
+     * `startsOn` is indexed because every read is "which block covers this
+     * day", which is a scan backwards from a date. There is nothing to migrate:
+     * the table simply did not exist before, and an app with no blocks behaves
+     * exactly as it did.
+     */
+    this.version(4).stores({ trainingBlocks: 'id, startsOn' });
+
     // Starting catalogue, once, when the database is created.
     this.on('populate', (transaction) => {
       transaction.table<Exercise, string>('exercises').bulkAdd(buildSeedExercises());
@@ -163,6 +177,7 @@ export class WorkoutDB extends Dexie {
     installShapeGuard(this.sessions, assertSessionShape);
     installShapeGuard(this.sessionExercises, assertSessionExerciseShape);
     installShapeGuard(this.bodyweights, assertBodyWeightShape);
+    installShapeGuard(this.trainingBlocks, assertTrainingBlockShape);
   }
 }
 

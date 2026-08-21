@@ -21,6 +21,7 @@ import type {
   SetEntry,
   Timestamp,
 } from './types';
+import type { TrainingBlock } from '../training-block';
 
 export const BACKUP_FORMAT = 'workout-backup';
 export const BACKUP_VERSION = 1;
@@ -43,6 +44,8 @@ export interface BackupFile {
    * weights on the sessions instead, and the import reads them from there.
    */
   bodyweights?: BodyWeight[];
+  /** Optional for the same reason as `bodyweights`: added after the format. */
+  trainingBlocks?: TrainingBlock[];
 }
 
 export interface BackupSummary {
@@ -61,21 +64,21 @@ export class BackupFormatError extends Error {
 
 /** A complete snapshot of the database, serialisable to JSON as is. */
 export async function exportDatabase(): Promise<BackupFile> {
+  // The array form: Dexie types only five tables as positional arguments, and
+  // the snapshot now spans six.
   return db.transaction(
     'r',
-    db.exercises,
-    db.sessions,
-    db.sessionExercises,
-    db.sets,
-    db.bodyweights,
+    [db.exercises, db.sessions, db.sessionExercises, db.sets, db.bodyweights, db.trainingBlocks],
     async () => {
-      const [exercises, sessions, sessionExercises, sets, bodyweights] = await Promise.all([
-        db.exercises.toArray(),
-        db.sessions.toArray(),
-        db.sessionExercises.toArray(),
-        db.sets.toArray(),
-        db.bodyweights.toArray(),
-      ]);
+      const [exercises, sessions, sessionExercises, sets, bodyweights, trainingBlocks] =
+        await Promise.all([
+          db.exercises.toArray(),
+          db.sessions.toArray(),
+          db.sessionExercises.toArray(),
+          db.sets.toArray(),
+          db.bodyweights.toArray(),
+          db.trainingBlocks.toArray(),
+        ]);
 
       return {
         format: BACKUP_FORMAT,
@@ -86,6 +89,7 @@ export async function exportDatabase(): Promise<BackupFile> {
         sessionExercises,
         sets,
         bodyweights,
+        trainingBlocks,
       };
     },
   );
@@ -135,8 +139,10 @@ export function readBackup(value: unknown): BackupFile {
 
   // Absent is fine — older files predate the timeline. Present but not a list
   // is not: that is a corrupt file claiming to carry weights.
-  if (candidate.bodyweights !== undefined && !Array.isArray(candidate.bodyweights)) {
-    throw new BackupFormatError('Incomplete backup: bodyweights is unreadable.');
+  for (const optional of ['bodyweights', 'trainingBlocks'] as const) {
+    if (candidate[optional] !== undefined && !Array.isArray(candidate[optional])) {
+      throw new BackupFormatError(`Incomplete backup: ${optional} is unreadable.`);
+    }
   }
 
   return candidate as unknown as BackupFile;
@@ -163,11 +169,7 @@ export function parseBackup(json: string): BackupFile {
 export async function importDatabase(backup: BackupFile): Promise<BackupSummary> {
   await db.transaction(
     'rw',
-    db.exercises,
-    db.sessions,
-    db.sessionExercises,
-    db.sets,
-    db.bodyweights,
+    [db.exercises, db.sessions, db.sessionExercises, db.sets, db.bodyweights, db.trainingBlocks],
     async () => {
       await Promise.all([
         db.exercises.clear(),
@@ -175,6 +177,7 @@ export async function importDatabase(backup: BackupFile): Promise<BackupSummary>
         db.sessionExercises.clear(),
         db.sets.clear(),
         db.bodyweights.clear(),
+        db.trainingBlocks.clear(),
       ]);
 
       await db.exercises.bulkAdd(backup.exercises);
@@ -182,6 +185,7 @@ export async function importDatabase(backup: BackupFile): Promise<BackupSummary>
       await db.sessionExercises.bulkAdd(backup.sessionExercises);
       await db.sets.bulkAdd(backup.sets);
       await db.bodyweights.bulkPut(bodyWeightsFrom(backup));
+      await db.trainingBlocks.bulkPut(backup.trainingBlocks ?? []);
     },
   );
 
