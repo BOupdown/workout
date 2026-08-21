@@ -77,7 +77,7 @@ export function SessionHeader({
               <>
                 <span aria-hidden className="h-1 w-1 rounded-full bg-line" />
                 <span className="truncate font-sans">
-                  {block.block.label} w{block.week}
+                  {block.block.label} w{block.week}/{block.totalWeeks}
                 </span>
               </>
             ) : null}

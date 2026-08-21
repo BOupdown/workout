@@ -158,6 +158,20 @@ export class WorkoutDB extends Dexie {
      */
     this.version(4).stores({ trainingBlocks: 'id, startsOn' });
 
+    /**
+     * Blocks gain an end date.
+     *
+     * Version 4 was never released, so this touches no real data — it exists
+     * so a development database opens cleanly rather than carrying blocks with
+     * no end, which every read would then have to defend against. Inventing an
+     * end for them would be a guess dressed as a fact.
+     */
+    this.version(5).upgrade(async (transaction) => {
+      const blocks = transaction.table<TrainingBlock, string>('trainingBlocks');
+      const orphans = await blocks.filter((block) => block.endsOn === undefined).toArray();
+      await Promise.all(orphans.map((block) => blocks.delete(block.id)));
+    });
+
     // Starting catalogue, once, when the database is created.
     this.on('populate', (transaction) => {
       transaction.table<Exercise, string>('exercises').bulkAdd(buildSeedExercises());

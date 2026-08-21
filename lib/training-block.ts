@@ -6,14 +6,15 @@
  * deliberately: the app has no business encoding a methodology, and the same
  * feature then serves someone writing "prépa compét" as well as "force".
  *
- * A block has a **start and no end**. Nobody closes a block — you start the
- * next one and forget the last. With only a start, gaps and overlaps are not
- * rules to enforce but shapes that cannot be expressed, which is the same
- * reasoning that keeps supersets contiguous.
+ * A block has a **start and an end**, both chosen up front. That is what lets
+ * the counter say "week 2 of 4" rather than just "week 2" — and the whole
+ * point of the feature is knowing when to move on, which a plan with a stated
+ * length answers outright.
  *
- * What it is for is practical, not analytical: seeing that you are in week 3
- * tells you whether it is time to move on. That is why the week count matters
- * more than the colour.
+ * The price is that two shapes become expressible and have to be ruled out
+ * rather than made impossible: a gap between blocks, and an overlap. Gaps are
+ * fine — days belonging to no block are ordinary days. Overlaps are not: you
+ * are not in two cycles at once, so they are refused when a block is created.
  */
 
 import { localMidnight } from './db/keys';
@@ -23,8 +24,9 @@ export interface TrainingBlock {
   id: Id;
   /** What the user calls it. Free text — "Strength", "Deload", "Prépa". */
   label: string;
-  /** The day it starts. It runs until the next block starts. */
   startsOn: LocalDate;
+  /** Inclusive: the last day of the block, not the first day after it. */
+  endsOn: LocalDate;
   createdAt: Timestamp;
 }
 
@@ -35,6 +37,10 @@ export interface BlockProgress {
   daysIn: number;
   /** Week it is in, counting from 1. */
   week: number;
+  /** How many weeks it runs in total, rounded up. */
+  totalWeeks: number;
+  /** Days remaining, the last day counting as 0. */
+  daysLeft: number;
 }
 
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -55,24 +61,43 @@ export function orderBlocks(blocks: readonly TrainingBlock[]): TrainingBlock[] {
   return [...blocks].sort((a, b) => a.startsOn.localeCompare(b.startsOn));
 }
 
+/** Whether a day falls inside a block, both ends included. */
+export function covers(block: TrainingBlock, date: LocalDate): boolean {
+  return block.startsOn <= date && date <= block.endsOn;
+}
+
 /**
- * The block covering a day: the last one starting on or before it.
+ * Whether a proposed span would sit on top of an existing block.
  *
- * `null` before the first block ever started — days that belong to no block
- * are ordinary days, not an error.
+ * Two spans overlap unless one ends before the other starts. Written that way
+ * round because it is the only formulation with no edge case: touching spans,
+ * where one ends the day the next begins, correctly count as overlapping.
+ */
+export function overlaps(
+  blocks: readonly TrainingBlock[],
+  span: { startsOn: LocalDate; endsOn: LocalDate },
+  ignoreId?: Id,
+): TrainingBlock | null {
+  for (const block of orderBlocks(blocks)) {
+    if (block.id === ignoreId) continue;
+    if (block.endsOn < span.startsOn || span.endsOn < block.startsOn) continue;
+    return block;
+  }
+
+  return null;
+}
+
+/**
+ * The block covering a day, or `null`.
+ *
+ * `null` covers both "before any block" and "in a gap between two", which are
+ * the same thing to a reader: an ordinary day, not an error.
  */
 export function blockOn(
   blocks: readonly TrainingBlock[],
   date: LocalDate,
 ): TrainingBlock | null {
-  let found: TrainingBlock | null = null;
-
-  for (const block of orderBlocks(blocks)) {
-    if (block.startsOn > date) break;
-    found = block;
-  }
-
-  return found;
+  return orderBlocks(blocks).find((block) => covers(block, date)) ?? null;
 }
 
 /** How far into its block a day is, or `null` when it belongs to none. */
@@ -84,15 +109,23 @@ export function blockProgressOn(
   if (!block) return null;
 
   const daysIn = daysBetween(block.startsOn, date);
-  return { block, daysIn, week: Math.floor(daysIn / 7) + 1 };
+  const span = daysBetween(block.startsOn, block.endsOn);
+
+  return {
+    block,
+    daysIn,
+    week: Math.floor(daysIn / 7) + 1,
+    // Rounded up: a block of ten days is two weeks, the second being short.
+    totalWeeks: Math.floor(span / 7) + 1,
+    daysLeft: span - daysIn,
+  };
 }
 
 /**
- * The block currently running, which is simply the one covering today.
+ * The block running today.
  *
- * A block started in the future is not current — someone planning ahead has
- * not begun it yet, and saying "week 1" of something that has not started
- * would be a lie the counter tells every time it is read.
+ * A block planned for later is not current — saying "week 1" of something that
+ * has not started would be a lie repeated every time the counter is read.
  */
 export function currentBlock(
   blocks: readonly TrainingBlock[],
