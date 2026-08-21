@@ -1,6 +1,6 @@
 'use client';
 
-import { ArrowUUpLeft, Barbell, CaretRight, Plus } from '@phosphor-icons/react';
+import { Barbell, CaretRight, ClockCounterClockwise, Plus } from '@phosphor-icons/react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { useState } from 'react';
 import { useActiveSession } from '@/hooks/use-active-session';
@@ -33,6 +33,7 @@ import { SetEditorSheet } from './set-editor-sheet';
 import { RestTimerBar } from './rest-timer-bar';
 import { SessionHeader } from './session-header';
 import { SessionNotesSheet } from './session-notes-sheet';
+import { SessionPickerSheet } from './session-picker-sheet';
 import { SessionSkeleton } from './session-skeleton';
 import { SetEntryPanel } from './set-entry-panel';
 
@@ -60,6 +61,7 @@ export function ActiveSessionScreen() {
   const [removalCount, setRemovalCount] = useState<number | null>(null);
   // Exercises the layout could not carry over. Cleared as soon as it is read.
   const [leftBehind, setLeftBehind] = useState<string[]>([]);
+  const [pickerOpenForStart, setPickerOpenForStart] = useState(false);
 
   const detail = state.status === 'ready' ? state.detail : undefined;
   const entries = detail?.entries ?? [];
@@ -101,6 +103,7 @@ export function ActiveSessionScreen() {
     try {
       const { skipped } = await startSessionFrom(sourceId);
       setLeftBehind(skipped);
+      setPickerOpenForStart(false);
     } finally {
       setBusy(false);
     }
@@ -206,16 +209,37 @@ export function ActiveSessionScreen() {
         {/* Without this reminder the home screen would be a dead end: one
             button and nothing else. The last session answers "what did I do
             last time?" and opens straight into it. */}
-        <LastSessionCard onRepeat={handleStartFrom} busy={busy} />
+        <LastSessionCard />
+
+        {/* Reopening a layout is offered beside starting empty, not instead of
+            it: on a split, the session you want back is rarely the last one, so
+            which one it is has to be a choice. */}
+        <button
+          type="button"
+          onClick={() => setPickerOpenForStart(true)}
+          disabled={busy}
+          className="mt-3 flex min-h-14 w-full items-center justify-center gap-2 rounded-control border border-line text-[0.9375rem] font-medium text-ink transition-transform active:scale-[0.99] disabled:opacity-50"
+        >
+          <ClockCounterClockwise size={17} weight="bold" />
+          Start from a past session
+        </button>
 
         <button
           type="button"
           onClick={handleStart}
           disabled={busy}
-          className="mt-3 h-16 w-full rounded-control bg-accent text-[1.0625rem] font-semibold text-accent-ink transition-transform active:scale-[0.98] disabled:opacity-50"
+          className="mt-2 h-16 w-full rounded-control bg-accent text-[1.0625rem] font-semibold text-accent-ink transition-transform active:scale-[0.98] disabled:opacity-50"
         >
           {busy ? 'Starting…' : 'Start a session'}
         </button>
+
+        {pickerOpenForStart ? (
+          <SessionPickerSheet
+            onPick={handleStartFrom}
+            onClose={() => setPickerOpenForStart(false)}
+            busy={busy}
+          />
+        ) : null}
       </main>
     );
   }
@@ -419,13 +443,7 @@ const DAY_FORMAT = new Intl.DateTimeFormat('en-GB', { weekday: 'long', day: 'num
  * being asked is "what did I do last time?", not "show me the list". Closing
  * the detail therefore comes back here, not to another tab.
  */
-function LastSessionCard({
-  onRepeat,
-  busy,
-}: {
-  onRepeat: (sessionId: Id) => void;
-  busy: boolean;
-}) {
+function LastSessionCard() {
   const summaries = useLiveQuery(() => listSessionSummaries({ limit: 1 }), []);
   const [open, setOpen] = useState(false);
   const last = summaries?.[0];
@@ -456,22 +474,6 @@ function LastSessionCard({
         <CaretRight size={16} className="shrink-0 text-muted" />
       </div>
     </button>
-
-    {/* Starting a session means adding every exercise back by hand — the one
-        moment the two-tap promise did not hold. Repeating a layout is the
-        answer, and it belongs on the card that already says what that layout
-        was. */}
-    {last.exerciseCount > 0 ? (
-      <button
-        type="button"
-        onClick={() => onRepeat(last.id)}
-        disabled={busy}
-        className="mt-2 flex min-h-14 w-full items-center justify-center gap-2 rounded-panel border border-line text-[0.9375rem] font-medium text-ink transition-transform active:scale-[0.99] disabled:opacity-50"
-      >
-        <ArrowUUpLeft size={17} weight="bold" />
-        Start the same session again
-      </button>
-    ) : null}
 
     {open ? <SessionDetailSheet sessionId={last.id} onClose={() => setOpen(false)} /> : null}
     </>

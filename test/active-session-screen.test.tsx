@@ -212,9 +212,9 @@ describe('le record personnel', () => {
 });
 
 describe('repartir d’une séance passée', () => {
-  /** A finished session laid out with two exercises and one logged set. */
-  async function finishedSession() {
-    const { session } = await startSession();
+  /** A finished session, optionally named, laid out with two exercises. */
+  async function finishedSession(title?: string) {
+    const { session } = await startSession(title === undefined ? {} : { title });
     const block = await addExerciseToSession(session.id, squat.id);
     await addExerciseToSession(session.id, pushUps.id);
     await createSet({ sessionExerciseId: block.id, weightKg: 100, reps: 5, kind: 'work' });
@@ -222,46 +222,82 @@ describe('repartir d’une séance passée', () => {
     return session;
   }
 
-  it('rouvre la même liste d’exercices, vide de séries', async () => {
+  const openPicker = async (user: ReturnType<typeof userEvent.setup>) => {
+    await user.click(await screen.findByRole('button', { name: /Start from a past session/ }));
+    // Scoped to the picker: the last-session card behind it carries the same
+    // name, and an unscoped query lands there instead — which opens history.
+    return within(await screen.findByRole('list', { name: 'Past sessions' }));
+  };
+
+  it('rouvre la disposition choisie, vide de séries', async () => {
     // Le moment où la promesse des deux taps ne tenait pas : démarrer imposait
     // de rajouter chaque exercice à la main.
     const user = userEvent.setup();
-    await finishedSession();
+    await finishedSession('Push A');
 
     render(<ActiveSessionScreen />);
+    const picker = await openPicker(user);
 
-    await user.click(
-      await screen.findByRole('button', { name: /Start the same session again/ }),
-    );
+    await user.click(picker.getByRole('button', { name: /Push A/ }));
 
-    expect(await screen.findByRole('button', { name: /^Squat/ })).toBeDefined();
+    expect(await screen.findByRole('button', { name: /^Squat/ }, { timeout: 5000 })).toBeDefined();
     expect(screen.getByRole('button', { name: /^Push-ups/ })).toBeDefined();
     // Une seule série en base : celle de la séance d'origine.
     await expect.poll(savedSets).toBe(1);
   });
 
-  it('n’offre rien à répéter quand la dernière séance était vide', async () => {
+  it('laisse choisir laquelle, pas seulement la dernière', async () => {
+    // Le défaut de la première version : sur un split, la séance qu'on veut
+    // reprendre n'est presque jamais celle qu'on vient de faire.
+    const user = userEvent.setup();
+    await finishedSession('Push A');
+    await finishedSession('Legs');
+
+    render(<ActiveSessionScreen />);
+    const picker = await openPicker(user);
+
+    await user.click(picker.getByRole('button', { name: /Push A/ }));
+
+    await expect
+      .poll(() => screen.queryByRole('button', { name: /^Squat/ }) !== null)
+      .toBe(true);
+  });
+
+  it('ne montre qu’une entrée par nom de routine', async () => {
+    const user = userEvent.setup();
+    await finishedSession('Push A');
+    await finishedSession('Push A');
+    await finishedSession('Push A');
+
+    render(<ActiveSessionScreen />);
+    const picker = await openPicker(user);
+
+    expect(picker.queryAllByRole('button', { name: /Push A/ })).toHaveLength(1);
+  });
+
+  it('n’offre rien quand aucune séance passée ne porte d’exercice', async () => {
+    const user = userEvent.setup();
     const { session } = await startSession();
     await endSession(session.id);
 
     render(<ActiveSessionScreen />);
+    // Pas d openPicker ici : il attend la liste, et c est justement son absence
+    // qu on verifie.
+    await user.click(await screen.findByRole('button', { name: /Start from a past session/ }));
 
-    await screen.findByRole('button', { name: 'Start a session' });
-    expect(screen.queryByRole('button', { name: /Start the same session again/ })).toBeNull();
+    expect(await screen.findByText(/Nothing to reuse yet/)).toBeDefined();
   });
 
   it('dit ce qui a été laissé de côté', async () => {
     const user = userEvent.setup();
-    await finishedSession();
+    await finishedSession('Push A');
     await archiveExercise(pushUps.id);
 
     render(<ActiveSessionScreen />);
+    const picker = await openPicker(user);
+    await user.click(picker.getByRole('button', { name: /Push A/ }));
 
-    await user.click(
-      await screen.findByRole('button', { name: /Start the same session again/ }),
-    );
-
-    expect(await screen.findByText(/archived since, and left out/)).toBeDefined();
+    expect(await screen.findByText(/archived since, and left out/, {}, { timeout: 5000 })).toBeDefined();
     expect(screen.getByRole('button', { name: /^Squat/ })).toBeDefined();
     // Le motif exclut le bandeau, qui nomme lui aussi l exercice ecarte : ce
     // qui doit manquer, c est la *ligne* d exercice.
@@ -270,14 +306,13 @@ describe('repartir d’une séance passée', () => {
 
   it('ne dit rien quand tout a pu être repris', async () => {
     const user = userEvent.setup();
-    await finishedSession();
+    await finishedSession('Push A');
 
     render(<ActiveSessionScreen />);
-    await user.click(
-      await screen.findByRole('button', { name: /Start the same session again/ }),
-    );
+    const picker = await openPicker(user);
+    await user.click(picker.getByRole('button', { name: /Push A/ }));
 
-    await screen.findByRole('button', { name: /^Squat/ });
+    await screen.findByRole('button', { name: /^Squat/ }, { timeout: 5000 });
     expect(screen.queryByText(/archived since/)).toBeNull();
   });
 });
