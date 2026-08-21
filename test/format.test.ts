@@ -107,75 +107,103 @@ describe('formatElapsed', () => {
 });
 
 describe('describeSet', () => {
-  it('met la charge en avant et les répétitions en retrait', () => {
-    expect(describeSet({ weightKg: 102.5, reps: 5 }, rules('external', 'reps'))).toEqual({
-      primary: '102.5',
-      secondary: '× 5',
-    });
+  /** Ce qui se lit, dans l'ordre. */
+  const reading = (...args: Parameters<typeof describeSet>) =>
+    describeSet(...args)
+      .map((part) => part.text)
+      .join(' ');
+
+  /** La partie mise en avant, celle qu'on scanne dans une colonne. */
+  const emphasised = (...args: Parameters<typeof describeSet>) =>
+    describeSet(...args)
+      .filter((part) => part.strong)
+      .map((part) => part.text);
+
+  it('lit les répétitions avant la charge', () => {
+    // Comme on les saisit : reps à gauche, charge à droite.
+    expect(reading({ weightKg: 102.5, reps: 5 }, rules('external', 'reps'))).toBe('5 × 102.5');
+  });
+
+  it('garde la charge en avant, même en seconde position', () => {
+    // L'ordre et l'emphase sont deux questions séparées. Sur un historique
+    // on parcourt une colonne de charges — 100, 102.5, 105 — et c'est ce
+    // nombre-là qui doit accrocher l'œil, pas le nombre de répétitions.
+    expect(emphasised({ weightKg: 102.5, reps: 5 }, rules('external', 'reps'))).toEqual(['102.5']);
   });
 
   it('met les répétitions en avant au poids du corps', () => {
-    expect(describeSet({ reps: 25 }, rules('bodyweight', 'reps'))).toEqual({
-      primary: '25',
-      secondary: 'reps',
-    });
+    // Là ce sont elles qui progressent, donc elles sont à la fois premières
+    // et mises en avant.
+    expect(reading({ reps: 25 }, rules('bodyweight', 'reps'))).toBe('25 reps');
+    expect(emphasised({ reps: 25 }, rules('bodyweight', 'reps'))).toEqual(['25']);
   });
 
   it('signale un exercice compté par côté, avec charge', () => {
     // Le modèle porte `perSide` depuis le premier schéma pour trancher
     // « 10 reps : 10 ou 20 ? ». Tant qu'il n'était affiché nulle part,
     // l'ambiguïté qu'il existe pour lever restait entière.
-    expect(describeSet({ weightKg: 20, reps: 10 }, rules('external', 'reps', true))).toEqual({
-      primary: '20',
-      secondary: '× 10/side',
-    });
+    expect(reading({ weightKg: 20, reps: 10 }, rules('external', 'reps', true))).toBe(
+      '10/side × 20',
+    );
+  });
+
+  it('colle « /side » aux répétitions, jamais à la charge', () => {
+    // « 10 × 20/side » se lirait 20 kg par côté, ce qui est une autre
+    // séance : sur un squat bulgare à la barre, la charge n'est pas par côté.
+    const parts = describeSet({ weightKg: 20, reps: 10 }, rules('external', 'reps', true));
+    expect(parts.find((part) => part.text.includes('/side'))?.text).toBe('10/side ×');
   });
 
   it('le signale aussi au poids du corps', () => {
-    expect(describeSet({ reps: 12 }, rules('bodyweight', 'reps', true))).toEqual({
-      primary: '12',
-      secondary: 'reps/side',
-    });
+    expect(reading({ reps: 12 }, rules('bodyweight', 'reps', true))).toBe('12 reps/side');
   });
 
   it('ne dit rien quand l’exercice est bilatéral', () => {
-    expect(describeSet({ weightKg: 100, reps: 5 }, rules('external', 'reps')).secondary).toBe(
-      '× 5',
-    );
+    expect(reading({ weightKg: 100, reps: 5 }, rules('external', 'reps'))).toBe('5 × 100');
   });
 
   it('signale aussi une position tenue par côté', () => {
     // Cette assertion disait l'inverse — « une durée n'a pas de côtés » — et
     // tenait tant qu'aucun exercice livré n'était à la fois au temps et
     // unilatéral. Le gainage latéral en a deux : 45 s en font 90 de travail.
-    expect(describeSet({ durationSec: 45 }, rules('bodyweight', 'time', true))).toEqual({
-      primary: '0:45',
-      secondary: 'per side',
-    });
+    expect(reading({ durationSec: 45 }, rules('bodyweight', 'time', true))).toBe('0:45 per side');
+    expect(emphasised({ durationSec: 45 }, rules('bodyweight', 'time', true))).toEqual(['0:45']);
   });
 
   it('laisse une durée bilatérale nue', () => {
-    expect(describeSet({ durationSec: 90 }, rules('bodyweight', 'time'))).toEqual({
-      primary: '1:30',
-      secondary: undefined,
-    });
+    expect(reading({ durationSec: 90 }, rules('bodyweight', 'time'))).toBe('1:30');
   });
 
   it('reste lisible sur une durée manquante, par côté ou non', () => {
-    expect(describeSet({}, rules('bodyweight', 'time', true)).primary).toBe('?');
-    expect(describeSet({}, rules('bodyweight', 'time')).primary).toBe('?');
+    expect(reading({}, rules('bodyweight', 'time', true))).toBe('?');
+    expect(reading({}, rules('bodyweight', 'time'))).toBe('?');
   });
 
   it('reste lisible sur une série incomplète', () => {
-    expect(describeSet({}, rules('external', 'reps')).primary).toBe('?');
-    expect(describeSet({}, rules('bodyweight', 'time')).primary).toBe('?');
+    expect(reading({}, rules('external', 'reps'))).toBe('?');
+    expect(reading({}, rules('bodyweight', 'time'))).toBe('?');
+  });
+
+  it('n’a jamais plus d’une partie mise en avant', () => {
+    // Deux gros nombres côte à côte, c'est aucun des deux.
+    const cases: Parameters<typeof describeSet>[] = [
+      [{ weightKg: 100, reps: 5 }, rules('external', 'reps')],
+      [{ reps: 12 }, rules('bodyweight', 'reps', true)],
+      [{ durationSec: 45 }, rules('bodyweight', 'time', true)],
+      [{ weightKg: 20, reps: 8 }, rules('assisted', 'reps')],
+      [{}, rules('external', 'reps')],
+    ];
+
+    for (const args of cases) {
+      expect(emphasised(...args)).toHaveLength(1);
+    }
   });
 });
 
 describe('formatSetSummary', () => {
-  it('rend charge × répétitions', () => {
+  it('rend répétitions × charge', () => {
     expect(formatSetSummary({ weightKg: 100, reps: 5 }, rules('external', 'reps'))).toBe(
-      '100 × 5',
+      '5 × 100',
     );
   });
 
@@ -192,7 +220,7 @@ describe('formatSetSummary', () => {
 
   it('marque l’assistance comme retirée', () => {
     expect(formatSetSummary({ weightKg: 20, reps: 8 }, rules('assisted', 'reps'))).toBe(
-      '-20 × 8',
+      '8 × -20',
     );
   });
 

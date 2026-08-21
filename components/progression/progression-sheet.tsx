@@ -4,7 +4,7 @@ import { ArrowLeft, Medal, PencilSimple, TrendUp } from '@phosphor-icons/react';
 import { useExerciseProgression } from '@/hooks/use-exercise-progression';
 import { useWeightUnit } from '@/hooks/use-weight-unit';
 import type { Exercise } from '@/lib/db/types';
-import { describeSet, formatDuration, formatNumber } from '@/lib/format';
+import { formatDuration, formatNumber, formatSetSummary } from '@/lib/format';
 import type { ProgressionMetric } from '@/lib/progression';
 import { toDisplayWeight } from '@/lib/units';
 import { ProgressionChart } from './progression-chart';
@@ -107,11 +107,14 @@ export function ProgressionSheet({ exercise, onEdit, onClose }: ProgressionSheet
               {/* Headline figure: proportional figures, not `tabular-nums`. At
                   this size, equal-width digits read loose. */}
               <p className="mt-1 flex items-baseline gap-1.5 text-5xl leading-none font-semibold text-ink">
+                {/* Reps lead, as they do everywhere a set is shown and as they
+                    are typed. The load keeps the headline size: it is the
+                    number this whole screen plots. */}
+                {latest.reps !== undefined ? (
+                  <span className="text-lg font-medium text-muted">{latest.reps} ×</span>
+                ) : null}
                 {format(latest.value)}
                 {label ? <span className="text-lg font-medium text-muted">{label}</span> : null}
-                {latest.reps !== undefined ? (
-                  <span className="text-lg font-medium text-muted">× {latest.reps}</span>
-                ) : null}
               </p>
 
               <p className="mt-2.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted">
@@ -140,8 +143,8 @@ export function ProgressionSheet({ exercise, onEdit, onClose }: ProgressionSheet
                   <Medal size={15} weight="fill" aria-hidden className="self-center text-chart" />
                   <span className="text-muted">Record</span>
                   <span className="font-mono font-semibold text-ink tabular-nums">
+                    {best.reps !== undefined ? `${best.reps} × ` : ''}
                     {format(best.value)} {label}
-                    {best.reps !== undefined ? ` × ${best.reps}` : ''}
                   </span>
                   <span className="text-muted">{DATE_FORMAT.format(best.performedAt)}</span>
                 </p>
@@ -180,13 +183,7 @@ export function ProgressionSheet({ exercise, onEdit, onClose }: ProgressionSheet
                       </div>
                       <div className="mt-1.5 flex flex-wrap gap-x-2 gap-y-1 font-mono text-xs text-muted tabular-nums">
                         {sessionSets.map((set) => {
-                          const { primary, secondary } = describeSet(set, exercise, unit);
-                          return (
-                            <span key={set.id}>
-                              {primary}
-                              {secondary ? ` ${secondary}` : ''}
-                            </span>
-                          );
+                          return <span key={set.id}>{formatSetSummary(set, exercise, unit)}</span>;
                         })}
                       </div>
                     </li>

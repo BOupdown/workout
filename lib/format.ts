@@ -60,18 +60,24 @@ export function formatElapsed(milliseconds: number): string {
 }
 
 /**
- * A set split in two, so the display can give the measured value the weight it
- * deserves and demote the qualifier.
+ * A set as a short ordered reading, each piece carrying its own emphasis.
+ *
+ * Order and prominence are two separate questions, and keeping them in one
+ * `primary`/`secondary` pair forced the same answer to both: whichever number
+ * came first was also the big one. Reps read first, matching the order they
+ * are typed in — but on a loaded lift the load is still the number you scan a
+ * column of history for, so it keeps the emphasis from second place.
  *
  * This is the single source of the rules for presenting a set: the shape
  * follows the exercise's nature, exactly as data entry does.
  */
-export interface SetDescription {
-  /** The quantity that progresses, brought forward. */
-  primary: string;
-  /** What qualifies it, kept back. */
-  secondary?: string;
+export interface SetPart {
+  text: string;
+  /** Given the visual weight: the quantity that progresses. */
+  strong: boolean;
 }
+
+export type SetDescription = SetPart[];
 
 export function describeSet(
   set: Pick<SetEntry, 'weightKg' | 'reps' | 'durationSec'>,
@@ -94,24 +100,34 @@ export function describeSet(
   // A held position is just as ambiguous as a counted one: 45 seconds of side
   // plank is 90 seconds of work, and reads like a front plank without this.
   if (exercise.metric === 'time') {
-    if (set.durationSec === undefined) return { primary: '?' };
-    return {
-      primary: formatDuration(set.durationSec),
-      secondary: exercise.perSide ? 'per side' : undefined,
-    };
+    if (set.durationSec === undefined) return [{ text: '?', strong: true }];
+
+    const held: SetDescription = [{ text: formatDuration(set.durationSec), strong: true }];
+    if (exercise.perSide) held.push({ text: 'per side', strong: false });
+    return held;
   }
 
-  if (set.reps === undefined) return { primary: '?' };
+  if (set.reps === undefined) return [{ text: '?', strong: true }];
 
-  // Bodyweight, or zero added/assisted load: showing "0 × 8" teaches nothing,
-  // the reps carry all the information.
+  // Bodyweight, or zero added/assisted load: showing "8 × 0" teaches nothing,
+  // the reps carry all the information — and are what progresses, so they are
+  // both first and emphasised here.
   if (exercise.loadType === 'bodyweight' || !set.weightKg) {
-    return { primary: String(set.reps), secondary: `reps${perSide}` };
+    return [
+      { text: String(set.reps), strong: true },
+      { text: `reps${perSide}`, strong: false },
+    ];
   }
 
   const sign = exercise.loadType === 'assisted' ? '-' : '';
   const weight = formatNumber(toDisplayWeight(set.weightKg, unit));
-  return { primary: `${sign}${weight}`, secondary: `× ${set.reps}${perSide}` };
+
+  // "/side" stays glued to the reps it qualifies. Trailing it after the load
+  // would read as 100 kg a side, which is a different session entirely.
+  return [
+    { text: `${set.reps}${perSide} ×`, strong: false },
+    { text: `${sign}${weight}`, strong: true },
+  ];
 }
 
 /** One-line compact form, derived from the same rules. */
@@ -120,6 +136,7 @@ export function formatSetSummary(
   exercise: Pick<Exercise, 'loadType' | 'metric' | 'perSide'>,
   unit: WeightUnit = 'kg',
 ): string {
-  const { primary, secondary } = describeSet(set, exercise, unit);
-  return secondary ? `${primary} ${secondary}` : primary;
+  return describeSet(set, exercise, unit)
+    .map((part) => part.text)
+    .join(' ');
 }
