@@ -1,7 +1,7 @@
 'use client';
 
 import { ArrowDown, ArrowUp, Medal, Trash } from '@phosphor-icons/react';
-import { describeSet } from '@/lib/format';
+import { describeSet, formatSetSummary } from '@/lib/format';
 import type { Exercise, Id, SessionExerciseWithSets, SetEntry } from '@/lib/db/types';
 import type { WeightUnit } from '@/lib/units';
 
@@ -157,7 +157,7 @@ function SetTile({
   justLogged: boolean;
   onPress: () => void;
 }) {
-  const { primary, secondary } = describeSet(set, exercise, unit);
+  const parts = describeSet(set, exercise, unit);
   const isWarmup = set.kind === 'warmup';
 
   // On the active row the background is already tinted: tiles go white to stay
@@ -171,7 +171,7 @@ function SetTile({
         onClick={onPress}
         aria-label={
           isActive
-            ? `Edit set ${position}: ${primary}${secondary ? ` ${secondary}` : ''}${
+            ? `Edit set ${position}: ${formatSetSummary(set, exercise, unit)}${
                 isWarmup ? ', warm-up' : ''
               }${isRecord ? ', personal record' : ''}`
             : `Select ${exercise.name}`
@@ -186,8 +186,17 @@ function SetTile({
         {isRecord ? (
           <Medal size={13} weight="fill" aria-hidden className="self-center text-chart" />
         ) : null}
-        <span className={isWarmup ? 'text-sm' : 'text-base font-semibold'}>{primary}</span>
-        {secondary ? <span className="text-xs text-muted">{secondary}</span> : null}
+        {parts.map((part) =>
+          part.strong ? (
+            <span key={part.text} className={isWarmup ? 'text-sm' : 'text-base font-semibold'}>
+              {part.text}
+            </span>
+          ) : (
+            <span key={part.text} className="text-xs text-muted">
+              {part.text}
+            </span>
+          ),
+        )}
       </button>
     </li>
   );

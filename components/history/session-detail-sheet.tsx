@@ -104,7 +104,7 @@ export function SessionDetailSheet({ sessionId, onClose }: SessionDetailSheetPro
               {entry.sets.length > 0 ? (
                 <ul className="mt-2.5 flex flex-wrap gap-1.5">
                   {entry.sets.map((set) => {
-                    const { primary, secondary } = describeSet(set, entry.exercise, unit);
+                    const parts = describeSet(set, entry.exercise, unit);
                     const isWarmup = set.kind === 'warmup';
                     return (
                       <li
@@ -113,10 +113,20 @@ export function SessionDetailSheet({ sessionId, onClose }: SessionDetailSheetPro
                           isWarmup ? 'text-muted' : 'text-ink'
                         }`}
                       >
-                        <span className={isWarmup ? 'text-sm' : 'text-base font-semibold'}>
-                          {primary}
-                        </span>
-                        {secondary ? <span className="text-xs text-muted">{secondary}</span> : null}
+                        {parts.map((part) =>
+                          part.strong ? (
+                            <span
+                              key={part.text}
+                              className={isWarmup ? 'text-sm' : 'text-base font-semibold'}
+                            >
+                              {part.text}
+                            </span>
+                          ) : (
+                            <span key={part.text} className="text-xs text-muted">
+                              {part.text}
+                            </span>
+                          ),
+                        )}
                         {isWarmup ? <span className="sr-only">(warm-up)</span> : null}
                       </li>
                     );
