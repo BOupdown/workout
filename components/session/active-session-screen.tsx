@@ -1,6 +1,6 @@
 'use client';
 
-import { Barbell, CaretRight, Plus } from '@phosphor-icons/react';
+import { ArrowUUpLeft, Barbell, CaretRight, Plus } from '@phosphor-icons/react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { useState } from 'react';
 import { useActiveSession } from '@/hooks/use-active-session';
@@ -15,6 +15,7 @@ import {
   reorderSessionExercises,
   SessionExerciseNotEmptyError,
   startSession,
+  startSessionFrom,
 } from '@/lib/db/sessions';
 import { listSessionSummaries } from '@/lib/db/queries';
 import { createSet } from '@/lib/db/sets';
@@ -57,6 +58,8 @@ export function ActiveSessionScreen() {
   const [bodyweightOpen, setBodyweightOpen] = useState(false);
   const [notesOpen, setNotesOpen] = useState(false);
   const [removalCount, setRemovalCount] = useState<number | null>(null);
+  // Exercises the layout could not carry over. Cleared as soon as it is read.
+  const [leftBehind, setLeftBehind] = useState<string[]>([]);
 
   const detail = state.status === 'ready' ? state.detail : undefined;
   const entries = detail?.entries ?? [];
@@ -86,6 +89,18 @@ export function ActiveSessionScreen() {
     setBusy(true);
     try {
       await startSession();
+      setLeftBehind([]);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  /** Opens a session laid out like an earlier one. Sets are not carried. */
+  const handleStartFrom = async (sourceId: Id) => {
+    setBusy(true);
+    try {
+      const { skipped } = await startSessionFrom(sourceId);
+      setLeftBehind(skipped);
     } finally {
       setBusy(false);
     }
@@ -191,7 +206,7 @@ export function ActiveSessionScreen() {
         {/* Without this reminder the home screen would be a dead end: one
             button and nothing else. The last session answers "what did I do
             last time?" and opens straight into it. */}
-        <LastSessionCard />
+        <LastSessionCard onRepeat={handleStartFrom} busy={busy} />
 
         <button
           type="button"
@@ -229,6 +244,19 @@ export function ActiveSessionScreen() {
       ) : null}
 
       <div className="flex-1 space-y-2 overflow-y-auto p-4">
+        {/* Said once, where the shorter list is visible, rather than dropped in
+            silence: the session came from one that had more exercises. */}
+        {leftBehind.length > 0 ? (
+          <button
+            type="button"
+            onClick={() => setLeftBehind([])}
+            className="w-full rounded-panel bg-raised px-4 py-3 text-left text-sm text-muted transition-transform active:scale-[0.99]"
+          >
+            {leftBehind.join(', ')} {leftBehind.length > 1 ? 'were' : 'was'} archived since, and
+            left out. Tap to dismiss.
+          </button>
+        ) : null}
+
         {entries.map((entry, index) => (
           <ExerciseRow
             key={entry.id}
@@ -391,7 +419,13 @@ const DAY_FORMAT = new Intl.DateTimeFormat('en-GB', { weekday: 'long', day: 'num
  * being asked is "what did I do last time?", not "show me the list". Closing
  * the detail therefore comes back here, not to another tab.
  */
-function LastSessionCard() {
+function LastSessionCard({
+  onRepeat,
+  busy,
+}: {
+  onRepeat: (sessionId: Id) => void;
+  busy: boolean;
+}) {
   const summaries = useLiveQuery(() => listSessionSummaries({ limit: 1 }), []);
   const [open, setOpen] = useState(false);
   const last = summaries?.[0];
@@ -422,6 +456,22 @@ function LastSessionCard() {
         <CaretRight size={16} className="shrink-0 text-muted" />
       </div>
     </button>
+
+    {/* Starting a session means adding every exercise back by hand — the one
+        moment the two-tap promise did not hold. Repeating a layout is the
+        answer, and it belongs on the card that already says what that layout
+        was. */}
+    {last.exerciseCount > 0 ? (
+      <button
+        type="button"
+        onClick={() => onRepeat(last.id)}
+        disabled={busy}
+        className="mt-2 flex min-h-14 w-full items-center justify-center gap-2 rounded-panel border border-line text-[0.9375rem] font-medium text-ink transition-transform active:scale-[0.99] disabled:opacity-50"
+      >
+        <ArrowUUpLeft size={17} weight="bold" />
+        Start the same session again
+      </button>
+    ) : null}
 
     {open ? <SessionDetailSheet sessionId={last.id} onClose={() => setOpen(false)} /> : null}
     </>
