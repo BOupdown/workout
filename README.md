@@ -37,7 +37,7 @@ components/         screens and components, by domain
 hooks/              Dexie live queries and entry state
 lib/db/             model, schema, validation, write layers
 lib/                pure logic: formatting, drafts, progression, units
-test/               321 tests, all in a Node environment
+test/               414 tests — *.test.ts logic (Node), *.test.tsx screens (jsdom)
 ```
 
 ## Principles
