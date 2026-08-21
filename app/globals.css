@@ -29,6 +29,24 @@
      white panel, which is invisible as a 2px stroke. A line has to be seen
      against the surface it crosses, which a fill never has to do. */
   --chart: #6f8b1a;
+
+  /*
+    Training-cycle tints, and the one place the single-accent rule bends.
+
+    A cycle is told apart from its neighbour by hue, because that is what the
+    calendar is for: reading a run of weeks at a glance. They stay washed and
+    low-chroma so the month reads as one surface rather than a spreadsheet, and
+    every one of them keeps `--ink` above 15:1.
+
+    The first is `--accent-wash` itself, so a single cycle looks exactly as it
+    did before there were six.
+  */
+  --cycle-1: #f4fbdc;
+  --cycle-2: #fdf5d0;
+  --cycle-3: #ddf4e8;
+  --cycle-4: #dbeefb;
+  --cycle-5: #e9e4fb;
+  --cycle-6: #fde7da;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -45,6 +63,15 @@
     /* Chosen for this mode rather than mirrored from the light one: the same
        hue lightened, so the curve keeps its contrast on a dark panel. */
     --chart: #82a326;
+
+    /* Darkened rather than inverted: the hue stays recognisable, and the near
+       white ink keeps above 14:1 on each. */
+    --cycle-1: #1e2410;
+    --cycle-2: #2a2410;
+    --cycle-3: #10241a;
+    --cycle-4: #11202c;
+    --cycle-5: #1f1a2e;
+    --cycle-6: #2b1c13;
   }
 }
 
@@ -59,6 +86,12 @@
   --color-accent-wash: var(--accent-wash);
   --color-danger: var(--danger);
   --color-chart: var(--chart);
+  --color-cycle-1: var(--cycle-1);
+  --color-cycle-2: var(--cycle-2);
+  --color-cycle-3: var(--cycle-3);
+  --color-cycle-4: var(--cycle-4);
+  --color-cycle-5: var(--cycle-5);
+  --color-cycle-6: var(--cycle-6);
 
   --radius-panel: 20px;
   --radius-control: 16px;

@@ -12,7 +12,7 @@ import { gridBounds, monthGrid, monthOf, shiftMonth } from '@/lib/calendar';
 import { formatNumber } from '@/lib/format';
 import { toDisplayWeight } from '@/lib/units';
 import { listTrainingBlocks } from '@/lib/db/training-blocks';
-import { blockOn, currentBlock } from '@/lib/training-block';
+import { blockOn, currentBlock, tintByBlock } from '@/lib/training-block';
 import { DayWeightSheet } from './day-weight-sheet';
 import { TrainingBlockBar } from './training-block-bar';
 
@@ -53,6 +53,7 @@ export function CalendarView() {
 
   const blocks = useLiveQuery(() => listTrainingBlocks(), []);
   const current = currentBlock(blocks ?? [], today);
+  const tints = tintByBlock(blocks ?? []);
 
   const weightFor = (date: LocalDate) => weights?.get(date);
 
@@ -103,16 +104,15 @@ export function CalendarView() {
             const weight = weightFor(day.date);
             const trained = (sessions?.get(day.date) ?? 0) > 0;
             const isToday = day.date === today;
-            // Every block is tinted, not only the one running: a past block
-            // shown like an empty day makes the month unreadable, which was the
-            // whole reason for having blocks on a calendar.
-            //
-            // Still one accent, never a colour per block — a palette per cycle
-            // would read as a spreadsheet. What separates two blocks is a seam
-            // on the first day of each, which works even when one starts the
-            // day after another ends.
+            // A colour per block, which is the one place the single-accent
+            // rule bends — and it bends because telling one cycle from the next
+            // at a glance is the entire reason blocks are on a calendar. The
+            // tints stay washed and low-chroma so the month still reads as one
+            // surface, and the seam on a block's first day survives the palette
+            // repeating past six.
             const dayBlock = blockOn(blocks ?? [], day.date);
             const startsBlock = dayBlock !== null && dayBlock.startsOn === day.date;
+            const tint = dayBlock ? tints.get(dayBlock.id) : undefined;
 
             return (
               <button
@@ -125,11 +125,7 @@ export function CalendarView() {
                   weight !== undefined ? `, ${formatNumber(toDisplayWeight(weight, unit))} ${unit}` : ''
                 }`}
                 className={`flex min-h-[3.25rem] flex-col items-center justify-center gap-0.5 rounded-control px-0.5 transition-transform active:scale-95 ${
-                  day.inMonth
-                    ? dayBlock
-                      ? 'bg-accent-wash'
-                      : 'bg-raised'
-                    : 'bg-transparent'
+                  day.inMonth ? (tint ?? 'bg-raised') : 'bg-transparent'
                 } ${startsBlock ? 'border-l-2 border-ink' : ''} ${
                   isToday ? 'ring-2 ring-ink' : ''
                 }`}
