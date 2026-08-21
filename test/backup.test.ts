@@ -12,6 +12,7 @@ import {
   type BackupFile,
 } from '../lib/db/backup';
 import { db } from '../lib/db/db';
+import { getBodyWeight, setBodyWeight } from '../lib/db/bodyweight';
 import { createExercise } from '../lib/db/exercises';
 import { createSet } from '../lib/db/sets';
 import { addExerciseToSession, endSession, startSession } from '../lib/db/sessions';
@@ -205,5 +206,64 @@ describe('summarise & backupFileName', () => {
 
   it('date le nom de fichier', () => {
     expect(backupFileName(new Date(2026, 7, 16).getTime())).toBe('workout-2026-08-16.json');
+  });
+});
+
+describe('le poids de corps dans les sauvegardes', () => {
+  it('exporte la timeline', async () => {
+    await setBodyWeight('2026-08-20', 78.4);
+
+    const backup = await exportDatabase();
+    expect(backup.bodyweights).toEqual([
+      expect.objectContaining({ date: '2026-08-20', weightKg: 78.4 }),
+    ]);
+  });
+
+  it('relit ce qu’il a écrit', async () => {
+    await setBodyWeight('2026-08-19', 77);
+    await setBodyWeight('2026-08-20', 78);
+    const backup = await exportDatabase();
+
+    await setBodyWeight('2026-08-20', 999 as unknown as number).catch(() => {});
+    await db.bodyweights.clear();
+    await importDatabase(backup);
+
+    expect(await db.bodyweights.count()).toBe(2);
+    expect((await getBodyWeight('2026-08-19'))?.weightKg).toBe(77);
+  });
+
+  it('accepte un fichier écrit avant l’existence de la timeline', async () => {
+    // Le champ est absent : bumper la version du format aurait rendu illisible
+    // toute sauvegarde déjà entre les mains des gens.
+    const legacy = await exportDatabase();
+    delete legacy.bodyweights;
+
+    await expect(importDatabase(legacy)).resolves.toBeDefined();
+  });
+
+  it('récupère les poids portés par les anciennes séances', async () => {
+    // Restaurer une vieille sauvegarde ne doit pas perdre un an de pesées.
+    const backup = await exportDatabase();
+    delete backup.bodyweights;
+    backup.sessions = [
+      {
+        id: 'old-1',
+        startedAt: 1_700_000_000_000,
+        date: '2026-08-18',
+        createdAt: 1_700_000_000_000,
+        bodyweightKg: 76.5,
+      },
+    ] as typeof backup.sessions;
+
+    await importDatabase(backup);
+
+    expect((await getBodyWeight('2026-08-18'))?.weightKg).toBe(76.5);
+  });
+
+  it('refuse un champ present mais illisible', async () => {
+    const backup = await exportDatabase();
+    const broken = JSON.stringify({ ...backup, bodyweights: 'nope' });
+
+    expect(() => parseBackup(broken)).toThrow(BackupFormatError);
   });
 });

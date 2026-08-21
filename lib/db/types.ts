@@ -128,13 +128,40 @@ export interface Session {
   title?: string;
 
   /**
-   * Bodyweight on the day, in kg. Without it, no progression is measurable on
-   * `bodyweight` / `weighted_bodyweight` / `assisted` exercises.
+   * @deprecated Bodyweight now lives in its own dated timeline — see
+   * `BodyWeight`. Kept on the type because backups written before that change
+   * still carry it, and importing one has to be able to read it. Nothing
+   * writes it any more.
    */
   bodyweightKg?: number;
 
   notes?: string;
   createdAt: Timestamp;
+}
+
+// ---------------------------------------------------------------------------
+// Bodyweight
+// ---------------------------------------------------------------------------
+
+/**
+ * What you weighed on a given day.
+ *
+ * Its own entity, and keyed by the **day** rather than by an id, because that
+ * is what it is: one weight per date, replaced rather than accumulated. It
+ * used to hang off `Session`, which meant it could only be recorded on a day
+ * you trained — and weighing yourself is a morning thing, not a between-sets
+ * thing.
+ *
+ * A session reads the weight of its own day rather than storing a second copy.
+ * Two places holding the same number is two places that will disagree the day
+ * one of them is corrected.
+ */
+export interface BodyWeight {
+  /** The day, `YYYY-MM-DD`. Primary key: one weight per day. */
+  date: LocalDate;
+  weightKg: number;
+  /** When it was entered, which is not necessarily the day it describes. */
+  recordedAt: Timestamp;
 }
 
 // ---------------------------------------------------------------------------
