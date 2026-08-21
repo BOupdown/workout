@@ -29,3 +29,13 @@ export async function referenceExercises() {
   ]);
   return { squat, pushUps, plank, pullUp };
 }
+
+/**
+ * A name the shipped catalogue does not use.
+ *
+ * Tests that create a custom exercise need one that is free, and the catalogue
+ * grows: shipping "Face pull" once broke eight tests that had assumed it was
+ * theirs. Kept here with a test asserting it stays free, so the next addition
+ * costs one line rather than an afternoon of unrelated failures.
+ */
+export const CUSTOM_EXERCISE_NAME = 'Sandbag carry';

@@ -44,7 +44,10 @@ describe('persistance demandée par l’app', () => {
     render(<ActiveSessionScreen />);
     await user.click(await screen.findByRole('button', { name: 'Start a session' }));
 
-    await expect.poll(() => persist.mock.calls.length).toBe(1);
+    // Budget explicite : ces tests réimportent le module à chaud, et sous charge
+    // parallèle la seconde par défaut ne suffit pas toujours. C'est le délai qui
+    // change, pas ce qui est vérifié.
+    await expect.poll(() => persist.mock.calls.length, { timeout: 5000 }).toBe(1);
   });
 
   it('ne redemande pas quand c’est déjà accordé', async () => {
@@ -68,7 +71,10 @@ describe('persistance demandée par l’app', () => {
 
     render(<ActiveSessionScreen />);
     await user.click(await screen.findByRole('button', { name: 'Start a session' }));
-    await expect.poll(() => persist.mock.calls.length).toBe(1);
+    // Budget explicite : ces tests réimportent le module à chaud, et sous charge
+    // parallèle la seconde par défaut ne suffit pas toujours. C'est le délai qui
+    // change, pas ce qui est vérifié.
+    await expect.poll(() => persist.mock.calls.length, { timeout: 5000 }).toBe(1);
 
     await user.click(await screen.findByRole('button', { name: /Add exercise/ }));
     await user.click(await screen.findByRole('button', { name: /^Squat/ }));

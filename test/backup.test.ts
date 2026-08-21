@@ -24,7 +24,7 @@ let pushUps: Exercise;
 
 /** Une base représentative : catalogue, exercice perso, deux séances, séries. */
 async function seedRealData() {
-  await createExercise({ name: 'Face pull', loadType: 'external', metric: 'reps' });
+  await createExercise({ name: 'Sandbag carry', loadType: 'external', metric: 'reps' });
 
   const older = Date.parse('2026-08-09T09:00:00Z');
   const first = await startSession({ startedAt: older, bodyweightKg: 78 });
@@ -70,7 +70,7 @@ describe('exportDatabase', () => {
     await seedRealData();
     const backup = await exportDatabase();
 
-    expect(backup.exercises.some((e) => e.isCustom && e.name === 'Face pull')).toBe(true);
+    expect(backup.exercises.some((e) => e.isCustom && e.name === 'Sandbag carry')).toBe(true);
   });
 });
 

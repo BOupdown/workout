@@ -18,7 +18,7 @@ beforeEach(resetDatabase);
 
 const draft = (over: Partial<ExerciseDraft> = {}): ExerciseDraft => ({
   ...EMPTY_EXERCISE_DRAFT,
-  name: 'Face pull',
+  name: 'Sandbag carry',
   ...over,
 });
 
@@ -67,7 +67,7 @@ describe('draftAllowsIncrement', () => {
 
 describe('exerciseDraftToInput', () => {
   it('nettoie le nom saisi', () => {
-    expect(exerciseDraftToInput(draft({ name: '  Face pull  ' })).name).toBe('Face pull');
+    expect(exerciseDraftToInput(draft({ name: '  Sandbag carry  ' })).name).toBe('Sandbag carry');
   });
 
   it('omet un groupe musculaire non renseigné', () => {
@@ -123,11 +123,11 @@ describe('exerciseDraftToInput — accord avec la base', () => {
   it('remonte le conflit de nom avec l’exercice existant', async () => {
     await createExercise(exerciseDraftToInput(draft()));
 
-    await createExercise(exerciseDraftToInput(draft({ name: 'FACE-PULL' }))).then(
+    await createExercise(exerciseDraftToInput(draft({ name: 'SANDBAG-CARRY' }))).then(
       () => expect.unreachable('la création aurait dû être refusée'),
       (error: ExerciseNameConflictError) => {
         expect(error).toBeInstanceOf(ExerciseNameConflictError);
-        expect(error.existing.name).toBe('Face pull');
+        expect(error.existing.name).toBe('Sandbag carry');
       },
     );
   });
@@ -140,7 +140,7 @@ describe('exerciseDraftToInput — accord avec la base', () => {
 describe('exerciseToDraft', () => {
   it('recharge un exercice existant sans rien perdre', async () => {
     const exercise = await createExercise({
-      name: 'Face pull',
+      name: 'Sandbag carry',
       loadType: 'external',
       metric: 'reps',
       perSide: true,
@@ -149,7 +149,7 @@ describe('exerciseToDraft', () => {
     });
 
     expect(exerciseToDraft(exercise)).toEqual({
-      name: 'Face pull',
+      name: 'Sandbag carry',
       loadType: 'external',
       metric: 'reps',
       perSide: true,
@@ -196,7 +196,7 @@ describe('exerciseToDraft', () => {
 
 describe('exerciseDraftToUpdate', () => {
   it('coupe les espaces autour du nom', () => {
-    expect(exerciseDraftToUpdate(draft({ name: '  Face pull  ' })).name).toBe('Face pull');
+    expect(exerciseDraftToUpdate(draft({ name: '  Sandbag carry  ' })).name).toBe('Sandbag carry');
   });
 
   it('rend undefined, et non une absence, pour un groupe musculaire effacé', () => {
