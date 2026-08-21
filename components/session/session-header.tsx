@@ -4,6 +4,8 @@ import { NotePencil } from '@phosphor-icons/react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { useEffect, useState } from 'react';
 import { getBodyWeight } from '@/lib/db/bodyweight';
+import { listTrainingBlocks } from '@/lib/db/training-blocks';
+import { blockProgressOn } from '@/lib/training-block';
 import { formatElapsed, formatNumber } from '@/lib/format';
 import type { SessionDetail } from '@/lib/db/types';
 import { toDisplayWeight, type WeightUnit } from '@/lib/units';
@@ -32,6 +34,11 @@ export function SessionHeader({
   // Read from the timeline rather than from the session: the session holds no
   // copy, so the header and the calendar cannot show different numbers.
   const bodyweight = useLiveQuery(() => getBodyWeight(detail.date), [detail.date]);
+
+  // Shown here because knowing you are in week 3 of a strength block matters
+  // while deciding today's sets, not while browsing a calendar afterwards.
+  const blocks = useLiveQuery(() => listTrainingBlocks(), []);
+  const block = blockProgressOn(blocks ?? [], detail.date);
   const [elapsed, setElapsed] = useState(() => Date.now() - detail.startedAt);
 
   useEffect(() => {
@@ -66,6 +73,14 @@ export function SessionHeader({
             <span>
               {setCount} set{setCount > 1 ? 's' : ''}
             </span>
+            {block ? (
+              <>
+                <span aria-hidden className="h-1 w-1 rounded-full bg-line" />
+                <span className="truncate font-sans">
+                  {block.block.label} w{block.week}
+                </span>
+              </>
+            ) : null}
             <span aria-hidden className="h-1 w-1 rounded-full bg-line" />
             {/* Small on purpose — it is read at a glance and set once — but the
                 pseudo-element gives it a full-size touch target without pushing

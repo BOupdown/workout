@@ -11,7 +11,10 @@ import type { LocalDate } from '@/lib/db/types';
 import { gridBounds, monthGrid, monthOf, shiftMonth } from '@/lib/calendar';
 import { formatNumber } from '@/lib/format';
 import { toDisplayWeight } from '@/lib/units';
+import { listTrainingBlocks } from '@/lib/db/training-blocks';
+import { blockOn, currentBlock } from '@/lib/training-block';
 import { DayWeightSheet } from './day-weight-sheet';
+import { TrainingBlockBar } from './training-block-bar';
 
 const MONTH_LABEL = new Intl.DateTimeFormat('en-GB', { month: 'long', year: 'numeric' });
 
@@ -48,6 +51,9 @@ export function CalendarView() {
     return new Map(entries.map((entry) => [entry.date, entry.weightKg]));
   }, [from, to]);
 
+  const blocks = useLiveQuery(() => listTrainingBlocks(), []);
+  const current = currentBlock(blocks ?? [], today);
+
   const weightFor = (date: LocalDate) => weights?.get(date);
 
   return (
@@ -77,7 +83,12 @@ export function CalendarView() {
       </header>
 
       <div className="flex-1 overflow-y-auto p-3 pb-[calc(env(safe-area-inset-bottom)+1rem)]">
-        <div className="grid grid-cols-7 gap-1">
+        {/* Above the grid rather than inside it: the week count is the answer
+            people came for, and counting coloured squares to find it would be
+            a detour. */}
+        <TrainingBlockBar blocks={blocks ?? []} current={current} today={today} />
+
+        <div className="mt-3 grid grid-cols-7 gap-1">
           {WEEKDAYS.map((day, index) => (
             <p
               key={`${day}-${index}`}
@@ -92,6 +103,12 @@ export function CalendarView() {
             const weight = weightFor(day.date);
             const trained = (sessions?.get(day.date) ?? 0) > 0;
             const isToday = day.date === today;
+            // Only the block running now is tinted, and in the app's one accent
+            // rather than a colour per block: a palette per cycle would turn
+            // the month into a spreadsheet and break the single-accent rule the
+            // whole interface is built on.
+            const inCurrentBlock =
+              current !== null && blockOn(blocks ?? [], day.date)?.id === current.block.id;
 
             return (
               <button
@@ -102,7 +119,11 @@ export function CalendarView() {
                   weight !== undefined ? `, ${formatNumber(toDisplayWeight(weight, unit))} ${unit}` : ''
                 }`}
                 className={`flex min-h-[3.25rem] flex-col items-center justify-center gap-0.5 rounded-control px-0.5 transition-transform active:scale-95 ${
-                  day.inMonth ? 'bg-raised' : 'bg-transparent'
+                  day.inMonth
+                    ? inCurrentBlock
+                      ? 'bg-accent-wash'
+                      : 'bg-raised'
+                    : 'bg-transparent'
                 } ${isToday ? 'ring-2 ring-ink' : ''}`}
               >
                 <span
@@ -130,7 +151,8 @@ export function CalendarView() {
         </div>
 
         <p className="mt-4 px-1 text-xs text-muted">
-          Tap any day to record what you weighed. A day you trained is marked.
+          Tap any day to record what you weighed. A day you trained is marked, and the
+          block you are in is tinted.
         </p>
       </div>
 
