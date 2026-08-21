@@ -13,6 +13,7 @@ import { useState } from 'react';
 import { useActiveSession } from '@/hooks/use-active-session';
 import { useRestTimer } from '@/hooks/use-rest-timer';
 import { useSessionRecords } from '@/hooks/use-session-records';
+import { useStorageStatus } from '@/hooks/use-storage-status';
 import { useSetDraft } from '@/hooks/use-set-draft';
 import { useWeightUnit } from '@/hooks/use-weight-unit';
 import {
@@ -84,6 +85,7 @@ export function ActiveSessionScreen() {
   const [unit] = useWeightUnit();
   const rest = useRestTimer();
   const recordSetIds = useSessionRecords(entries);
+  const storage = useStorageStatus();
 
   // Resolved from the loaded session: no extra query, and the sheet closes by
   // itself if the block disappears.
@@ -101,6 +103,8 @@ export function ActiveSessionScreen() {
     try {
       await startSession();
       setLeftBehind([]);
+      // Something now exists that would hurt to lose.
+      void storage.ensurePersisted();
     } finally {
       setBusy(false);
     }
@@ -195,6 +199,8 @@ export function ActiveSessionScreen() {
       // belongs after the round rather than between its members — that is what
       // a superset *is*. Outside one, nothing moves: the panel has to stay put
       // for the one-tap repeat.
+      void storage.ensurePersisted();
+
       const following = nextInGroup(entries, activeEntry.id);
       if (following !== null) setSelectedBlockId(following);
 

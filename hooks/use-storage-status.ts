@@ -8,13 +8,32 @@ export interface StorageStatus {
   /** `null` until the answer is known. */
   persisted: boolean | null;
   usageBytes: number | null;
+  /** Asks explicitly, from the settings screen. */
   requestPersist: () => Promise<void>;
+  /**
+   * Asks on the app's own initiative, at most once per launch and never once
+   * granted. Safe to call from anywhere data has just been created.
+   */
+  ensurePersisted: () => Promise<void>;
 }
 
 const supportsStorageApi = () => typeof navigator.storage?.persisted === 'function';
 
 /** Support never changes during a session: there is nothing to subscribe to. */
 const neverChanges = () => () => {};
+
+/**
+ * One automatic attempt per launch, shared by every caller of the hook.
+ *
+ * Per launch rather than once ever, because the answer is not final: Chrome
+ * grants persistence on engagement — how often the site is opened, whether it
+ * was installed — so a refusal today can become a grant next week without
+ * anything changing in the app. Asking again on each launch costs nothing and
+ * eventually succeeds. Where the browser prompts instead of deciding (Firefox),
+ * a refusal is remembered by the browser itself, so this does not turn into a
+ * dialog at every start.
+ */
+let askedThisLaunch = false;
 
 /**
  * Durable storage state.
@@ -26,6 +45,10 @@ const neverChanges = () => () => {};
  * Chrome answers on its own heuristics (app installed, site visited regularly),
  * Firefox asks the user. A refusal is not an error: it just has to be stated
  * honestly, with a backup offered instead.
+ *
+ * The request is made **by the app**, not by the user: leaving it behind a
+ * button in the settings meant it was never made at all, which is the same as
+ * having no protection. The button stays for anyone who wants to force it.
  */
 export function useStorageStatus(): StorageStatus {
   // `navigator` does not exist during the server render. Answering "not
@@ -72,5 +95,28 @@ export function useStorageStatus(): StorageStatus {
     setReading((count) => count + 1);
   }, [supported]);
 
-  return { supported, persisted, usageBytes, requestPersist };
+  /**
+   * Asked the moment there is something to lose — a session started, a set
+   * written — rather than on the first paint.
+   *
+   * Two reasons. A first-time visitor with an empty database has nothing worth
+   * a permission prompt, and browsers that decide on engagement are far more
+   * likely to say yes to a site being used than to one just opened.
+   */
+  const ensurePersisted = useCallback(async () => {
+    if (askedThisLaunch) return;
+    if (!supported || typeof navigator.storage.persist !== 'function') return;
+
+    // Already durable: asking again would be pointless work on every set.
+    if (await navigator.storage.persisted()) {
+      askedThisLaunch = true;
+      return;
+    }
+
+    askedThisLaunch = true;
+    await navigator.storage.persist();
+    setReading((count) => count + 1);
+  }, [supported]);
+
+  return { supported, persisted, usageBytes, requestPersist, ensurePersisted };
 }
