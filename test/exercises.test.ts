@@ -32,13 +32,13 @@ describe('createExercise', () => {
   it('dérive id, nameKey, isCustom et createdAt', async () => {
     const before = Date.now();
     const exercise = await createExercise({
-      name: 'Face pull',
+      name: 'Sandbag carry',
       loadType: 'external',
       metric: 'reps',
     });
 
     expect(exercise.id).toBeTruthy();
-    expect(exercise.nameKey).toBe('face pull');
+    expect(exercise.nameKey).toBe('sandbag carry');
     expect(exercise.isCustom).toBe(true);
     expect(exercise.createdAt).toBeGreaterThanOrEqual(before);
     expect(exercise.archivedAt).toBeUndefined();
@@ -46,7 +46,7 @@ describe('createExercise', () => {
 
   it('vaut false pour perSide par défaut', async () => {
     const exercise = await createExercise({
-      name: 'Face pull',
+      name: 'Sandbag carry',
       loadType: 'external',
       metric: 'reps',
     });
@@ -55,7 +55,7 @@ describe('createExercise', () => {
 
   it('ne matérialise pas les champs optionnels absents', async () => {
     const exercise = await createExercise({
-      name: 'Face pull',
+      name: 'Sandbag carry',
       loadType: 'external',
       metric: 'reps',
     });
@@ -67,7 +67,7 @@ describe('createExercise', () => {
 
   it('persiste l’exercice et le rend sélectionnable', async () => {
     const exercise = await createExercise({
-      name: 'Face pull',
+      name: 'Sandbag carry',
       loadType: 'external',
       metric: 'reps',
       muscleGroup: 'shoulders',
@@ -100,10 +100,10 @@ describe('createExercise — conflit de nom', () => {
   });
 
   it('refuse aussi une variante accentuée ou ponctuée', async () => {
-    await createExercise({ name: 'Face pull', loadType: 'external', metric: 'reps' });
+    await createExercise({ name: 'Sandbag carry', loadType: 'external', metric: 'reps' });
 
     await expect(
-      createExercise({ name: 'face-pull !', loadType: 'external', metric: 'reps' }),
+      createExercise({ name: 'sandbag-carry !', loadType: 'external', metric: 'reps' }),
     ).rejects.toThrow(ExerciseNameConflictError);
   });
 
@@ -122,13 +122,13 @@ describe('createExercise — conflit de nom', () => {
 
   it('signale qu’un homonyme est archivé', async () => {
     const custom = await createExercise({
-      name: 'Face pull',
+      name: 'Sandbag carry',
       loadType: 'external',
       metric: 'reps',
     });
     await archiveExercise(custom.id);
 
-    await createExercise({ name: 'Face pull', loadType: 'external', metric: 'reps' }).then(
+    await createExercise({ name: 'Sandbag carry', loadType: 'external', metric: 'reps' }).then(
       () => expect.unreachable('la création aurait dû être refusée'),
       (err: ExerciseNameConflictError) => {
         expect(err.existing.archivedAt).toBeDefined();
@@ -171,7 +171,7 @@ describe('validation structurelle', () => {
   it('refuse un groupe musculaire inconnu', async () => {
     await expect(
       createExercise({
-        name: 'Face pull',
+        name: 'Sandbag carry',
         loadType: 'external',
         metric: 'reps',
         muscleGroup: 'tentacules' as Exercise['muscleGroup'],

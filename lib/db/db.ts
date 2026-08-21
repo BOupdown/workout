@@ -172,6 +172,29 @@ export class WorkoutDB extends Dexie {
       await Promise.all(orphans.map((block) => blocks.delete(block.id)));
     });
 
+    /**
+     * Catalogue additions reach databases that already exist.
+     *
+     * `on('populate')` fires once, when a database is created, so everything
+     * added to the seed after that would only ever appear on new installs —
+     * which is to say, not on the phone of anyone already using the app.
+     *
+     * Anything whose normalised name is already taken is skipped, whoever owns
+     * it. A user who created their own "Front squat" keeps theirs, with its
+     * history: `&nameKey` is unique, and overwriting it would be both a lost
+     * exercise and an aborted upgrade. That also makes this safe to re-run.
+     */
+    this.version(6).upgrade(async (transaction) => {
+      const exercises = transaction.table<Exercise, string>('exercises');
+
+      for (const candidate of buildSeedExercises()) {
+        const taken = await exercises.where('nameKey').equals(candidate.nameKey).first();
+        if (taken) continue;
+
+        await exercises.add(candidate);
+      }
+    });
+
     // Starting catalogue, once, when the database is created.
     this.on('populate', (transaction) => {
       transaction.table<Exercise, string>('exercises').bulkAdd(buildSeedExercises());

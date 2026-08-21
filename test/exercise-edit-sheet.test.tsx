@@ -33,7 +33,7 @@ const natureControls = () => [
 
 describe('ExerciseEditSheet', () => {
   it('laisse tout modifiable tant qu’aucune série n’existe', async () => {
-    const fresh = await createExercise({ name: 'Face pull', loadType: 'external', metric: 'reps' });
+    const fresh = await createExercise({ name: 'Sandbag carry', loadType: 'external', metric: 'reps' });
 
     render(<ExerciseEditSheet exercise={fresh} onSaved={vi.fn()} onClose={vi.fn()} />);
 
@@ -92,7 +92,7 @@ describe('ExerciseEditSheet', () => {
 
   it('refuse un renommage vers un nom déjà pris, sans écrire', async () => {
     const user = userEvent.setup();
-    const fresh = await createExercise({ name: 'Face pull', loadType: 'external', metric: 'reps' });
+    const fresh = await createExercise({ name: 'Sandbag carry', loadType: 'external', metric: 'reps' });
 
     render(<ExerciseEditSheet exercise={fresh} onSaved={vi.fn()} onClose={vi.fn()} />);
 
@@ -102,7 +102,7 @@ describe('ExerciseEditSheet', () => {
     await user.click(screen.getByRole('button', { name: 'Save changes' }));
 
     expect(await screen.findByRole('alert')).toBeDefined();
-    expect((await db.exercises.get(fresh.id))?.name).toBe('Face pull');
+    expect((await db.exercises.get(fresh.id))?.name).toBe('Sandbag carry');
   });
 
   it('archive derrière une confirmation, sans perdre l’historique', async () => {
@@ -124,7 +124,7 @@ describe('ExerciseEditSheet', () => {
   it('propose la restauration, sans confirmation, sur un exercice archivé', async () => {
     const user = userEvent.setup();
     const archived = await createExercise({
-      name: 'Face pull',
+      name: 'Sandbag carry',
       loadType: 'external',
       metric: 'reps',
     });
