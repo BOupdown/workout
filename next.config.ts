@@ -37,6 +37,16 @@ const csp = [
 ].join("; ");
 
 const nextConfig: NextConfig = {
+  experimental: {
+    // `@phosphor-icons/react` re-exports some nine thousand icons from one
+    // entry file. Production tree-shakes them away, but every module still has
+    // to be walked first: the barrel is what the dev server compiles on boot
+    // and re-walks on each HMR round. Naming it here has the compiler rewrite
+    // `import { Barbell }` into the one file it actually needs — the import
+    // sites stay as they are, types and all.
+    optimizePackageImports: ['@phosphor-icons/react'],
+  },
+
   async headers() {
     return [
       {

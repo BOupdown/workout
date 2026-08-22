@@ -1,11 +1,12 @@
 'use client';
 
 import { Timer, X } from '@phosphor-icons/react';
-import type { RestProgress } from '@/lib/rest-timer';
+import { useRestProgress } from '@/hooks/use-rest-timer';
+import type { RestTimer } from '@/lib/rest-timer';
 import { formatDuration } from '@/lib/format';
 
 interface RestTimerBarProps {
-  progress: RestProgress;
+  timer: RestTimer;
   onExtend: (deltaSec: number) => void;
   onDismiss: () => void;
 }
@@ -20,12 +21,21 @@ const EXTEND_SEC = 30;
  * exactly what breaks repeating a set in a single tap. At the top the bar takes
  * its room from the scrolling list, which nothing is aiming at.
  *
+ * The countdown is subscribed to *here*, not by the screen: the digits change
+ * every second, and that tick has no business re-rendering a session of
+ * exercise rows and set tiles which are all standing still.
+ *
  * It is also the *only* signal the end of a rest gets. The web cannot alert a
  * phone whose screen is off — iOS has no vibration API at all, and Chrome
  * ignores one from a hidden page — so the bar is built to be read at a glance
  * rather than to supplement a buzz that never comes.
  */
-export function RestTimerBar({ progress, onExtend, onDismiss }: RestTimerBarProps) {
+export function RestTimerBar({ timer, onExtend, onDismiss }: RestTimerBarProps) {
+  const progress = useRestProgress(timer);
+
+  // A stale rest, on its way out: nothing to show for the frame it takes.
+  if (!progress) return null;
+
   const over = progress.phase === 'over';
 
   return (

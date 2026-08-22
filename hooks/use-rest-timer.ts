@@ -77,8 +77,6 @@ function writeTimer(timer: RestTimer | null): void {
 export interface RestTimerController {
   /** The rest in progress, or `null`. */
   timer: RestTimer | null;
-  /** Where it stands right now. `null` whenever `timer` is. */
-  progress: RestProgress | null;
   /** The duration a new rest gets, in seconds. */
   durationSec: number;
   setDurationSec: (seconds: number) => void;
@@ -92,36 +90,16 @@ export interface RestTimerController {
 /**
  * The rest between two sets.
  *
- * The stored value is the *start*, never the remaining time, so a locked screen
- * or a throttled tab costs nothing: the countdown is recomputed from the clock
- * on every repaint. The interval below only decides how often that repaint
- * happens.
+ * Whether one is running, and how to start or stop it — but *not* where it
+ * stands. That second number changes every second, and the two screens holding
+ * this controller (the session, the settings) both re-rendered on every one of
+ * those ticks while none of their content moved. The countdown therefore lives
+ * in `useRestProgress`, called by the one component that draws it, so a rest
+ * repaints a bar rather than an app.
  */
 export function useRestTimer(): RestTimerController {
   const timer = useSyncExternalStore(subscribe, getTimerSnapshot, noTimer);
   const durationSec = useSyncExternalStore(subscribe, getDurationSnapshot, defaultDuration);
-
-  // `null` until the first tick, which the effect fires on the same commit.
-  const [now, setNow] = useState<number | null>(null);
-
-  useEffect(() => {
-    if (!timer) return;
-
-    const tick = () => {
-      const instant = Date.now();
-      // A rest left running overnight is not a rest. Dropping it here, rather
-      // than hiding it in the view, also clears the storage key.
-      if (isRestStale(timer, instant)) {
-        writeTimer(null);
-        return;
-      }
-      setNow(instant);
-    };
-
-    tick();
-    const id = window.setInterval(tick, 1000);
-    return () => window.clearInterval(id);
-  }, [timer]);
 
   const setDurationSec = useCallback((seconds: number) => {
     window.localStorage.setItem(DURATION_KEY, String(clampRestDuration(seconds)));
@@ -145,13 +123,37 @@ export function useRestTimer(): RestTimerController {
 
   const dismiss = useCallback(() => writeTimer(null), []);
 
-  return {
-    timer,
-    progress: timer && now !== null ? restProgress(timer, now) : null,
-    durationSec,
-    setDurationSec,
-    start,
-    extend,
-    dismiss,
-  };
+  return { timer, durationSec, setDurationSec, start, extend, dismiss };
+}
+
+/**
+ * Where a running rest stands, repainted once a second.
+ *
+ * The stored value is the *start*, never the remaining time, so a locked screen
+ * or a throttled tab costs nothing: the countdown is recomputed from the clock
+ * on every repaint. The interval only decides how often that repaint happens.
+ *
+ * `null` for a rest so far past its end that it is stale — left running on a
+ * bench, or reopened the next day. It is dropped rather than hidden, storage
+ * key and all, and the caller draws nothing in the meantime.
+ */
+export function useRestProgress(timer: RestTimer): RestProgress | null {
+  const [now, setNow] = useState(() => Date.now());
+
+  useEffect(() => {
+    const tick = () => {
+      const instant = Date.now();
+      if (isRestStale(timer, instant)) {
+        writeTimer(null);
+        return;
+      }
+      setNow(instant);
+    };
+
+    tick();
+    const id = window.setInterval(tick, 1000);
+    return () => window.clearInterval(id);
+  }, [timer]);
+
+  return isRestStale(timer, now) ? null : restProgress(timer, now);
 }

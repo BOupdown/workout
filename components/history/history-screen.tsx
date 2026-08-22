@@ -67,6 +67,15 @@ export function HistoryScreen() {
   );
 }
 
+/**
+ * One past session.
+ *
+ * `content-visibility` because this list only grows: a year of training is a
+ * few hundred cards, of which four are on screen. The browser skips layout and
+ * paint for the rest until they are scrolled near, and `contain-intrinsic-size`
+ * gives it a placeholder height in the meantime so the scrollbar does not lie —
+ * `auto` then replaces the estimate with each card's real height once measured.
+ */
 function SummaryRow({ summary, onOpen }: { summary: SessionSummary; onOpen: () => void }) {
   const day = DATE_FORMAT.format(summary.startedAt);
 
@@ -74,7 +83,7 @@ function SummaryRow({ summary, onOpen }: { summary: SessionSummary; onOpen: () =
     <button
       type="button"
       onClick={onOpen}
-      className="w-full rounded-panel bg-raised px-4 py-3.5 text-left transition-transform active:scale-[0.99]"
+      className="w-full rounded-panel bg-raised px-4 py-3.5 text-left transition-transform [contain-intrinsic-size:auto_5.5rem] [content-visibility:auto] active:scale-[0.99]"
     >
       <div className="flex items-baseline justify-between gap-3">
         <span className="truncate text-[0.9375rem] font-semibold text-ink">

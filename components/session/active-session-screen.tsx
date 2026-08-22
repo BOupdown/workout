@@ -295,12 +295,8 @@ export function ActiveSessionScreen() {
         <SessionNotesSheet sessionId={detail.id} onClose={() => setNotesOpen(false)} />
       ) : null}
 
-      {rest.progress ? (
-        <RestTimerBar
-          progress={rest.progress}
-          onExtend={rest.extend}
-          onDismiss={rest.dismiss}
-        />
+      {rest.timer ? (
+        <RestTimerBar timer={rest.timer} onExtend={rest.extend} onDismiss={rest.dismiss} />
       ) : null}
 
       <div className="flex-1 space-y-2 overflow-y-auto p-4">
