@@ -56,26 +56,21 @@ export function ExerciseIndexScreen() {
    * Sections when browsing the catalogue, `null` when the list should stay
    * flat.
    *
+   * One axis only. Lifting the trained exercises into a section of their own
+   * put a "have I done this" heading among "what does this work" ones, and took
+   * the bench press out of Chest — so finding a chest exercise meant looking in
+   * two places. They stay under their muscle.
+   *
+   * Trained-first survives inside each group at no cost: `matches` is already
+   * sorted that way and `groupByMuscle` keeps the order it is given.
+   *
    * Flat while searching, because a query has already narrowed things and
    * headings over two results get between the eye and the name. Flat in the
-   * archive, which holds a handful of rows and would come out as a column of
-   * one-line sections. And flat until the set counts land: reading a missing
-   * count as zero would file every trained exercise under a muscle for a frame,
-   * then move it.
+   * archive too, which holds a handful of rows and would come out as a column
+   * of one-line sections.
    */
-  const sections = (() => {
-    if (search.trim() !== '' || showArchived || counts === undefined) return null;
-
-    const trained = matches.filter((exercise) => (counts.get(exercise.id) ?? 0) > 0);
-    const untrained = matches.filter((exercise) => (counts.get(exercise.id) ?? 0) === 0);
-
-    return [
-      // What you have actually done stays on top — that is the point of this
-      // screen — and only the rest gets sorted by muscle.
-      ...(trained.length > 0 ? [{ label: 'Trained', exercises: trained }] : []),
-      ...groupByMuscle(untrained),
-    ];
-  })();
+  const sections =
+    search.trim() !== '' || showArchived ? null : groupByMuscle(matches);
 
   return (
     <div className="flex h-full flex-col">
@@ -152,7 +147,11 @@ export function ExerciseIndexScreen() {
         ) : null}
       </header>
 
-      <ul className="flex-1 overflow-y-auto p-4">
+      {/* No padding at the top of the scroll container. A sticky element cannot
+          rise above its parent's content box, so container padding would freeze
+          the headings below it and leave a strip where outgoing cards show
+          through. The spacing moves inside instead. */}
+      <ul className={`flex-1 overflow-y-auto px-4 pb-4 ${sections === null ? 'pt-4' : ''}`}>
         {exercises === undefined ? (
           <li className="space-y-2">
             {[0, 1, 2, 3, 4].map((row) => (
