@@ -25,32 +25,63 @@ const headings = () =>
   screen.queryAllByRole('heading', { level: 3 }).map((node) => node.textContent);
 
 describe('ExerciseIndexScreen', () => {
-  it('garde ce qui a été fait en tête, et classe le reste par muscle', async () => {
-    // Les deux à la fois : le tri « déjà travaillé d'abord » reste ce que cet
-    // écran raconte, le classement ne s'applique qu'à la longue queue.
+  it('classe par muscle, et rien d’autre', async () => {
+    // Un seul axe : sortir les exercices travaillés dans leur propre section
+    // mettait un titre « est-ce que je l'ai fait » au milieu de titres
+    // « qu'est-ce que ça travaille », et sortait le développé couché de Chest.
     await logOneSet(squat);
 
     render(<ExerciseIndexScreen />);
 
-    await expect.poll(() => headings()[0], { timeout: 5000 }).toBe('Trained');
-    expect(headings()[1]).toBe('Chest');
+    await expect.poll(() => headings()[0], { timeout: 5000 }).toBe('Chest');
+    expect(headings()).not.toContain('Trained');
   });
 
-  it('ne montre pas deux fois un exercice travaillé', async () => {
-    // Il monte dans « Trained » : le laisser aussi sous son muscle en ferait
-    // deux lignes pour un seul exercice.
+  /**
+   * The first row under a heading, once it settles.
+   *
+   * Polled on the row itself rather than on the heading: the sections render
+   * as soon as the catalogue lands, while the trained-first order only applies
+   * once the set counts arrive. Waiting on the heading meant asserting on an
+   * order that had not happened yet — which passed alone and failed under load.
+   */
+  const firstRowUnder = (label: string) =>
+    expect.poll(
+      () =>
+        screen
+          .queryByRole('heading', { level: 3, name: label })
+          ?.parentElement?.querySelector('li')?.textContent,
+      { timeout: 5000 },
+    );
+
+  it('garde un exercice travaillé sous son muscle', async () => {
     await logOneSet(squat);
 
     render(<ExerciseIndexScreen />);
-    await expect.poll(() => headings()[0], { timeout: 5000 }).toBe('Trained');
+
+    await firstRowUnder('Quads').toContain('Squat');
+  });
+
+  it('ne le montre qu’une fois', async () => {
+    await logOneSet(squat);
+
+    render(<ExerciseIndexScreen />);
+    await firstRowUnder('Quads').toContain('Squat');
 
     expect(screen.getAllByRole('button', { name: /^Squat/ })).toHaveLength(1);
   });
 
-  it('n’affiche pas de section « Trained » vide', async () => {
+  it('le remonte en tête de son groupe', async () => {
+    // Le tri « déjà travaillé d'abord » ne disparaît pas, il se déplace à
+    // l'intérieur du groupe : `groupByMuscle` conserve l'ordre reçu. « Leg
+    // press » est cinquième par ordre alphabétique dans Quads, donc le voir en
+    // tête ne peut venir que de ce tri.
+    const legPress = await exerciseByKey('leg press');
+    await logOneSet(legPress);
+
     render(<ExerciseIndexScreen />);
 
-    await expect.poll(() => headings()[0], { timeout: 5000 }).toBe('Chest');
+    await firstRowUnder('Quads').toContain('Leg press');
   });
 
   it('reste à plat pendant une recherche', async () => {

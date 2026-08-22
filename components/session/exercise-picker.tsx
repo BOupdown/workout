@@ -62,7 +62,9 @@ export function ExercisePicker({ onPick, onClose }: ExercisePickerProps) {
         </button>
       </div>
 
-      <ul className="flex-1 overflow-y-auto px-4 py-2">
+      {/* See the index screen: top padding here would strand the sticky
+          headings below it. */}
+      <ul className={`flex-1 overflow-y-auto px-4 pb-2 ${searching ? 'pt-2' : ''}`}>
         {exercises === undefined ? (
           <li className="space-y-2 py-2">
             {[0, 1, 2, 3, 4].map((row) => (
