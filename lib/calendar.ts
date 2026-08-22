@@ -88,3 +88,20 @@ export function gridBounds(grid: MonthGrid): { from: LocalDate; to: LocalDate } 
   const lastWeek = grid[grid.length - 1];
   return { from: first.date, to: lastWeek[lastWeek.length - 1].date };
 }
+
+/**
+ * The first and last day of the month itself, neighbours excluded.
+ *
+ * Distinct from `gridBounds`, which reaches into the weeks either side so one
+ * query fills every visible cell. Anything captioned with the month's name has
+ * to use these instead: a chart labelled "August" that plots the 29th of July
+ * is wrong about itself.
+ */
+export function monthBounds({ year, month }: YearMonth): { from: LocalDate; to: LocalDate } {
+  // Day 0 of the next month is the last day of this one, leap years included.
+  const last = new Date(year, month, 0);
+  return {
+    from: toLocalDate(new Date(year, month - 1, 1).getTime()),
+    to: toLocalDate(last.getTime()),
+  };
+}

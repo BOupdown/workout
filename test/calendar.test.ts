@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { gridBounds, monthGrid, monthOf, shiftMonth } from '../lib/calendar';
+import { gridBounds, monthBounds, monthGrid, monthOf, shiftMonth } from '../lib/calendar';
 
 const flat = (year: number, month: number) => monthGrid({ year, month }).flat();
 const dates = (year: number, month: number) => flat(year, month).map((day) => day.date);
@@ -118,5 +118,32 @@ describe('gridBounds', () => {
     expect(from).toBe(grid[0][0].date);
     expect(to).toBe(grid[grid.length - 1][6].date);
     expect(from < to).toBe(true);
+  });
+});
+
+describe('monthBounds', () => {
+  it('borne le mois, sans les jours voisins', () => {
+    expect(monthBounds({ year: 2026, month: 8 })).toEqual({
+      from: '2026-08-01',
+      to: '2026-08-31',
+    });
+  });
+
+  it('connaît les mois courts', () => {
+    expect(monthBounds({ year: 2026, month: 4 }).to).toBe('2026-04-30');
+  });
+
+  it('connaît les années bissextiles', () => {
+    // 2024 est bissextile, 2026 ne l'est pas.
+    expect(monthBounds({ year: 2024, month: 2 }).to).toBe('2024-02-29');
+    expect(monthBounds({ year: 2026, month: 2 }).to).toBe('2026-02-28');
+  });
+
+  it('reste dans le mois là où la grille en sort', () => {
+    // La différence entre les deux : la grille d'août 2026 commence un 27
+    // juillet, et une légende disant « August » ne doit pas tracer ce jour-là.
+    const grid = monthGrid({ year: 2026, month: 8 });
+
+    expect(gridBounds(grid).from < monthBounds({ year: 2026, month: 8 }).from).toBe(true);
   });
 });
