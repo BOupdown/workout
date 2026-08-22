@@ -164,14 +164,14 @@ export interface ChartBox {
   padding: { top: number; right: number; bottom: number; left: number };
 }
 
-export interface PlottedPoint {
+export interface PlottedPoint<T> {
   x: number;
   y: number;
-  point: SessionPoint;
+  point: T;
 }
 
-export interface ChartGeometry {
-  plotted: PlottedPoint[];
+export interface ChartGeometry<T> {
+  plotted: PlottedPoint<T>[];
   /** The line path. */
   line: string;
   /** The area path under the line, closed on the baseline. */
@@ -199,11 +199,23 @@ function niceTicks(min: number, max: number, count = 3): number[] {
 /**
  * Projects the points into the SVG box.
  *
- * The x axis is **indexed by session**, not proportional to time: one tick is
- * one session. That is the expected reading for training tracking, and the axis
- * caption says so explicitly.
+ * The x axis is **indexed by point** unless `xFractions` says otherwise: one
+ * tick is one session, which is the expected reading for training tracking, and
+ * the axis caption says so explicitly.
+ *
+ * `xFractions` gives each point a position in `[0, 1]` across the plot instead,
+ * for a series where the gaps carry meaning. Bodyweight is the case: weighing
+ * yourself on the 1st, 2nd, 3rd and then the 28th is not four evenly spaced
+ * facts, and drawing it that way would invent a steady trend.
+ *
+ * Generic in the point, because the geometry only ever reads `value` — what
+ * rides along is the caller's business.
  */
-export function buildChartGeometry(points: SessionPoint[], box: ChartBox): ChartGeometry {
+export function buildChartGeometry<T extends { value: number }>(
+  points: T[],
+  box: ChartBox,
+  xFractions?: number[],
+): ChartGeometry<T> {
   const { width, height, padding } = box;
   const plotWidth = width - padding.left - padding.right;
   const plotHeight = height - padding.top - padding.bottom;
@@ -220,8 +232,10 @@ export function buildChartGeometry(points: SessionPoint[], box: ChartBox): Chart
   const max = rawMax + span * 0.1;
 
   const toY = (value: number) => padding.top + plotHeight * (1 - (value - min) / (max - min));
-  const toX = (index: number) =>
-    padding.left + (points.length === 1 ? plotWidth / 2 : (plotWidth * index) / (points.length - 1));
+  const toX = (index: number) => {
+    if (xFractions) return padding.left + plotWidth * xFractions[index];
+    return padding.left + (points.length === 1 ? plotWidth / 2 : (plotWidth * index) / (points.length - 1));
+  };
 
   const plotted = points.map((point, index) => ({
     x: toX(index),

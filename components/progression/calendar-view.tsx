@@ -8,13 +8,15 @@ import { listBodyWeights } from '@/lib/db/bodyweight';
 import { toLocalDate } from '@/lib/db/keys';
 import { countSessionsByDate } from '@/lib/db/queries';
 import type { LocalDate } from '@/lib/db/types';
-import { gridBounds, monthGrid, monthOf, shiftMonth } from '@/lib/calendar';
+import { gridBounds, monthBounds, monthGrid, monthOf, shiftMonth } from '@/lib/calendar';
+import { buildWeightTrend } from '@/lib/bodyweight-trend';
 import { formatNumber } from '@/lib/format';
 import { toDisplayWeight } from '@/lib/units';
 import { listTrainingBlocks } from '@/lib/db/training-blocks';
 import { blockOn, currentBlock, tintByBlock } from '@/lib/training-block';
 import { DayWeightSheet } from './day-weight-sheet';
 import { TrainingBlockBar } from './training-block-bar';
+import { WeightChart } from './weight-chart';
 
 const MONTH_LABEL = new Intl.DateTimeFormat('en-GB', { month: 'long', year: 'numeric' });
 
@@ -42,20 +44,29 @@ export function CalendarView() {
 
   const grid = monthGrid(month);
   const { from, to } = gridBounds(grid);
+  // The month itself, without the neighbouring days the grid reaches into: the
+  // chart is captioned with the month's name, so it has to plot that month.
+  const inMonth = monthBounds(month);
 
   // One query for the whole grid, neighbouring days included, rather than one
   // per cell.
   const sessions = useLiveQuery(() => countSessionsByDate(from, to), [from, to]);
-  const weights = useLiveQuery(async () => {
-    const entries = await listBodyWeights(from, to);
-    return new Map(entries.map((entry) => [entry.date, entry.weightKg]));
-  }, [from, to]);
+  const entries = useLiveQuery(() => listBodyWeights(from, to), [from, to]);
+  const weights = new Map((entries ?? []).map((entry) => [entry.date, entry.weightKg]));
+
+  const monthLabel = MONTH_LABEL.format(new Date(month.year, month.month - 1, 1));
+
+  const trend = buildWeightTrend(
+    (entries ?? []).filter((entry) => entry.date >= inMonth.from && entry.date <= inMonth.to),
+    inMonth.from,
+    inMonth.to,
+  );
 
   const blocks = useLiveQuery(() => listTrainingBlocks(), []);
   const current = currentBlock(blocks ?? [], today);
   const tints = tintByBlock(blocks ?? []);
 
-  const weightFor = (date: LocalDate) => weights?.get(date);
+  const weightFor = (date: LocalDate) => weights.get(date);
 
   return (
     <div className="flex h-full flex-col">
@@ -69,9 +80,7 @@ export function CalendarView() {
           <CaretLeft size={18} weight="bold" />
         </button>
 
-        <h2 className="text-[0.9375rem] font-semibold text-ink">
-          {MONTH_LABEL.format(new Date(month.year, month.month - 1, 1))}
-        </h2>
+        <h2 className="text-[0.9375rem] font-semibold text-ink">{monthLabel}</h2>
 
         <button
           type="button"
@@ -153,6 +162,19 @@ export function CalendarView() {
             );
           })}
         </div>
+
+        {/* Under the grid, not above it: the grid is what you came to tap, and
+            the curve reads the month you have just been looking at. Drawn only
+            from two weigh-ins — one reading is a number, not a trend, and the
+            cell above already shows it. */}
+        {trend.points.length >= 2 ? (
+          <section className="mt-4 rounded-panel bg-raised px-3 pt-3 pb-2">
+            <h3 className="mb-1 text-xs font-semibold tracking-wide text-muted uppercase">
+              Bodyweight
+            </h3>
+            <WeightChart trend={trend} unit={unit} windowLabel={monthLabel} />
+          </section>
+        ) : null}
 
         <p className="mt-4 px-1 text-xs text-muted">
           Tap any day to record what you weighed. A day you trained is marked, and the
