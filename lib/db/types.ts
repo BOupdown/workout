@@ -195,8 +195,13 @@ export interface SessionExercise {
   order: number;
 
   /**
-   * Blocks sharing a number form a superset. Unused for now; the room is
-   * reserved so the history never needs migrating later.
+   * Blocks sharing a number formed a superset, back when the app offered them.
+   *
+   * The gesture is gone: it asked the screen to express a *relation* between two
+   * rows, which cost more in reading than it ever returned in training. What is
+   * left is read by nothing — but it is left. Rows already carry it, and erasing
+   * a fact about somebody's past sessions to tidy up a type is not a trade worth
+   * making. Nothing writes it any more.
    */
   supersetGroup?: number;
 

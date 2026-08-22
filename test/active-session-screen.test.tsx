@@ -317,8 +317,8 @@ describe('repartir d’une séance passée', () => {
   });
 });
 
-describe('les supersets', () => {
-  /** A session with two exercises, the first already carrying a set. */
+describe('après une série enregistrée', () => {
+  /** Une séance à deux exercices, le premier portant déjà une série. */
   async function twoExercises() {
     const { session } = await startSession();
     const a = await addExerciseToSession(session.id, squat.id);
@@ -328,59 +328,9 @@ describe('les supersets', () => {
     return { session, a, b };
   }
 
-  const link = () => screen.findByRole('button', { name: /Superset Squat with Push-ups/ });
-
-  it('offre de lier deux exercices voisins', async () => {
-    await twoExercises();
-    render(<ActiveSessionScreen />);
-
-    expect(await link()).toBeDefined();
-  });
-
-  it('n’offre rien après le dernier exercice', async () => {
-    await twoExercises();
-    render(<ActiveSessionScreen />);
-
-    await link();
-    expect(screen.queryByRole('button', { name: /Superset Push-ups with/ })).toBeNull();
-  });
-
-  it('lie puis délie', async () => {
-    const user = userEvent.setup();
-    const { a } = await twoExercises();
-    render(<ActiveSessionScreen />);
-
-    await user.click(await link());
-    await expect
-      .poll(async () => (await db.sessionExercises.get(a.id))?.supersetGroup)
-      .toBeTypeOf('number');
-
-    await user.click(await screen.findByRole('button', { name: /Split Squat from Push-ups/ }));
-    await expect
-      .poll(async () => (await db.sessionExercises.get(a.id))?.supersetGroup)
-      .toBeUndefined();
-  });
-
-  it('passe à l’exercice suivant après une série, dans un superset', async () => {
-    // Le cœur du superset : on enchaîne sans repasser par la liste.
-    const user = userEvent.setup();
-    await twoExercises();
-    render(<ActiveSessionScreen />);
-
-    await user.click(await link());
-    await screen.findByRole('button', { name: /Split Squat from Push-ups/ });
-
-    await user.click(await screen.findByRole('button', { name: /^Squat/ }));
-    await screen.findByRole('region', { name: /Log a set of Squat/ });
-
-    await user.click(screen.getByRole('button', { name: /Save set/ }));
-
-    expect(
-      await screen.findByRole('region', { name: /Log a set of Push-ups/ }, { timeout: 5000 }),
-    ).toBeDefined();
-  });
-
-  it('ne déplace rien hors superset : le tap unique répète', async () => {
+  it('ne déplace rien : le tap unique répète', async () => {
+    // La promesse centrale de l'écran. Elle valait déjà hors superset ; les
+    // supersets partis, elle vaut partout.
     const user = userEvent.setup();
     await twoExercises();
     render(<ActiveSessionScreen />);
@@ -394,32 +344,13 @@ describe('les supersets', () => {
     expect(screen.getByRole('region', { name: /Log a set of Squat/ })).toBeDefined();
   });
 
-  it('ne démarre pas de repos entre les membres du superset', async () => {
+  it('démarre le repos', async () => {
     const user = userEvent.setup();
     await twoExercises();
     render(<ActiveSessionScreen />);
-
-    await user.click(await link());
-    await screen.findByRole('button', { name: /Split Squat from Push-ups/ });
 
     await user.click(await screen.findByRole('button', { name: /^Squat/ }));
     await screen.findByRole('region', { name: /Log a set of Squat/ });
-    await user.click(screen.getByRole('button', { name: /Save set/ }));
-
-    await screen.findByRole('region', { name: /Log a set of Push-ups/ }, { timeout: 5000 });
-    expect(window.localStorage.getItem('workout.rest-timer')).toBeNull();
-  });
-
-  it('démarre le repos après le dernier membre', async () => {
-    const user = userEvent.setup();
-    await twoExercises();
-    render(<ActiveSessionScreen />);
-
-    await user.click(await link());
-    await screen.findByRole('button', { name: /Split Squat from Push-ups/ });
-
-    await user.click(await screen.findByRole('button', { name: /^Push-ups/ }));
-    await screen.findByRole('region', { name: /Log a set of Push-ups/ });
     await user.click(screen.getByRole('button', { name: /Save set/ }));
 
     expect(

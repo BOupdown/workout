@@ -148,6 +148,9 @@ export function checkSessionExerciseShape(value: unknown): ValidationIssue[] {
     });
   }
 
+  // Nothing writes this any more (see `SessionExercise.supersetGroup`), but a
+  // restored backup can still carry it, and a row is only ever as trustworthy as
+  // the last thing that checked it.
   if (b.supersetGroup !== undefined && !isNonNegativeInteger(b.supersetGroup)) {
     issues.push({
       field: 'supersetGroup',
