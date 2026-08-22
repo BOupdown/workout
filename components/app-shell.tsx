@@ -1,5 +1,6 @@
 'use client';
 
+import { ArrowClockwise } from '@phosphor-icons/react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { HistoryScreen } from '@/components/history/history-screen';
 import { TabBar } from '@/components/nav/tab-bar';
@@ -67,33 +68,46 @@ export function AppShell() {
   }, []);
 
   return (
-    /* Framed rather than stretched. The whole layout is drawn for a thumb at
-       375px; letting it fill a 1440px monitor put a 1300px-wide "Save set"
-       button on screen, which reads as unfinished rather than as a phone app.
-       The side rules only appear once there is room for them. */
-    <div className="mx-auto flex h-[100dvh] w-full max-w-[430px] flex-col border-line sm:border-x">
-      <div
-        ref={track}
-        // `overscroll-x-contain` stops a swipe past the last tab from triggering
-        // the browser's own back gesture.
-        className="flex min-h-0 flex-1 snap-x snap-mandatory overflow-x-auto overscroll-x-contain scrollbar-none"
-      >
-        <section className="h-full w-full shrink-0 snap-center" aria-label="Session">
-          <ActiveSessionScreen />
-        </section>
-        <section className="h-full w-full shrink-0 snap-center" aria-label="History">
-          <HistoryScreen />
-        </section>
-        <section className="h-full w-full shrink-0 snap-center" aria-label="Progress">
-          <ExerciseIndexScreen />
-        </section>
-        <section className="h-full w-full shrink-0 snap-center" aria-label="Settings">
-          <SettingsScreen />
-        </section>
+    <>
+      {/* A phone held sideways. CSS rather than an orientation hook: see
+          `.landscape-notice` in globals.css. */}
+      <div className="landscape-notice h-[100dvh] flex-col items-center justify-center gap-2 px-8 text-center">
+        <ArrowClockwise size={26} weight="bold" aria-hidden className="text-muted" />
+        <p className="text-[0.9375rem] font-semibold text-ink">Turn your phone upright</p>
+        <p className="text-sm text-muted">
+          Workout is laid out for one hand between sets. Nothing was lost — your session
+          is still here.
+        </p>
       </div>
 
-      <ServiceWorkerRegistrar />
-      <TabBar active={active} onSelect={scrollToTab} />
-    </div>
+      {/* Framed rather than stretched. The whole layout is drawn for a thumb at
+          375px; letting it fill a 1440px monitor put a 1300px-wide "Save set"
+          button on screen, which reads as unfinished rather than as a phone
+          app. The side rules only appear once there is room for them. */}
+      <div className="landscape-hidden mx-auto flex h-[100dvh] w-full max-w-[430px] flex-col border-line sm:border-x">
+        <div
+          ref={track}
+          // `overscroll-x-contain` stops a swipe past the last tab from triggering
+          // the browser's own back gesture.
+          className="flex min-h-0 flex-1 snap-x snap-mandatory overflow-x-auto overscroll-x-contain scrollbar-none"
+        >
+          <section className="h-full w-full shrink-0 snap-center" aria-label="Session">
+            <ActiveSessionScreen />
+          </section>
+          <section className="h-full w-full shrink-0 snap-center" aria-label="History">
+            <HistoryScreen />
+          </section>
+          <section className="h-full w-full shrink-0 snap-center" aria-label="Progress">
+            <ExerciseIndexScreen />
+          </section>
+          <section className="h-full w-full shrink-0 snap-center" aria-label="Settings">
+            <SettingsScreen />
+          </section>
+        </div>
+
+        <ServiceWorkerRegistrar />
+        <TabBar active={active} onSelect={scrollToTab} />
+      </div>
+    </>
   );
 }

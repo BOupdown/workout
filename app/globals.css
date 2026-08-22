@@ -134,3 +134,38 @@ body {
 .scrollbar-none::-webkit-scrollbar {
   display: none;
 }
+
+/* --------------------------------------------------------------------------
+   Phones held sideways.
+
+   The manifest asks for `orientation: portrait`, which is the real mechanism —
+   but it only binds once the app is installed to the home screen, and iOS
+   ignores the field altogether. So the layout still turns for anyone reading
+   this in a browser tab, or on an iPhone, and it turns badly: the shell is
+   drawn for a 430px column, and a landscape phone leaves under 400px of height
+   for a keypad, a rest timer and a list of sets.
+
+   Answered in CSS rather than by reading the orientation in React. Orientation
+   is a browser fact the server cannot know, so a JS guard would mean either a
+   hydration mismatch or a mount-time flash of the wrong layout.
+
+   `pointer: coarse` keeps this on touch devices: a short, wide desktop window
+   is not a phone lying on its side, and telling someone at a laptop to turn
+   their phone upright would be nonsense. The height ceiling clears tablets,
+   which are wide enough to use sideways.
+
+   Hidden, never unmounted: an in-progress set, a running rest timer and a
+   half-typed weight all survive the turn and are still there on the way back. */
+.landscape-notice {
+  display: none;
+}
+
+@media (orientation: landscape) and (max-height: 30rem) and (pointer: coarse) {
+  .landscape-hidden {
+    display: none;
+  }
+
+  .landscape-notice {
+    display: flex;
+  }
+}
