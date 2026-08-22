@@ -5,7 +5,8 @@ import { useLiveQuery } from 'dexie-react-hooks';
 import { useState } from 'react';
 import { listSelectableExercises } from '@/lib/db/exercises';
 import { toNameKey } from '@/lib/db/keys';
-import type { Id } from '@/lib/db/types';
+import type { Exercise, Id } from '@/lib/db/types';
+import { groupByMuscle } from '@/lib/exercise-groups';
 import { ExerciseFormSheet } from '@/components/exercises/exercise-form-sheet';
 
 interface ExercisePickerProps {
@@ -18,14 +19,21 @@ interface ExercisePickerProps {
  *
  * Search goes through `toNameKey`, the same normalisation as the unique index:
  * typing "bench" finds "Bench press".
+ *
+ * Browsing is grouped by muscle, searching is not. At 58 entries a single
+ * alphabetical column stopped being a list and became a wall — but a query has
+ * already narrowed things, and headings over two or three results are noise
+ * between you and the name you are looking at.
  */
 export function ExercisePicker({ onPick, onClose }: ExercisePickerProps) {
   const [search, setSearch] = useState('');
   const [creating, setCreating] = useState(false);
   const exercises = useLiveQuery(() => listSelectableExercises(), []);
 
+  const searching = search.trim() !== '';
   const needle = toNameKey(search);
   const matches = (exercises ?? []).filter((exercise) => exercise.nameKey.includes(needle));
+  const sections = searching ? [] : groupByMuscle(matches);
 
   return (
     <div className="fixed inset-0 z-10 flex flex-col bg-surface">
@@ -77,27 +85,24 @@ export function ExercisePicker({ onPick, onClose }: ExercisePickerProps) {
               Create “{search.trim()}”
             </button>
           </li>
-        ) : (
+        ) : searching ? (
           matches.map((exercise) => (
-            <li key={exercise.id}>
-              <button
-                type="button"
-                onClick={() => onPick(exercise.id)}
-                className="flex min-h-14 w-full items-center justify-between gap-3 border-b border-line/60 text-left transition-transform active:scale-[0.99]"
-              >
-                <span className="min-w-0 flex-1 truncate text-[0.9375rem] font-medium text-ink">
-                  {exercise.name}
-                  {/* Said on the exercise, not only on its sets: this is where
-                      you decide which one you are about to do, and a one-arm
-                      row read exactly like any other until now. */}
-                  {exercise.perSide ? (
-                    <span className="font-normal text-muted"> · per side</span>
-                  ) : null}
-                </span>
-                {exercise.muscleGroup ? (
-                  <span className="shrink-0 text-xs text-muted">{exercise.muscleGroup}</span>
-                ) : null}
-              </button>
+            <Row key={exercise.id} exercise={exercise} showGroup onPick={onPick} />
+          ))
+        ) : (
+          sections.map((section) => (
+            <li key={section.label}>
+              {/* Sticky: on a section of a dozen rows the heading scrolls away
+                  long before the section does, and the answer to "which muscle
+                  am I looking at" should not be to scroll back up. */}
+              <h3 className="sticky top-0 z-10 -mx-4 bg-surface px-4 pt-3.5 pb-2 text-xs font-semibold tracking-wide text-muted uppercase">
+                {section.label}
+              </h3>
+              <ul>
+                {section.exercises.map((exercise) => (
+                  <Row key={exercise.id} exercise={exercise} onPick={onPick} />
+                ))}
+              </ul>
             </li>
           ))
         )}
@@ -130,5 +135,42 @@ export function ExercisePicker({ onPick, onClose }: ExercisePickerProps) {
         />
       ) : null}
     </div>
+  );
+}
+
+/**
+ * One exercise in the list.
+ *
+ * The muscle group only shows while searching: under a heading that already
+ * says "Chest", repeating it on every row is a column of the same word.
+ */
+function Row({
+  exercise,
+  showGroup = false,
+  onPick,
+}: {
+  exercise: Exercise;
+  showGroup?: boolean;
+  onPick: (exerciseId: Id) => void;
+}) {
+  return (
+    <li>
+      <button
+        type="button"
+        onClick={() => onPick(exercise.id)}
+        className="flex min-h-14 w-full items-center justify-between gap-3 border-b border-line/60 text-left transition-transform active:scale-[0.99]"
+      >
+        <span className="min-w-0 flex-1 truncate text-[0.9375rem] font-medium text-ink">
+          {exercise.name}
+          {/* Said on the exercise, not only on its sets: this is where you
+              decide which one you are about to do, and a one-arm row read
+              exactly like any other until now. */}
+          {exercise.perSide ? <span className="font-normal text-muted"> · per side</span> : null}
+        </span>
+        {showGroup && exercise.muscleGroup ? (
+          <span className="shrink-0 text-xs text-muted">{exercise.muscleGroup}</span>
+        ) : null}
+      </button>
+    </li>
   );
 }
