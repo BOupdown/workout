@@ -16,6 +16,7 @@ import { db } from './db';
 import type {
   BodyWeight,
   Exercise,
+  RetiredExercise,
   Session,
   SessionExercise,
   SetEntry,
@@ -46,6 +47,17 @@ export interface BackupFile {
   bodyweights?: BodyWeight[];
   /** Optional for the same reason as `bodyweights`: added after the format. */
   trainingBlocks?: TrainingBlock[];
+  /**
+   * Tombstones of deleted catalogue exercises. Optional, again for the reason
+   * `bodyweights` is: added after the format was set.
+   *
+   * Absent does **not** mean "none". A file written before tombstones existed
+   * says nothing about them, so restoring it leaves the ones already on the
+   * device alone. Clearing them would hand back every shipped exercise their
+   * owner had deleted, the next time the catalogue grows — which is the single
+   * thing tombstones exist to prevent.
+   */
+  retiredExercises?: RetiredExercise[];
 }
 
 export interface BackupSummary {
@@ -65,20 +77,36 @@ export class BackupFormatError extends Error {
 /** A complete snapshot of the database, serialisable to JSON as is. */
 export async function exportDatabase(): Promise<BackupFile> {
   // The array form: Dexie types only five tables as positional arguments, and
-  // the snapshot now spans six.
+  // the snapshot spans every one of them.
   return db.transaction(
     'r',
-    [db.exercises, db.sessions, db.sessionExercises, db.sets, db.bodyweights, db.trainingBlocks],
+    [
+      db.exercises,
+      db.sessions,
+      db.sessionExercises,
+      db.sets,
+      db.bodyweights,
+      db.trainingBlocks,
+      db.retiredExercises,
+    ],
     async () => {
-      const [exercises, sessions, sessionExercises, sets, bodyweights, trainingBlocks] =
-        await Promise.all([
-          db.exercises.toArray(),
-          db.sessions.toArray(),
-          db.sessionExercises.toArray(),
-          db.sets.toArray(),
-          db.bodyweights.toArray(),
-          db.trainingBlocks.toArray(),
-        ]);
+      const [
+        exercises,
+        sessions,
+        sessionExercises,
+        sets,
+        bodyweights,
+        trainingBlocks,
+        retiredExercises,
+      ] = await Promise.all([
+        db.exercises.toArray(),
+        db.sessions.toArray(),
+        db.sessionExercises.toArray(),
+        db.sets.toArray(),
+        db.bodyweights.toArray(),
+        db.trainingBlocks.toArray(),
+        db.retiredExercises.toArray(),
+      ]);
 
       return {
         format: BACKUP_FORMAT,
@@ -90,6 +118,7 @@ export async function exportDatabase(): Promise<BackupFile> {
         sets,
         bodyweights,
         trainingBlocks,
+        retiredExercises,
       };
     },
   );
@@ -110,9 +139,10 @@ const TABLES = ['exercises', 'sessions', 'sessionExercises', 'sets'] as const;
  * Checks the envelope **without writing anything**, so a foreign file can be
  * refused before touching existing data.
  *
- * Row contents are not checked here: Dexie's structural hooks handle that on
- * write, with the same rules as data entry. A backup therefore cannot
- * reintroduce invalid data.
+ * Row *contents* are left to Dexie's structural hooks, which apply the same
+ * rules as data entry. What those hooks cannot see is how rows relate — they
+ * are handed one row at a time — so the references between them are checked
+ * separately, by `checkReferences` in `importDatabase`.
  */
 export function readBackup(value: unknown): BackupFile {
   if (typeof value !== 'object' || value === null) {
@@ -139,7 +169,7 @@ export function readBackup(value: unknown): BackupFile {
 
   // Absent is fine — older files predate the timeline. Present but not a list
   // is not: that is a corrupt file claiming to carry weights.
-  for (const optional of ['bodyweights', 'trainingBlocks'] as const) {
+  for (const optional of ['bodyweights', 'trainingBlocks', 'retiredExercises'] as const) {
     if (candidate[optional] !== undefined && !Array.isArray(candidate[optional])) {
       throw new BackupFormatError(`Incomplete backup: ${optional} is unreadable.`);
     }
@@ -165,11 +195,26 @@ export function parseBackup(json: string): BackupFile {
  * Everything happens in **one transaction**: if a row is refused by the
  * validation, nothing is written and existing data is untouched. A corrupted
  * backup therefore cannot destroy what is already there.
+ *
+ * The references are checked **before** the transaction opens rather than
+ * inside it. Rolling back would be enough to protect the data, but not enough
+ * to protect the user: the message they get has to be about their file, not a
+ * transaction that aborted for reasons nobody can act on.
  */
 export async function importDatabase(backup: BackupFile): Promise<BackupSummary> {
+  checkReferences(backup);
+
   await db.transaction(
     'rw',
-    [db.exercises, db.sessions, db.sessionExercises, db.sets, db.bodyweights, db.trainingBlocks],
+    [
+      db.exercises,
+      db.sessions,
+      db.sessionExercises,
+      db.sets,
+      db.bodyweights,
+      db.trainingBlocks,
+      db.retiredExercises,
+    ],
     async () => {
       await Promise.all([
         db.exercises.clear(),
@@ -186,10 +231,79 @@ export async function importDatabase(backup: BackupFile): Promise<BackupSummary>
       await db.sets.bulkAdd(backup.sets);
       await db.bodyweights.bulkPut(bodyWeightsFrom(backup));
       await db.trainingBlocks.bulkPut(backup.trainingBlocks ?? []);
+
+      // Cleared only when the file has something to say about tombstones. See
+      // `BackupFile.retiredExercises`: absent means "written before these
+      // existed", not "there are none".
+      if (backup.retiredExercises !== undefined) {
+        await db.retiredExercises.clear();
+        await db.retiredExercises.bulkPut(backup.retiredExercises);
+      }
     },
   );
 
   return summarise(backup);
+}
+
+/** One reference field of a row, however broken that row turns out to be. */
+function reference(row: unknown, field: string): string {
+  const value = (row as Record<string, unknown> | null)?.[field];
+  return typeof value === 'string' ? value : '';
+}
+
+/** The ids a table of the file carries, skipping rows too broken to have one. */
+function idsIn(rows: readonly unknown[]): Set<string> {
+  const ids = new Set<string>();
+  for (const row of rows) {
+    const id = reference(row, 'id');
+    if (id !== '') ids.add(id);
+  }
+  return ids;
+}
+
+/**
+ * Every reference the file makes, resolved against the file itself.
+ *
+ * The structural hooks see one row at a time, so nothing in them can notice
+ * that a set names a block the file does not carry. That blind spot costs more
+ * here than anywhere else: the import **clears the database before it writes**,
+ * so a file accepted by mistake takes the existing history with it, and every
+ * read afterwards throws on the dangling reference — leaving an app with no
+ * screen left to export from.
+ *
+ * Counted rather than reported one by one: a file with a missing exercise has
+ * hundreds of sets pointing at it, and the number is the useful part.
+ */
+function checkReferences(backup: BackupFile): void {
+  const exercises = idsIn(backup.exercises);
+  const sessions = idsIn(backup.sessions);
+  const blocks = idsIn(backup.sessionExercises);
+
+  const problems: string[] = [];
+  const check = (
+    rows: readonly unknown[],
+    field: string,
+    known: Set<string>,
+    complaint: string,
+  ) => {
+    let dangling = 0;
+    for (const row of rows) {
+      if (!known.has(reference(row, field))) dangling += 1;
+    }
+    if (dangling > 0) problems.push(`${dangling} ${complaint}`);
+  };
+
+  check(backup.sessionExercises, 'sessionId', sessions, 'exercises name a session it does not hold');
+  check(backup.sessionExercises, 'exerciseId', exercises, 'exercises name a movement it does not hold');
+  check(backup.sets, 'sessionExerciseId', blocks, 'sets name a session exercise it does not hold');
+  check(backup.sets, 'sessionId', sessions, 'sets name a session it does not hold');
+  check(backup.sets, 'exerciseId', exercises, 'sets name a movement it does not hold');
+
+  if (problems.length > 0) {
+    throw new BackupFormatError(
+      `This backup is incomplete: ${problems.join(', ')}. Nothing was changed.`,
+    );
+  }
 }
 
 /**

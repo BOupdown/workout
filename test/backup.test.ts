@@ -11,13 +11,13 @@ import {
   summarise,
   type BackupFile,
 } from '../lib/db/backup';
-import { db } from '../lib/db/db';
+import { addMissingSeedExercises, db } from '../lib/db/db';
 import { getBodyWeight, setBodyWeight } from '../lib/db/bodyweight';
-import { createExercise } from '../lib/db/exercises';
+import { createExercise, deleteExercise } from '../lib/db/exercises';
 import { createSet } from '../lib/db/sets';
 import { addExerciseToSession, endSession, startSession } from '../lib/db/sessions';
 import type { Exercise, SetEntry } from '../lib/db/types';
-import { referenceExercises, resetDatabase } from './helpers';
+import { exerciseByKey, referenceExercises, resetDatabase } from './helpers';
 
 let squat: Exercise;
 let pushUps: Exercise;
@@ -265,5 +265,94 @@ describe('le poids de corps dans les sauvegardes', () => {
     const broken = JSON.stringify({ ...backup, bodyweights: 'nope' });
 
     expect(() => parseBackup(broken)).toThrow(BackupFormatError);
+  });
+});
+
+describe('sauvegarde — pierres tombales', () => {
+  beforeEach(resetDatabase);
+
+  it('rend un exercice supprimé toujours supprimé sur un appareil neuf', async () => {
+    // Le scénario exact pour lequel la sauvegarde existe : données effacées,
+    // réinstallation, restauration. Sans les pierres tombales dans le fichier,
+    // la prochaine version qui enrichit le catalogue rendrait tout.
+    const jumpRope = await exerciseByKey('jump rope');
+    await deleteExercise(jumpRope.id);
+
+    const backup = await exportDatabase();
+
+    await resetDatabase();
+    await importDatabase(backup);
+
+    await db.transaction('rw', db.exercises, db.retiredExercises, async (tx) => {
+      await addMissingSeedExercises(tx);
+    });
+
+    expect(await db.exercises.where('nameKey').equals('jump rope').count()).toBe(0);
+  });
+
+  it('laisse les pierres tombales du téléphone à un fichier qui les ignore', async () => {
+    // Absent ne veut pas dire « aucune » : un fichier écrit avant qu'elles
+    // existent ne dit rien à leur sujet, et les effacer rendrait l'exercice.
+    const jumpRope = await exerciseByKey('jump rope');
+    const legacy = await exportDatabase();
+    delete legacy.retiredExercises;
+
+    await deleteExercise(jumpRope.id);
+    await importDatabase(legacy);
+
+    expect(await db.retiredExercises.count()).toBe(1);
+  });
+});
+
+describe('sauvegarde — références', () => {
+  beforeEach(resetDatabase);
+
+  /** Une séance complète : un bloc, une série. */
+  async function oneLoggedSet() {
+    const { squat } = await referenceExercises();
+    const { session } = await startSession();
+    const block = await addExerciseToSession(session.id, squat.id);
+    await createSet({ sessionExerciseId: block.id, weightKg: 100, reps: 5 });
+    return { squat, session, block };
+  }
+
+  it('refuse un fichier dont une série pointe dans le vide', async () => {
+    const { squat } = await oneLoggedSet();
+
+    const backup = await exportDatabase();
+    backup.exercises = backup.exercises.filter((exercise) => exercise.id !== squat.id);
+
+    await expect(importDatabase(backup)).rejects.toThrow(BackupFormatError);
+  });
+
+  it('ne touche à rien avant de refuser', async () => {
+    // L'import efface avant d'écrire : un fichier accepté à tort emporterait
+    // l'historique déjà là. Le contrôle doit donc précéder la transaction.
+    const { squat } = await oneLoggedSet();
+
+    const backup = await exportDatabase();
+    backup.sessionExercises = [];
+
+    await expect(importDatabase(backup)).rejects.toThrow(BackupFormatError);
+
+    expect(await db.sets.count()).toBe(1);
+    expect(await db.sessionExercises.count()).toBe(1);
+    expect(await db.exercises.get(squat.id)).toBeDefined();
+  });
+
+  it('dit combien de lignes pendent, pas lesquelles', async () => {
+    const { session } = await oneLoggedSet();
+
+    const backup = await exportDatabase();
+    backup.sessions = backup.sessions.filter((row) => row.id !== session.id);
+
+    await expect(importDatabase(backup)).rejects.toThrow(/1 set/);
+  });
+
+  it('accepte une sauvegarde entière', async () => {
+    await oneLoggedSet();
+    const backup = await exportDatabase();
+
+    await expect(importDatabase(backup)).resolves.toBeDefined();
   });
 });

@@ -192,16 +192,28 @@ export async function startSessionFrom(sourceId: Id): Promise<StartFromSessionRe
 /**
  * Closes a session. Idempotent: closing an already-finished session returns it
  * unchanged, so a double tap on "Finish" produces no error.
+ *
+ * An explicit `endedAt` is taken at its word, and the structural hook refuses
+ * one that falls before the start — a caller naming an impossible instant is a
+ * caller to correct.
+ *
+ * The **default** is clamped instead, the same way `closeAtLastLoggedSet` is.
+ * "Finish, now" cannot be wrong: it is the user in front of the phone. But a
+ * session whose day was mistyped into the future — one wrong digit in a year,
+ * on a phone — has a start the clock will not reach for months, and without the
+ * clamp every tap on "Finish" would be refused, silently, leaving a session
+ * that can never be closed. A duration of zero is a poor answer; a session with
+ * no way out is a worse one.
  */
-export async function endSession(id: Id, endedAt: Timestamp = Date.now()): Promise<Session> {
+export async function endSession(id: Id, endedAt?: Timestamp): Promise<Session> {
   return db.transaction('rw', db.sessions, async () => {
     const session = await db.sessions.get(id);
     if (!session) throw new Error(`Session not found: ${id}`);
     if (session.endedAt !== undefined) return session;
 
-    // `endedAt >= startedAt` is checked by the structural hook.
-    await db.sessions.update(id, { endedAt });
-    return { ...session, endedAt };
+    const closedAt = endedAt ?? Math.max(session.startedAt, Date.now());
+    await db.sessions.update(id, { endedAt: closedAt });
+    return { ...session, endedAt: closedAt };
   });
 }
 

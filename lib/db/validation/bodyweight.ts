@@ -11,7 +11,7 @@ import {
   isNumber,
   isTimestamp,
   notAnObjectIssue,
-  SessionValidationError,
+  BodyWeightValidationError,
   type ValidationIssue,
 } from './common';
 import { SESSION_LIMITS } from './session';
@@ -62,5 +62,5 @@ export function checkBodyWeightShape(value: unknown): ValidationIssue[] {
 
 export function assertBodyWeightShape(value: unknown): void {
   const issues = checkBodyWeightShape(value);
-  if (issues.length > 0) throw new SessionValidationError(issues);
+  if (issues.length > 0) throw new BodyWeightValidationError(issues);
 }

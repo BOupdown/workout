@@ -4,6 +4,7 @@ import { ArrowLeft, CalendarBlank, NotePencil, Trash } from '@phosphor-icons/rea
 import { useLiveQuery } from 'dexie-react-hooks';
 import { useState } from 'react';
 import { useWeightUnit } from '@/hooks/use-weight-unit';
+import { toLocalDate } from '@/lib/db/keys';
 import { getSessionDetail } from '@/lib/db/queries';
 import { deleteSession, updateSessionDate } from '@/lib/db/sessions';
 import type { Id } from '@/lib/db/types';
@@ -31,6 +32,9 @@ export function SessionDetailSheet({ sessionId, onClose }: SessionDetailSheetPro
   const [deleting, setDeleting] = useState(false);
   const [dateError, setDateError] = useState<string | null>(null);
   const [notesOpen, setNotesOpen] = useState(false);
+  // The picker's ceiling, read once when the sheet opens rather than on every
+  // render: training gets logged after it happened, never before.
+  const [today] = useState(() => toLocalDate(Date.now()));
 
   const setCount = detail?.entries.reduce((total, entry) => total + entry.sets.length, 0) ?? 0;
 
@@ -172,6 +176,9 @@ export function SessionDetailSheet({ sessionId, onClose }: SessionDetailSheetPro
             <input
               type="date"
               aria-label="Day of the session"
+              // Without this the picker cheerfully offers next year, and a
+              // session starting in the future is one the clock never reaches.
+              max={today}
               value={detail.date}
               onChange={(event) => handleDate(event.target.value)}
               className="mt-3 h-14 w-full rounded-control border-2 border-line bg-surface px-3.5 font-mono text-base text-ink tabular-nums outline-none focus:border-ink"

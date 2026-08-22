@@ -12,7 +12,7 @@ import {
   isId,
   isTimestamp,
   notAnObjectIssue,
-  SessionValidationError,
+  TrainingBlockValidationError,
   type ValidationIssue,
 } from './common';
 
@@ -80,5 +80,5 @@ export function checkTrainingBlockShape(value: unknown): ValidationIssue[] {
 
 export function assertTrainingBlockShape(value: unknown): void {
   const issues = checkTrainingBlockShape(value);
-  if (issues.length > 0) throw new SessionValidationError(issues);
+  if (issues.length > 0) throw new TrainingBlockValidationError(issues);
 }

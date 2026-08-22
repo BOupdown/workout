@@ -63,15 +63,24 @@ export async function addMissingSeedExercises(transaction: Transaction): Promise
 
 /** Tombstones, tolerating the schema versions that predate them. */
 async function retiredNameKeys(transaction: Transaction): Promise<Set<string>> {
+  let table: Table<RetiredExercise, string>;
+
   try {
-    const rows = await transaction.table<RetiredExercise, string>('retiredExercises').toArray();
-    return new Set(rows.map((row) => row.nameKey));
+    table = transaction.table<RetiredExercise, string>('retiredExercises');
   } catch {
     // The table does not exist at this version — which is exactly the range of
     // versions where nothing can have been retired, since deleting arrived with
     // it. An empty set is the truth here, not a fallback.
     return new Set();
   }
+
+  // Deliberately outside that catch, which covers naming the table and nothing
+  // else. A table that exists and cannot be read is a real failure: reporting it
+  // as "nothing was ever deleted" would hand every deleted exercise straight
+  // back, silently, the next time the catalogue grows. Better to abort the
+  // upgrade and leave the database as it was.
+  const rows = await table.toArray();
+  return new Set(rows.map((row) => row.nameKey));
 }
 
 export class WorkoutDB extends Dexie {

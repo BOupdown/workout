@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { db } from '../lib/db/db';
+import { toLocalDate } from '../lib/db/keys';
 import { createSet } from '../lib/db/sets';
 import { archiveExercise } from '../lib/db/exercises';
 import {
@@ -161,6 +162,21 @@ describe('endSession', () => {
 
   it('lève sur une séance inconnue', async () => {
     await expect(endSession('inconnue')).rejects.toThrow(/not found/);
+  });
+
+  it('clôture quand même une séance datée dans le futur', async () => {
+    // Une année mal tapée sur un téléphone, et le début est hors d'atteinte de
+    // l'horloge. Sans borne, « Finish » serait refusé à chaque fois — sans rien
+    // afficher — et la séance resterait ouverte pour toujours.
+    const { session } = await startSession();
+    const nextYear = toLocalDate(Date.now() + 365 * 86_400_000);
+    await updateSessionDate(session.id, nextYear);
+
+    const ended = await endSession(session.id);
+
+    const stored = await db.sessions.get(session.id);
+    expect(stored?.endedAt).toBeDefined();
+    expect(ended.endedAt).toBe(stored!.startedAt);
   });
 });
 

@@ -9,6 +9,10 @@
  * concerns picking an exercise; filtering here would make a block vanish from a
  * past session while its sets still exist. Exercises are therefore resolved by
  * `bulkGet` on ids, never through a filtered list.
+ *
+ * The same instinct governs a reference that cannot be resolved at all: the sets
+ * are shown under a named gap rather than the whole screen refusing to render.
+ * See `placeholderExercise`.
  */
 
 import { db } from './db';
@@ -26,15 +30,37 @@ import type {
 } from './types';
 
 /**
- * A block points at an exercise that no longer exists. No write path can
- * produce this state — there is no exercise deletion — so we fail loudly rather
- * than quietly drop an exercise from the history.
+ * Stand-in for a block whose exercise cannot be resolved.
+ *
+ * This used to throw. Nothing could produce the state at the time — there was
+ * no exercise deletion — and failing loudly beat dropping an exercise from the
+ * history in silence. Both halves of that have changed: `deleteExercise` exists,
+ * a restored backup can carry a dangling reference, and the throw does not
+ * remove one row from one screen. It propagates out of `useLiveQuery` during
+ * render, through an app that has no error boundary, and takes the session
+ * screen and **every page of history** with it — including the sessions that are
+ * perfectly intact.
+ *
+ * In an app with no server, that is the worst possible answer: nothing left to
+ * read, nothing left to export, and no way back except clearing site data, which
+ * destroys exactly what a backup exists to protect. So the gap is named and
+ * carried instead. The sets are still there, still readable, still exportable.
+ *
+ * The stand-in is a read projection and is never written: `createSet` re-reads
+ * the exercise from the database, so a set cannot be logged against one of
+ * these.
  */
-function missingExercise(block: SessionExercise): Error {
-  return new Error(
-    `Exercise ${block.exerciseId} not found, referenced by block ${block.id}. ` +
-      'Inconsistent database.',
-  );
+function placeholderExercise(id: Id): Exercise {
+  return {
+    id,
+    name: 'Missing exercise',
+    nameKey: 'missing exercise',
+    loadType: 'external',
+    metric: 'reps',
+    perSide: false,
+    isCustom: false,
+    createdAt: 0,
+  };
 }
 
 /** Index of the exercises named by a list of blocks, in a single query. */
@@ -88,16 +114,11 @@ export async function getSessionDetail(sessionId: Id): Promise<SessionDetail | u
         else setsByBlock.set(set.sessionExerciseId, [set]);
       }
 
-      const entries: SessionExerciseWithSets[] = blocks.map((block) => {
-        const exercise = exerciseById.get(block.exerciseId);
-        if (!exercise) throw missingExercise(block);
-
-        return {
-          ...block,
-          exercise,
-          sets: setsByBlock.get(block.id) ?? [],
-        };
-      });
+      const entries: SessionExerciseWithSets[] = blocks.map((block) => ({
+        ...block,
+        exercise: exerciseById.get(block.exerciseId) ?? placeholderExercise(block.exerciseId),
+        sets: setsByBlock.get(block.id) ?? [],
+      }));
 
       return { ...session, entries };
     },
@@ -202,11 +223,10 @@ export async function listSessionSummaries(
       return sessions.map((session, index) => {
         const blocks = blocksBySession.get(session.id) ?? [];
 
-        const exerciseNames = blocks.map((block) => {
-          const exercise = exerciseById.get(block.exerciseId);
-          if (!exercise) throw missingExercise(block);
-          return exercise.name;
-        });
+        const exerciseNames = blocks.map(
+          (block) =>
+            (exerciseById.get(block.exerciseId) ?? placeholderExercise(block.exerciseId)).name,
+        );
 
         return {
           id: session.id,

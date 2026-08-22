@@ -9,13 +9,21 @@ export interface ValidationIssue {
   message: string;
 }
 
-export type ValidatedEntity = 'set' | 'session' | 'sessionExercise' | 'exercise';
+export type ValidatedEntity =
+  | 'set'
+  | 'session'
+  | 'sessionExercise'
+  | 'exercise'
+  | 'bodyWeight'
+  | 'trainingBlock';
 
 const ENTITY_LABELS: Record<ValidatedEntity, string> = {
   set: 'Set',
   session: 'Session',
   sessionExercise: 'Session exercise',
   exercise: 'Exercise',
+  bodyWeight: 'Body weight',
+  trainingBlock: 'Training block',
 };
 
 export class ValidationError extends Error {
@@ -55,6 +63,26 @@ export class ExerciseValidationError extends ValidationError {
   constructor(issues: readonly ValidationIssue[]) {
     super('exercise', issues);
     this.name = 'ExerciseValidationError';
+  }
+}
+
+/**
+ * Both of these once borrowed `SessionValidationError`, which made a weight or a
+ * block report itself as an invalid *session* — the one thing the message is
+ * there to name. Bodyweight left the session at schema version 3 precisely
+ * because it is a fact about the day, and a block never belonged to one at all.
+ */
+export class BodyWeightValidationError extends ValidationError {
+  constructor(issues: readonly ValidationIssue[]) {
+    super('bodyWeight', issues);
+    this.name = 'BodyWeightValidationError';
+  }
+}
+
+export class TrainingBlockValidationError extends ValidationError {
+  constructor(issues: readonly ValidationIssue[]) {
+    super('trainingBlock', issues);
+    this.name = 'TrainingBlockValidationError';
   }
 }
 

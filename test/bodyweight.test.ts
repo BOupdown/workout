@@ -4,7 +4,7 @@ import { db } from '../lib/db/db';
 import { getBodyWeight, listBodyWeights, setBodyWeight } from '../lib/db/bodyweight';
 import { addExerciseToSession, startSession } from '../lib/db/sessions';
 import { buildSeedExercises } from '../lib/db/seed';
-import { SessionValidationError } from '../lib/db/validation';
+import { BodyWeightValidationError } from '../lib/db/validation';
 import type { Session } from '../lib/db/types';
 import { exerciseByKey, resetDatabase } from './helpers';
 
@@ -41,14 +41,14 @@ describe('setBodyWeight', () => {
   });
 
   it('refuse un poids absurde', async () => {
-    await expect(setBodyWeight('2026-08-20', 0)).rejects.toBeInstanceOf(SessionValidationError);
-    await expect(setBodyWeight('2026-08-20', 900)).rejects.toBeInstanceOf(SessionValidationError);
+    await expect(setBodyWeight('2026-08-20', 0)).rejects.toBeInstanceOf(BodyWeightValidationError);
+    await expect(setBodyWeight('2026-08-20', 900)).rejects.toBeInstanceOf(BodyWeightValidationError);
   });
 
   it('refuse une date mal formée', async () => {
     // La date est la clé primaire : une clé bancale crée une ligne
     // qu'aucune lecture ne retrouvera jamais.
-    await expect(setBodyWeight('20 août', 78)).rejects.toBeInstanceOf(SessionValidationError);
+    await expect(setBodyWeight('20 août', 78)).rejects.toBeInstanceOf(BodyWeightValidationError);
   });
 });
 

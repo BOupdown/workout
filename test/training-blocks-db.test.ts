@@ -8,7 +8,7 @@ import {
 } from '../lib/db/training-blocks';
 import { exportDatabase, importDatabase } from '../lib/db/backup';
 import { blockOn } from '../lib/training-block';
-import { SessionValidationError } from '../lib/db/validation';
+import { TrainingBlockValidationError } from '../lib/db/validation';
 import { resetDatabase } from './helpers';
 
 beforeEach(resetDatabase);
@@ -49,7 +49,7 @@ describe('createTrainingBlock', () => {
   it('refuse une fin antérieure au début', async () => {
     await expect(
       createTrainingBlock('Strength', '2026-08-30', '2026-08-03'),
-    ).rejects.toBeInstanceOf(SessionValidationError);
+    ).rejects.toBeInstanceOf(TrainingBlockValidationError);
   });
 
   it('les rend du plus ancien au plus récent', async () => {
@@ -62,13 +62,13 @@ describe('createTrainingBlock', () => {
   it('refuse un libellé vide', async () => {
     // Un bloc sans nom est une bande colorée que personne ne peut identifier.
     await expect(createTrainingBlock('   ', '2026-08-03', '2026-08-30')).rejects.toBeInstanceOf(
-      SessionValidationError,
+      TrainingBlockValidationError,
     );
   });
 
   it('refuse une date mal formée', async () => {
     await expect(createTrainingBlock('Strength', '3 août', '2026-08-30')).rejects.toBeInstanceOf(
-      SessionValidationError,
+      TrainingBlockValidationError,
     );
   });
 });

@@ -161,11 +161,18 @@ describe('getSessionDetail', () => {
     expect(detail.entries[0].sets).toHaveLength(3);
   });
 
-  it('échoue bruyamment si un bloc désigne un exercice disparu', async () => {
+  it('nomme le trou plutôt que de refuser la séance entière', async () => {
+    // Cette assertion attendait autrefois une exception. Elle emportait l'écran
+    // de séance *et* tout l'historique — voir `placeholderExercise`.
     const { session } = await buildFullSession();
     await db.exercises.delete(squat.id);
 
-    await expect(getSessionDetail(session.id)).rejects.toThrow(/Inconsistent database/);
+    const detail = (await getSessionDetail(session.id))!;
+
+    expect(detail.entries[0].exercise.name).toBe('Missing exercise');
+    expect(detail.entries[0].sets).toHaveLength(3);
+    // Les autres blocs sont intacts.
+    expect(detail.entries.map((e) => e.exercise.name)).toContain('Push-ups');
   });
 });
 
@@ -320,5 +327,40 @@ describe('listSessionSummaries — pagination', () => {
     const beyond = await listSessionSummaries({ before: all[all.length - 1].startedAt });
 
     expect(beyond).toEqual([]);
+  });
+});
+
+describe('une référence qui ne résout plus', () => {
+  /**
+   * L'état n'arrive que par une base abîmée — une sauvegarde restaurée à qui il
+   * manque une ligne. Ce qui compte est ce que l'app en fait : lever emportait
+   * l'écran de séance *et* tout l'historique, y compris les séances intactes,
+   * sans plus rien laisser à exporter.
+   */
+  async function danglingBlock() {
+    const { session } = await startSession();
+    const block = await addExerciseToSession(session.id, squat.id);
+    await createSet({ sessionExerciseId: block.id, weightKg: 100, reps: 5 });
+    // Directement dans la table : aucun chemin d'écriture ne produit ça.
+    await db.exercises.delete(squat.id);
+    return session;
+  }
+
+  it('laisse la séance lisible, le trou nommé', async () => {
+    const session = await danglingBlock();
+    const detail = await getSessionDetail(session.id);
+
+    expect(detail?.entries).toHaveLength(1);
+    expect(detail?.entries[0].exercise.name).toBe('Missing exercise');
+    expect(detail?.entries[0].sets).toHaveLength(1);
+  });
+
+  it('laisse l’historique entier lisible', async () => {
+    await danglingBlock();
+    const summaries = await listSessionSummaries();
+
+    expect(summaries).toHaveLength(1);
+    expect(summaries[0].setCount).toBe(1);
+    expect(summaries[0].exerciseNames).toEqual(['Missing exercise']);
   });
 });
