@@ -33,7 +33,14 @@ afterEach(() => {
   Reflect.deleteProperty(navigator, 'storage');
 });
 
-describe('persistance demandée par l’app', () => {
+/*
+ * Budget large, et pour une raison structurelle plutôt qu'une course :
+ * `freshScreen` appelle `vi.resetModules()`, donc chaque test réévalue tout le
+ * graphe d'imports de l'écran — Dexie, les icônes, toutes les feuilles. C'est
+ * ~875 ms par test en isolation, et bien plus quand la suite tourne en
+ * parallèle. Les 5 s par défaut suffisaient jusqu'à ce que le graphe grossisse.
+ */
+describe('persistance demandée par l’app', { timeout: 30_000 }, () => {
   it('demande la persistance dès qu’une séance démarre', async () => {
     // Le point de tout ce changement : laissée derrière un bouton des réglages,
     // la demande n'était jamais faite, ce qui revient à n'avoir aucune

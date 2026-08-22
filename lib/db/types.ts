@@ -66,10 +66,6 @@ export type MuscleGroup =
   | 'cardio';
 
 /**
- * The movement itself. A first-class entity: it is the keystone of progression
- * over time, so never a name copied into a set.
- */
-/**
  * An exercise the user deleted from the catalogue.
  *
  * Kept as a tombstone, not out of tidiness: the seed backfill adds any shipped
@@ -82,6 +78,10 @@ export interface RetiredExercise {
   retiredAt: Timestamp;
 }
 
+/**
+ * The movement itself. A first-class entity: it is the keystone of progression
+ * over time, so never a name copied into a set.
+ */
 export interface Exercise {
   id: Id;
 

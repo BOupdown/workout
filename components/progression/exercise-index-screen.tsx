@@ -7,6 +7,7 @@ import { listArchivedExercises, listSelectableExercises } from '@/lib/db/exercis
 import { toNameKey } from '@/lib/db/keys';
 import { countSetsForExercise } from '@/lib/db/sets';
 import type { Exercise } from '@/lib/db/types';
+import { groupByMuscle } from '@/lib/exercise-groups';
 import { ExerciseEditSheet } from '@/components/exercises/exercise-edit-sheet';
 import { ExerciseFormSheet } from '@/components/exercises/exercise-form-sheet';
 import { CalendarView } from './calendar-view';
@@ -50,6 +51,31 @@ export function ExerciseIndexScreen() {
       const practised = Number((counts?.get(b.id) ?? 0) > 0) - Number((counts?.get(a.id) ?? 0) > 0);
       return practised !== 0 ? practised : a.name.localeCompare(b.name, 'fr');
     });
+
+  /**
+   * Sections when browsing the catalogue, `null` when the list should stay
+   * flat.
+   *
+   * Flat while searching, because a query has already narrowed things and
+   * headings over two results get between the eye and the name. Flat in the
+   * archive, which holds a handful of rows and would come out as a column of
+   * one-line sections. And flat until the set counts land: reading a missing
+   * count as zero would file every trained exercise under a muscle for a frame,
+   * then move it.
+   */
+  const sections = (() => {
+    if (search.trim() !== '' || showArchived || counts === undefined) return null;
+
+    const trained = matches.filter((exercise) => (counts.get(exercise.id) ?? 0) > 0);
+    const untrained = matches.filter((exercise) => (counts.get(exercise.id) ?? 0) === 0);
+
+    return [
+      // What you have actually done stays on top — that is the point of this
+      // screen — and only the rest gets sorted by muscle.
+      ...(trained.length > 0 ? [{ label: 'Trained', exercises: trained }] : []),
+      ...groupByMuscle(untrained),
+    ];
+  })();
 
   return (
     <div className="flex h-full flex-col">
@@ -139,34 +165,36 @@ export function ExerciseIndexScreen() {
               ? 'Nothing archived.'
               : `No exercise matches “${search.trim()}”.`}
           </li>
+        ) : sections === null ? (
+          matches.map((exercise) => (
+            <Row
+              key={exercise.id}
+              exercise={exercise}
+              setCount={counts?.get(exercise.id) ?? 0}
+              onOpen={setOpenExercise}
+            />
+          ))
         ) : (
-          matches.map((exercise) => {
-            const setCount = counts?.get(exercise.id) ?? 0;
-            return (
-              <li key={exercise.id} className="mb-2">
-                <button
-                  type="button"
-                  onClick={() => setOpenExercise(exercise)}
-                  className="flex min-h-14 w-full items-center gap-3 rounded-panel bg-raised px-4 py-3 text-left transition-transform active:scale-[0.99]"
-                >
-                  <span className="min-w-0 flex-1">
-                    <span className="block truncate text-[0.9375rem] font-medium text-ink">
-                      {exercise.name}
-                      {exercise.perSide ? (
-                        <span className="font-normal text-muted"> · per side</span>
-                      ) : null}
-                    </span>
-                    <span className="mt-0.5 block font-mono text-xs text-muted tabular-nums">
-                      {setCount > 0
-                        ? `${setCount} set${setCount > 1 ? 's' : ''}`
-                        : 'never trained'}
-                    </span>
-                  </span>
-                  <CaretRight size={16} className="shrink-0 text-muted" />
-                </button>
-              </li>
-            );
-          })
+          sections.map((section) => (
+            <li key={section.label}>
+              {/* Sticky, like the picker: a section runs past a screenful long
+                  before it ends, and scrolling back up to learn which muscle
+                  you are reading is the problem this was meant to solve. */}
+              <h3 className="sticky top-0 z-10 -mx-4 bg-surface px-4 pt-3.5 pb-2 text-xs font-semibold tracking-wide text-muted uppercase">
+                {section.label}
+              </h3>
+              <ul>
+                {section.exercises.map((exercise) => (
+                  <Row
+                    key={exercise.id}
+                    exercise={exercise}
+                    setCount={counts?.get(exercise.id) ?? 0}
+                    onOpen={setOpenExercise}
+                  />
+                ))}
+              </ul>
+            </li>
+          ))
         )}
       </ul>
 
@@ -211,5 +239,37 @@ export function ExerciseIndexScreen() {
         />
       ) : null}
     </div>
+  );
+}
+
+/** One exercise in the index, with what it has behind it. */
+function Row({
+  exercise,
+  setCount,
+  onOpen,
+}: {
+  exercise: Exercise;
+  setCount: number;
+  onOpen: (exercise: Exercise) => void;
+}) {
+  return (
+    <li className="mb-2">
+      <button
+        type="button"
+        onClick={() => onOpen(exercise)}
+        className="flex min-h-14 w-full items-center gap-3 rounded-panel bg-raised px-4 py-3 text-left transition-transform active:scale-[0.99]"
+      >
+        <span className="min-w-0 flex-1">
+          <span className="block truncate text-[0.9375rem] font-medium text-ink">
+            {exercise.name}
+            {exercise.perSide ? <span className="font-normal text-muted"> · per side</span> : null}
+          </span>
+          <span className="mt-0.5 block font-mono text-xs text-muted tabular-nums">
+            {setCount > 0 ? `${setCount} set${setCount > 1 ? 's' : ''}` : 'never trained'}
+          </span>
+        </span>
+        <CaretRight size={16} className="shrink-0 text-muted" />
+      </button>
+    </li>
   );
 }
