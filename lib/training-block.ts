@@ -117,18 +117,29 @@ export const CYCLE_TINTS = [
 ] as const;
 
 /**
- * A tint for every block, in the order they run.
+ * A tint for every block, in the order they were created.
  *
- * Chronological rather than by identifier, so two blocks side by side never
- * share a colour — which is the whole job. Past six the palette repeats, and by
- * then the two blocks wearing one colour are half a year apart.
+ * Not the order they *run*, which is what this used to key on. A colour has to
+ * belong to the block, not to its rank in a list: recording a cycle you ran back
+ * in July — after the ones that follow it are already on the calendar — pushed
+ * every later block down a slot, and a cycle learned as green came back yellow.
+ * The month you remember stops being the month you scroll to.
+ *
+ * `createdAt` never changes, so nothing a new block does can repaint an old one.
+ * Blocks entered as they happen still come out in running order, which is the
+ * case that matters: two cycles back to back get different tints.
+ *
+ * Ties broken on the id so the ordering is total — two blocks created in the
+ * same millisecond would otherwise sort differently from one read to the next.
+ *
+ * Past six the palette repeats, and by then the two blocks sharing a colour are
+ * six cycles apart.
  */
 export function tintByBlock(blocks: readonly TrainingBlock[]): Map<Id, string> {
   return new Map(
-    orderBlocks(blocks).map((block, index) => [
-      block.id,
-      CYCLE_TINTS[index % CYCLE_TINTS.length],
-    ]),
+    [...blocks]
+      .sort((a, b) => a.createdAt - b.createdAt || a.id.localeCompare(b.id))
+      .map((block, index) => [block.id, CYCLE_TINTS[index % CYCLE_TINTS.length]]),
   );
 }
 

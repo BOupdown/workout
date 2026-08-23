@@ -12,12 +12,27 @@ import {
   type TrainingBlock,
 } from '../lib/training-block';
 
-const block = (label: string, startsOn: string, endsOn: string): TrainingBlock => ({
+/**
+ * `createdAt` increases with each call, so blocks written in source order model
+ * blocks entered as they happen. It used to be one fixed instant for all of
+ * them, which was harmless while tints keyed on the start date — and stopped
+ * being harmless the moment they keyed on creation, since every block then
+ * sorted on the id tie-break and "no two neighbouring tints" held by luck of
+ * the alphabet rather than by construction.
+ */
+let created = 1_700_000_000_000;
+
+const block = (
+  label: string,
+  startsOn: string,
+  endsOn: string,
+  createdAt = (created += 1_000),
+): TrainingBlock => ({
   id: label.toLowerCase(),
   label,
   startsOn,
   endsOn,
-  createdAt: 1_700_000_000_000,
+  createdAt,
 });
 
 // Four weeks, then four weeks, with a fortnight of nothing in between.
@@ -217,12 +232,33 @@ describe('tintByBlock', () => {
     expect(tints.get(strength.id)).not.toBe(tints.get(hypertrophy.id));
   });
 
-  it('attribue dans l’ordre chronologique, pas d’arrivée', () => {
+  it('ne dépend pas de l’ordre du tableau reçu', () => {
     const forward = tintByBlock([strength, hypertrophy]);
     const backward = tintByBlock([hypertrophy, strength]);
 
     expect(backward.get(strength.id)).toBe(forward.get(strength.id));
     expect(backward.get(hypertrophy.id)).toBe(forward.get(hypertrophy.id));
+  });
+
+  it('ne repeint pas un bloc quand on en enregistre un plus ancien', () => {
+    // Le défaut que ce changement corrige : la teinte suivait le rang du bloc
+    // dans la liste, donc consigner un cycle de juillet après coup décalait
+    // tous les suivants — un cycle appris vert revenait jaune.
+    const before = tintByBlock([strength, hypertrophy]);
+
+    // Créé maintenant, mais commencé avant les deux autres.
+    const deload = block('Deload', '2026-07-01', '2026-07-14');
+    const after = tintByBlock([deload, strength, hypertrophy]);
+
+    expect(after.get(strength.id)).toBe(before.get(strength.id));
+    expect(after.get(hypertrophy.id)).toBe(before.get(hypertrophy.id));
+  });
+
+  it('donne quand même au nouveau venu une teinte à lui', () => {
+    const deload = block('Deload2', '2026-07-01', '2026-07-14');
+    const tints = tintByBlock([deload, strength, hypertrophy]);
+
+    expect(new Set(tints.values()).size).toBe(3);
   });
 
   it('donne au premier bloc la teinte d’accent déjà présente', () => {
