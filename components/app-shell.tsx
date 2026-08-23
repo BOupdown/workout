@@ -3,6 +3,7 @@
 import { ArrowClockwise } from '@phosphor-icons/react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { HistoryScreen } from '@/components/history/history-screen';
+import { FirstRunNote } from '@/components/onboarding/first-run-note';
 import { TabBar } from '@/components/nav/tab-bar';
 import { ExerciseIndexScreen } from '@/components/progression/exercise-index-screen';
 import { ServiceWorkerRegistrar } from '@/components/pwa/service-worker-registrar';
@@ -108,6 +109,11 @@ export function AppShell() {
         <ServiceWorkerRegistrar />
         <TabBar active={active} onSelect={scrollToTab} />
       </div>
+
+      {/* Over everything, including the landscape notice: a phone held sideways
+          on a first launch should be turned upright first, but the note is the
+          thing that must not be missed. */}
+      <FirstRunNote />
     </>
   );
 }
