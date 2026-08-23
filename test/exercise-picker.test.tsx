@@ -10,6 +10,16 @@ beforeEach(resetDatabase);
 const headings = () =>
   screen.queryAllByRole('heading', { level: 3 }).map((node) => node.textContent);
 
+/**
+ * Attend que le catalogue soit classé à l'écran.
+ *
+ * Le champ de recherche est dans l'en-tête, donc rendu avant que la requête
+ * réponde : l'attendre lui ne prouve rien sur la liste. Ces tests assertaient
+ * juste après la frappe et lisaient parfois l'écran en cours de chargement —
+ * verts seuls, rouges sous charge.
+ */
+const grouped = () => expect.poll(() => headings()[0], { timeout: 5000 }).toBe('Chest');
+
 describe('ExercisePicker, en parcours', () => {
   it('classe le catalogue par muscle, dans l’ordre anatomique', async () => {
     // Le retour d'usage : à 58 entrées, une colonne alphabétique unique cesse
@@ -73,8 +83,10 @@ describe('ExercisePicker, en recherche', () => {
 
     await user.type(await screen.findByLabelText('Search exercises'), 'press');
 
+    // Le résultat d'abord : « aucun titre » est vrai aussi pendant le
+    // chargement, donc l'asserter seul passerait sans rien prouver.
+    expect(await screen.findByRole('button', { name: /Bench press/ })).toBeDefined();
     expect(headings()).toEqual([]);
-    expect(screen.getByRole('button', { name: /Bench press/ })).toBeDefined();
   });
 
   it('remet le muscle sur la ligne, faute de titre', async () => {
@@ -93,21 +105,27 @@ describe('ExercisePicker, en recherche', () => {
     render(<ExercisePicker onPick={vi.fn()} onClose={vi.fn()} />);
 
     const field = await screen.findByLabelText('Search exercises');
+    // Le champ s'affiche avant la liste : il est dans l'en-tête, pas dans la
+    // requête. Attendre le premier titre plutôt que le champ, sinon on lit
+    // l'écran pendant qu'il charge encore.
+    await grouped();
+
     await user.type(field, 'press');
     expect(headings()).toEqual([]);
 
     await user.clear(field);
 
-    expect(headings()[0]).toBe('Chest');
+    await grouped();
   });
 
   it('ne classe pas les blancs', async () => {
     // Une recherche vide de sens ne doit pas casser le parcours.
     const user = userEvent.setup();
     render(<ExercisePicker onPick={vi.fn()} onClose={vi.fn()} />);
+    await grouped();
 
     await user.type(await screen.findByLabelText('Search exercises'), '   ');
 
-    expect(headings()[0]).toBe('Chest');
+    await grouped();
   });
 });

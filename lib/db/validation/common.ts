@@ -15,7 +15,8 @@ export type ValidatedEntity =
   | 'sessionExercise'
   | 'exercise'
   | 'bodyWeight'
-  | 'trainingBlock';
+  | 'trainingBlock'
+  | 'retiredExercise';
 
 const ENTITY_LABELS: Record<ValidatedEntity, string> = {
   set: 'Set',
@@ -24,6 +25,7 @@ const ENTITY_LABELS: Record<ValidatedEntity, string> = {
   exercise: 'Exercise',
   bodyWeight: 'Body weight',
   trainingBlock: 'Training block',
+  retiredExercise: 'Deleted exercise',
 };
 
 export class ValidationError extends Error {
@@ -83,6 +85,22 @@ export class TrainingBlockValidationError extends ValidationError {
   constructor(issues: readonly ValidationIssue[]) {
     super('trainingBlock', issues);
     this.name = 'TrainingBlockValidationError';
+  }
+}
+
+/**
+ * A tombstone that cannot be read back.
+ *
+ * `nameKey` is the primary key, so a malformed one is not a bad row among good
+ * ones: Dexie refuses the write outright, and inside an import that means the
+ * whole restore aborts on a message about a transaction rather than about the
+ * file. Named here so it can be refused the same way every other table's rows
+ * are.
+ */
+export class RetiredExerciseValidationError extends ValidationError {
+  constructor(issues: readonly ValidationIssue[]) {
+    super('retiredExercise', issues);
+    this.name = 'RetiredExerciseValidationError';
   }
 }
 

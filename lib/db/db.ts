@@ -13,6 +13,7 @@ import type { TrainingBlock } from '../training-block';
 import {
   assertBodyWeightShape,
   assertExerciseShape,
+  assertRetiredExerciseShape,
   assertTrainingBlockShape,
   assertSessionExerciseShape,
   assertSessionShape,
@@ -275,6 +276,7 @@ export class WorkoutDB extends Dexie {
     installShapeGuard(this.sessionExercises, assertSessionExerciseShape);
     installShapeGuard(this.bodyweights, assertBodyWeightShape);
     installShapeGuard(this.trainingBlocks, assertTrainingBlockShape);
+    installShapeGuard(this.retiredExercises, assertRetiredExerciseShape);
   }
 }
 
