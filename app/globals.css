@@ -34,19 +34,31 @@
     Training-cycle tints, and the one place the single-accent rule bends.
 
     A cycle is told apart from its neighbour by hue, because that is what the
-    calendar is for: reading a run of weeks at a glance. They stay washed and
-    low-chroma so the month reads as one surface rather than a spreadsheet, and
-    every one of them keeps `--ink` above 15:1.
+    calendar is for: reading a run of weeks at a glance. Stepped at one
+    lightness with the hues evenly spread, so the six read as one family and the
+    month stays a surface rather than a spreadsheet.
 
-    The first is `--accent-wash` itself, so a single cycle looks exactly as it
-    did before there were six.
+    The first two used to sit 21° apart in hue — ΔE 1.9 for a reader with full
+    colour vision, where 15 is the bar. Two cycles back to back were the same
+    colour, which is the one thing these exist not to be. Now 60° apart at the
+    most chroma every hue can hold at this lightness: ΔE 3.8. Better, and still
+    nowhere near 15 — that is the price of a tint light enough to keep `--ink`
+    at 15:1, and the ceiling is the sRGB gamut up here, not restraint.
+
+    For a colour-blind reader they remain indistinguishable (ΔE 0.3), and no
+    amount of chroma at this lightness changes that. The ink rule down the first
+    day of a block is what marks the seam for them, and it is not decoration.
+
+    No longer `--accent-wash`: that token also paints the active exercise row
+    and a settings status, so pulling it along would repaint two screens that
+    have nothing to do with cycles.
   */
-  --cycle-1: #f4fbdc;
-  --cycle-2: #fdf5d0;
-  --cycle-3: #ddf4e8;
-  --cycle-4: #dbeefb;
-  --cycle-5: #e9e4fb;
-  --cycle-6: #fde7da;
+  --cycle-1: #e5eccf;
+  --cycle-2: #cef1e8;
+  --cycle-3: #d1ecff;
+  --cycle-4: #eae3ff;
+  --cycle-5: #ffdee8;
+  --cycle-6: #fce2cf;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -66,12 +78,22 @@
 
     /* Darkened rather than inverted: the hue stays recognisable, and the near
        white ink keeps above 14:1 on each. */
-    --cycle-1: #1e2410;
-    --cycle-2: #2a2410;
-    --cycle-3: #10241a;
-    --cycle-4: #11202c;
-    --cycle-5: #1f1a2e;
-    --cycle-6: #2b1c13;
+    /*
+      Lighter than their predecessors, not darker. The old ones sat at the
+      lightness of an untinted cell — 1.04:1 against it — so a tinted day was
+      nearly indistinguishable from a day in no block at all. These clear it at
+      1.18:1 while separating from each other at ΔE 5.1.
+
+      `--ink` lands at 13:1 here rather than the 15:1 of light mode. The comment
+      above used to claim 15:1 for both; it was never true of dark, where the
+      old tints reached 14.2:1.
+    */
+    --cycle-1: #272c0b;
+    --cycle-2: #003129;
+    --cycle-3: #0a2c40;
+    --cycle-4: #2c233f;
+    --cycle-5: #3d1d29;
+    --cycle-6: #3c220b;
   }
 }
 
