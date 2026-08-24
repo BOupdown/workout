@@ -1,0 +1,192 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Workout — LinkedIn card</title>
+<!--
+  The source of docs/linkedin/linkedin-1200x1350.png.
+  Open it in a browser at a 1200x1350 viewport and capture the page; the
+  screenshots come from ../screenshots, so editing one refreshes the card.
+-->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --ink: #111113;
+    --paper: #f2f2f5;
+    --accent: #ccec4b;
+    --muted: #a8a8b0;
+    --line: #2a2a30;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  html, body { width: 1200px; height: 1350px; }
+
+  body {
+    position: relative;
+    overflow: hidden;
+    background: var(--ink);
+    color: #ffffff;
+    font-family: 'Geist', system-ui, -apple-system, 'Segoe UI', sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  /* A single soft light behind the middle screen, so the eye lands there. */
+  .glow {
+    position: absolute;
+    left: 50%;
+    top: 300px;
+    width: 1250px;
+    height: 900px;
+    transform: translateX(-50%);
+    background: radial-gradient(ellipse at center, rgba(204, 236, 75, 0.20) 0%, rgba(204, 236, 75, 0.06) 42%, rgba(204, 236, 75, 0) 68%);
+    pointer-events: none;
+  }
+
+  .sheet {
+    position: relative;
+    height: 100%;
+    padding: 78px 64px 64px;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .eyebrow {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    font-family: 'Geist Mono', ui-monospace, monospace;
+    font-size: 19px;
+    font-weight: 500;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: var(--muted);
+  }
+
+  .dot {
+    width: 13px;
+    height: 13px;
+    border-radius: 50%;
+    background: var(--accent);
+  }
+
+  h1 {
+    margin-top: 26px;
+    font-size: 74px;
+    font-weight: 600;
+    line-height: 1.04;
+    letter-spacing: -0.032em;
+  }
+
+  /* The accent is too light to carry white text, which is why the app never
+     puts type on it. On this ground the relation is reversed: lime on near
+     black clears 13:1, so the second line simply takes the colour. */
+  h1 .lit { color: var(--accent); }
+
+  .sub {
+    margin-top: 24px;
+    max-width: 900px;
+    font-size: 27px;
+    line-height: 1.42;
+    color: var(--muted);
+  }
+
+  .screens {
+    margin-top: auto;
+    padding-top: 62px;
+    display: flex;
+    gap: 26px;
+    align-items: flex-end;
+    justify-content: center;
+  }
+
+  figure { width: 332px; }
+
+  /* The middle screen sits proud of the other two: three equal rectangles in a
+     row read as a spec sheet, not as a product. */
+  figure.lifted { margin-bottom: 34px; }
+
+  .frame {
+    border-radius: 26px;
+    overflow: hidden;
+    border: 1px solid rgba(255, 255, 255, 0.14);
+    box-shadow: 0 30px 60px -20px rgba(0, 0, 0, 0.8);
+    background: var(--paper);
+    line-height: 0;
+  }
+
+  .frame img { width: 100%; display: block; }
+
+  figcaption {
+    margin-top: 16px;
+    text-align: center;
+    font-family: 'Geist Mono', ui-monospace, monospace;
+    font-size: 17px;
+    letter-spacing: 0.04em;
+    color: var(--muted);
+  }
+
+  footer {
+    margin-top: 46px;
+    padding-top: 26px;
+    border-top: 1px solid var(--line);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    font-size: 20px;
+  }
+
+  .url {
+    font-family: 'Geist Mono', ui-monospace, monospace;
+    color: #ffffff;
+  }
+
+  .tags { display: flex; gap: 10px; }
+
+  .tag {
+    padding: 8px 16px;
+    border: 1px solid var(--line);
+    border-radius: 999px;
+    color: var(--muted);
+    font-size: 18px;
+  }
+</style>
+</head>
+<body>
+  <div class="glow"></div>
+
+  <div class="sheet">
+    <div class="eyebrow"><span class="dot"></span>Workout</div>
+
+    <h1>Logging a set<br><span class="lit">takes two taps.</span></h1>
+
+    <p class="sub">A strength log built for the gym: phone in one hand, between two sets. Every rep stays on the device — no account, no server.</p>
+
+    <div class="screens">
+      <figure>
+        <div class="frame"><img src="../screenshots/session.png" alt=""></div>
+        <figcaption>log a set</figcaption>
+      </figure>
+      <figure class="lifted">
+        <div class="frame"><img src="../screenshots/progression.png" alt=""></div>
+        <figcaption>see the progression</figcaption>
+      </figure>
+      <figure>
+        <div class="frame"><img src="../screenshots/calendar.png" alt=""></div>
+        <figcaption>read the block</figcaption>
+      </figure>
+    </div>
+
+    <footer>
+      <span class="url">workout-iota-beryl.vercel.app</span>
+      <div class="tags">
+        <span class="tag">Next.js 16</span>
+        <span class="tag">IndexedDB</span>
+        <span class="tag">Offline-first</span>
+      </div>
+    </footer>
+  </div>
+</body>
+</html>
