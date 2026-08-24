@@ -3,7 +3,7 @@
 import { ClockCounterClockwise } from '@phosphor-icons/react';
 import { useState } from 'react';
 import { useSessionHistory } from '@/hooks/use-session-history';
-import type { Id, SessionSummary } from '@/lib/db/types';
+import type { Id, SessionSummary, Timestamp } from '@/lib/db/types';
 import { formatElapsed } from '@/lib/format';
 import { SessionDetailSheet } from './session-detail-sheet';
 
@@ -12,6 +12,27 @@ const DATE_FORMAT = new Intl.DateTimeFormat('en-GB', {
   day: 'numeric',
   month: 'short',
 });
+
+/**
+ * The same day, carrying its year.
+ *
+ * This list scrolls back as far as the training goes, and a day of the year
+ * comes round again every twelve months. The year is dropped for the current
+ * one — that is most of what is on screen, and a column repeating "2026" says
+ * nothing.
+ */
+const DATED_FORMAT = new Intl.DateTimeFormat('en-GB', {
+  weekday: 'short',
+  day: 'numeric',
+  month: 'short',
+  year: 'numeric',
+});
+
+function formatDay(startedAt: Timestamp): string {
+  const date = new Date(startedAt);
+  const format = date.getFullYear() === new Date().getFullYear() ? DATE_FORMAT : DATED_FORMAT;
+  return format.format(date);
+}
 
 export function HistoryScreen() {
   const { loading, summaries, hasMore, loadMore } = useSessionHistory();
@@ -77,7 +98,7 @@ export function HistoryScreen() {
  * `auto` then replaces the estimate with each card's real height once measured.
  */
 function SummaryRow({ summary, onOpen }: { summary: SessionSummary; onOpen: () => void }) {
-  const day = DATE_FORMAT.format(summary.startedAt);
+  const day = formatDay(summary.startedAt);
 
   return (
     <button
@@ -95,6 +116,11 @@ function SummaryRow({ summary, onOpen }: { summary: SessionSummary; onOpen: () =
       </div>
 
       <p className="mt-1 font-mono text-xs text-muted tabular-nums">
+        {/* Every row carries its day: a programme names its sessions, so six
+            weeks of "Push" are otherwise six identical rows. It is left out
+            when the session has no name, since the headline is then the day
+            itself and printing it twice adds nothing. */}
+        {summary.title !== undefined ? `${day} · ` : ''}
         {summary.exerciseCount} exercise{summary.exerciseCount > 1 ? 's' : ''}
         {' · '}
         {summary.setCount} set{summary.setCount > 1 ? 's' : ''}
