@@ -15,14 +15,39 @@ anywhere.
 Six weeks of a push / pull / legs programme, three sessions a week.
 
 | Logging a set | Progression | Calendar |
-|:--|:--|:--|
-| [![A push session in progress](docs/screenshots/session.png)](docs/screenshots/session.png) | [![Bench press progression](docs/screenshots/progression.png)](docs/screenshots/progression.png) | [![August, inside a training block](docs/screenshots/calendar.png)](docs/screenshots/calendar.png) |
-| 47 minutes into a push session. The bench is behind — 8 × 67.5 kg twice, then 7 — and the medal sits on the set that holds the record. The panel is already on Overhead press, carrying last session's 8 × 45 kg: **Save set** logs it as is. | Bench press from 55 to 67.5 kg, the fortnight that did not move included. The headline is the last session, the badge its difference with the one before, and the table underneath lists every set — no figure is reachable through the chart alone. | August, week 7 of an eight-week block. A dumbbell marks a day trained, the number below it is that morning's bodyweight, and the tint is the block itself. |
+|:--:|:--:|:--:|
+| <a href="docs/screenshots/session.png"><img src="docs/screenshots/session.png" alt="A push session in progress" width="230"></a> | <a href="docs/screenshots/progression.png"><img src="docs/screenshots/progression.png" alt="Bench press progression" width="230"></a> | <a href="docs/screenshots/calendar.png"><img src="docs/screenshots/calendar.png" alt="August, inside a training block" width="230"></a> |
+
+**Logging a set.** An hour into a push session. The bench is behind — 8 ×
+67.5 kg twice, then 7 — and the medal sits on the set that holds the record.
+The panel is already on Overhead press, carrying last session's 8 × 45 kg:
+**Save set** logs it as is.
+
+**Progression.** Bench press from 55 to 67.5 kg, the fortnight that did not
+move included. The headline is the last session, the badge its difference with
+the one before, and the table underneath lists every set — no figure is
+reachable through the chart alone.
+
+**Calendar.** August, week 7 of an eight-week block. A dumbbell marks a day
+trained, the number below it is that morning's bodyweight, and the tint is the
+block itself.
 
 | History | A session, set by set | Backup |
-|:--|:--|:--|
-| [![The history tab](docs/screenshots/history.png)](docs/screenshots/history.png) | [![A finished session in detail](docs/screenshots/session-detail.png)](docs/screenshots/session-detail.png) | [![The backup and restore panels](docs/screenshots/settings.png)](docs/screenshots/settings.png) |
-| Finished sessions, most recent first, with the one in progress at the top. Every row carries its day, since a programme names its sessions and six weeks of *Push* are otherwise six identical rows. Duration, counts and names come from the session rows and an index count: not one set is read to draw this list. | Legs, 1 h 08: squat 3 × 5 at 115 kg after a warm-up at 60, plank held 1:50 then 1:35. The date can be corrected afterwards — the time of day is kept and every set moves with it. | The export is the whole database as a JSON file. Restoring replaces everything in one transaction: one invalid row and nothing is written. |
+|:--:|:--:|:--:|
+| <a href="docs/screenshots/history.png"><img src="docs/screenshots/history.png" alt="The history tab" width="230"></a> | <a href="docs/screenshots/session-detail.png"><img src="docs/screenshots/session-detail.png" alt="A finished session in detail" width="230"></a> | <a href="docs/screenshots/settings.png"><img src="docs/screenshots/settings.png" alt="The backup and restore panels" width="230"></a> |
+
+**History.** Finished sessions, most recent first, with the one in progress at
+the top. Every row carries its day, since a programme names its sessions and
+six weeks of *Push* are otherwise six identical rows. Duration, counts and
+names come from the session rows and an index count: not one set is read to
+draw this list.
+
+**A session, set by set.** Legs, 1 h 08: squat 3 × 5 at 115 kg after a warm-up
+at 60, plank held 1:50 then 1:35. The date can be corrected afterwards — the
+time of day is kept and every set moves with it.
+
+**Backup.** The export is the whole database as a JSON file. Restoring replaces
+everything in one transaction: one invalid row and nothing is written.
 
 ## Getting started
 
