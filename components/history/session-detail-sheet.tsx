@@ -181,7 +181,14 @@ export function SessionDetailSheet({ sessionId, onClose }: SessionDetailSheetPro
               max={today}
               value={detail.date}
               onChange={(event) => handleDate(event.target.value)}
-              className="mt-3 h-14 w-full rounded-control border-2 border-line bg-surface px-3.5 font-mono text-base text-ink tabular-nums outline-none focus:border-ink"
+              // `appearance-none` and `min-w-0` are what keep the field inside
+              // the panel. A date input left with its native appearance is
+              // sized by WebKit from its own segments rather than by the width
+              // it is given, so on iOS it can sit wider than the card holding
+              // it and run past the rounded edge. The block dates already carry
+              // `min-w-0` for the same reason, being flex children; this one is
+              // in flow, where only the intrinsic width could push it out.
+              className="mt-3 block h-14 w-full min-w-0 appearance-none rounded-control border-2 border-line bg-surface px-3.5 font-mono text-base text-ink tabular-nums outline-none focus:border-ink"
             />
 
             {dateError ? (
