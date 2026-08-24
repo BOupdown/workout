@@ -18,10 +18,10 @@ const exercise = (name: string, muscleGroup?: MuscleGroup): Exercise =>
   }) as Exercise;
 
 describe('MUSCLE_GROUP_ORDER', () => {
-  it('place tous les groupes, une seule fois', () => {
-    // Le `Record` des libellés garantit qu'un groupe est *nommé*, pas qu'il est
-    // *placé* : sans ce test, ajouter un groupe compilerait et le ferait
-    // disparaître du sélecteur, sans erreur nulle part.
+  it('places every group, exactly once', () => {
+    // The `Record` of labels guarantees a group is *named*, not that it is
+    // *placed*: without this test, adding a group would compile and drop it
+    // from the picker, with no error anywhere.
     const named = Object.keys(MUSCLE_GROUP_LABELS).sort();
     expect([...MUSCLE_GROUP_ORDER].sort()).toEqual(named);
     expect(new Set(MUSCLE_GROUP_ORDER).size).toBe(MUSCLE_GROUP_ORDER.length);
@@ -29,7 +29,7 @@ describe('MUSCLE_GROUP_ORDER', () => {
 });
 
 describe('groupByMuscle', () => {
-  it('suit l’ordre anatomique, pas celui des données', () => {
+  it('follows the anatomical order, not the one the data comes in', () => {
     const sections = groupByMuscle([
       exercise('Calf raise', 'calves'),
       exercise('Bench press', 'chest'),
@@ -39,7 +39,7 @@ describe('groupByMuscle', () => {
     expect(sections.map((section) => section.group)).toEqual(['chest', 'biceps', 'calves']);
   });
 
-  it('regroupe sous un seul en-tête', () => {
+  it('gathers them under a single heading', () => {
     const sections = groupByMuscle([
       exercise('Bench press', 'chest'),
       exercise('Squat', 'quads'),
@@ -50,17 +50,17 @@ describe('groupByMuscle', () => {
     expect(sections[0].exercises.map((item) => item.name)).toEqual(['Bench press', 'Cable fly']);
   });
 
-  it('n’invente pas de section vide', () => {
-    // Sinon supprimer le dernier exercice d'un groupe laisserait un titre seul.
+  it('invents no empty section', () => {
+    // Otherwise removing a group's last exercise would leave a heading alone.
     const sections = groupByMuscle([exercise('Bench press', 'chest')]);
 
     expect(sections).toHaveLength(1);
     expect(sections[0].label).toBe('Chest');
   });
 
-  it('garde l’ordre d’entrée dans une section', () => {
-    // Les appelants lisent déjà le catalogue trié par nom : retrier ici
-    // écraserait ce choix sans le dire.
+  it('keeps the incoming order within a section', () => {
+    // Callers already read the catalogue sorted by name: re-sorting here would
+    // overwrite that choice silently.
     const sections = groupByMuscle([
       exercise('Zottman curl', 'biceps'),
       exercise('Barbell curl', 'biceps'),
@@ -72,9 +72,9 @@ describe('groupByMuscle', () => {
     ]);
   });
 
-  it('range les exercices sans groupe à la fin, sans les perdre', () => {
-    // `muscleGroup` est optionnel : les écarter cacherait un exercice
-    // personnalisé de l'écran qui sert justement à le retrouver.
+  it('puts the exercises with no group last, without losing them', () => {
+    // `muscleGroup` is optional: dropping them would hide a custom exercise
+    // from the very screen that exists to find it again.
     const sections = groupByMuscle([
       exercise('Sandbag carry'),
       exercise('Bench press', 'chest'),
@@ -85,13 +85,13 @@ describe('groupByMuscle', () => {
     expect(sections.at(-1)?.exercises.map((item) => item.name)).toEqual(['Sandbag carry']);
   });
 
-  it('ne rend aucune section sur un catalogue vide', () => {
+  it('renders no section for an empty catalogue', () => {
     expect(groupByMuscle([])).toEqual([]);
   });
 
   it('ne perd ni ne duplique aucun exercice', () => {
-    // La propriété qui compte : quoi qu'il arrive au classement, tout ce qui
-    // entre ressort exactement une fois.
+    // The property that matters: whatever happens to the grouping, everything
+    // that goes in comes out exactly once.
     const input = [
       exercise('Bench press', 'chest'),
       exercise('Squat', 'quads'),

@@ -38,15 +38,15 @@ async function recordSessions(count: number) {
   }
 }
 
-describe('le rappel sur l’accueil', () => {
-  it('reste muet tant que rien n’a été enregistré', async () => {
+describe('the reminder on the home screen', () => {
+  it('stays silent while nothing has been recorded', async () => {
     render(<BackupReminderCard />);
 
     await new Promise((resolve) => setTimeout(resolve, 300));
     expect(screen.queryByLabelText('Backup reminder')).toBeNull();
   });
 
-  it('signale une base jamais sauvegardée', async () => {
+  it('speaks up for a database that was never backed up', async () => {
     await recordSessions(FIRST_REMINDER_SESSIONS);
     render(<BackupReminderCard />);
 
@@ -55,9 +55,9 @@ describe('le rappel sur l’accueil', () => {
     ).toBeDefined();
   });
 
-  it('renvoie vers les réglages plutôt que d’agir lui-même', async () => {
-    // Sauvegarder vit avec la restauration qu'elle reflète : l'accueil informe,
-    // il n'exécute pas.
+  it('points at the settings rather than acting itself', async () => {
+    // Backing up lives next to the restore it mirrors: the home screen informs,
+    // it does not execute.
     await recordSessions(FIRST_REMINDER_SESSIONS);
     render(<BackupReminderCard />);
 
@@ -66,7 +66,7 @@ describe('le rappel sur l’accueil', () => {
     expect(screen.queryByRole('button', { name: /Back up/ })).toBeNull();
   });
 
-  it('se tait une fois la sauvegarde faite', async () => {
+  it('goes quiet once the backup is done', async () => {
     await recordSessions(FIRST_REMINDER_SESSIONS);
     window.localStorage.setItem(KEY, String(Date.now()));
 
@@ -77,12 +77,12 @@ describe('le rappel sur l’accueil', () => {
   });
 });
 
-describe('l’export, dans les réglages', () => {
+describe('the export, in the settings', () => {
   const exportButton = () =>
     screen.findByRole('button', { name: /Export my data/ }, { timeout: 5000 });
 
-  it('passe par la feuille de partage quand elle existe', async () => {
-    // Un fichier téléchargé finit dans Téléchargements et n'en sort jamais.
+  it('goes through the share sheet where there is one', async () => {
+    // A downloaded file lands in Downloads and never leaves it.
     const user = userEvent.setup();
     await recordSessions(1);
     render(<SettingsScreen />);
@@ -94,7 +94,7 @@ describe('l’export, dans les réglages', () => {
     expect(shared.files[0].name).toMatch(/^workout-\d{4}-\d{2}-\d{2}\.json$/);
   });
 
-  it('enregistre la date une fois le partage abouti', async () => {
+  it('records the date once the share has gone through', async () => {
     const user = userEvent.setup();
     await recordSessions(1);
     render(<SettingsScreen />);
@@ -104,14 +104,13 @@ describe('l’export, dans les réglages', () => {
     await expect.poll(() => window.localStorage.getItem(KEY)).not.toBeNull();
   });
 
-  it('n’enregistre rien si l’utilisateur annule le partage', async () => {
-    // `share` rejette avec AbortError quand on ferme la feuille. Compter ça
-    // comme une sauvegarde ferait taire le rappel en promettant une sécurité
-    // qui n'existe pas.
+  it('records nothing when the user cancels the share', async () => {
+    // `share` rejects with AbortError when the sheet is dismissed. Counting
+    // that as a backup would silence the reminder on a promise of safety that
+    // does not exist.
     //
-    // Le délai n'est pas décoratif : c'est ce qui distingue une personne qui
-    // décide d'un navigateur qui refuse, les deux rejetant avec le même nom
-    // d'erreur.
+    // The delay is not decorative: it is what tells a person deciding from a
+    // browser refusing, both of which reject under the same error name.
     share.mockImplementation(
       () =>
         new Promise((_, reject) =>
@@ -129,10 +128,10 @@ describe('l’export, dans les réglages', () => {
     expect(window.localStorage.getItem(KEY)).toBeNull();
   });
 
-  it('retombe sur le téléchargement quand le navigateur refuse le partage', async () => {
-    // Le cas signalé sur Brave : `canShare` dit oui, `share` refuse. Le bouton
-    // ne faisait alors strictement rien — le pire résultat possible pour la
-    // seule fonctionnalité qui sépare quelqu'un d'un historique perdu.
+  it('falls back to the download when the browser refuses to share', async () => {
+    // The case reported on Brave: `canShare` says yes, `share` refuses. The
+    // button then did strictly nothing — the worst possible outcome for the one
+    // feature standing between somebody and a lost history.
     share.mockRejectedValue(new DOMException('not allowed', 'NotAllowedError'));
     const clicked = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {});
 
@@ -147,9 +146,9 @@ describe('l’export, dans les réglages', () => {
     clicked.mockRestore();
   });
 
-  it('retombe aussi sur le téléchargement quand le refus se déguise en annulation', async () => {
-    // Certains navigateurs rejettent avec AbortError sans avoir rien affiché.
-    // Un rejet instantané n'a montré de feuille à personne.
+  it('falls back to the download when a refusal dresses up as a cancel', async () => {
+    // Some browsers reject with AbortError having shown nothing at all. A
+    // rejection that arrives instantly showed nobody a sheet.
     share.mockRejectedValue(new DOMException('blocked', 'AbortError'));
     const clicked = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {});
 
@@ -163,7 +162,7 @@ describe('l’export, dans les réglages', () => {
     clicked.mockRestore();
   });
 
-  it('retombe sur le téléchargement là où le partage n’existe pas', async () => {
+  it('falls back to the download where sharing does not exist', async () => {
     canShare.mockReturnValue(false);
     const clicked = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {});
 
@@ -178,9 +177,9 @@ describe('l’export, dans les réglages', () => {
     clicked.mockRestore();
   });
 
-  it('affiche « never » tant que rien n’a été exporté, puis la date', async () => {
-    // « never » est la réponse qui compte : une ligne vide se lirait comme une
-    // assurance.
+  it('shows "never" while nothing has been exported, then the date', async () => {
+    // "never" is the answer that matters: an empty line would read as
+    // reassurance.
     const user = userEvent.setup();
     await recordSessions(1);
     render(<SettingsScreen />);

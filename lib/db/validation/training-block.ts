@@ -16,7 +16,7 @@ import {
   type ValidationIssue,
 } from './common';
 
-/** Long enough for "Prépa compétition novembre", short enough to render. */
+/** Long enough for "November meet preparation", short enough to render. */
 export const MAX_BLOCK_LABEL = 60;
 
 export function checkTrainingBlockShape(value: unknown): ValidationIssue[] {

@@ -5,7 +5,7 @@ const flat = (year: number, month: number) => monthGrid({ year, month }).flat();
 const dates = (year: number, month: number) => flat(year, month).map((day) => day.date);
 
 describe('monthGrid', () => {
-  it('rend des semaines complètes de sept jours', () => {
+  it('returns full weeks of seven days', () => {
     for (const [year, month] of [
       [2026, 1],
       [2026, 2],
@@ -18,7 +18,7 @@ describe('monthGrid', () => {
     }
   });
 
-  it('commence chaque semaine un lundi', () => {
+  it('starts every week on a Monday', () => {
     // `getDay()` rend 1 pour lundi.
     for (const week of monthGrid({ year: 2026, month: 8 })) {
       const [y, m, d] = week[0].date.split('-').map(Number);
@@ -26,7 +26,7 @@ describe('monthGrid', () => {
     }
   });
 
-  it('couvre tous les jours du mois, une seule fois', () => {
+  it('covers every day of the month, exactly once', () => {
     const august = flat(2026, 8).filter((day) => day.inMonth);
     expect(august).toHaveLength(31);
     expect(new Set(august.map((day) => day.date)).size).toBe(31);
@@ -34,9 +34,9 @@ describe('monthGrid', () => {
     expect(august[30].dayOfMonth).toBe(31);
   });
 
-  it('complète avec les jours voisins plutôt qu’avec du vide', () => {
-    // Chaque case est une vraie date : une case vide n'a rien à afficher et
-    // rien à toucher, et oblige tout le reste à se demander si elle est réelle.
+  it('fills up with the neighbouring days rather than with blanks', () => {
+    // Every cell is a real date: an empty one has nothing to show and nothing
+    // to tap, and forces everything else to ask whether it is real.
     const grid = monthGrid({ year: 2026, month: 8 });
     const first = grid[0][0];
 
@@ -44,7 +44,7 @@ describe('monthGrid', () => {
     expect(first.date).toBe('2026-07-27');
   });
 
-  it('ne produit jamais de trou dans la suite des jours', () => {
+  it('never leaves a hole in the run of days', () => {
     const all = dates(2026, 3);
     for (let i = 1; i < all.length; i += 1) {
       const [py, pm, pd] = all[i - 1].split('-').map(Number);
@@ -56,30 +56,30 @@ describe('monthGrid', () => {
     }
   });
 
-  it('gère un février bissextile', () => {
+  it('handles a leap February', () => {
     const february = flat(2024, 2).filter((day) => day.inMonth);
     expect(february).toHaveLength(29);
   });
 
-  it('gère un février non bissextile', () => {
+  it('handles a February that is not a leap one', () => {
     expect(flat(2026, 2).filter((day) => day.inMonth)).toHaveLength(28);
   });
 
-  it('ne rajoute pas une semaine entière du mois suivant', () => {
-    // Février 2027 fait 28 jours et commence un lundi : exactement quatre
-    // lignes, pas cinq dont une entièrement en mars.
+  it('does not add a whole week of the following month', () => {
+    // February 2027 runs 28 days and starts on a Monday: exactly four rows,
+    // not five with one of them entirely in March.
     const grid = monthGrid({ year: 2027, month: 2 });
     expect(grid).toHaveLength(4);
     expect(grid.flat().every((day) => day.inMonth)).toBe(true);
   });
 
-  it('passe l’année sur décembre', () => {
+  it('rolls the year over on December', () => {
     const december = flat(2026, 12);
     expect(december.some((day) => day.date.startsWith('2027-01'))).toBe(true);
     expect(december.filter((day) => day.inMonth)).toHaveLength(31);
   });
 
-  it('passe l’année sur janvier', () => {
+  it('rolls the year over on January', () => {
     const january = flat(2026, 1);
     expect(january.some((day) => day.date.startsWith('2025-12'))).toBe(true);
     expect(january.filter((day) => day.inMonth)).toHaveLength(31);
@@ -92,7 +92,7 @@ describe('shiftMonth', () => {
     expect(shiftMonth({ year: 2026, month: 8 }, -1)).toEqual({ year: 2026, month: 7 });
   });
 
-  it('roule l’année dans les deux sens', () => {
+  it('rolls the year both ways', () => {
     expect(shiftMonth({ year: 2026, month: 12 }, 1)).toEqual({ year: 2027, month: 1 });
     expect(shiftMonth({ year: 2026, month: 1 }, -1)).toEqual({ year: 2025, month: 12 });
   });
@@ -103,15 +103,15 @@ describe('shiftMonth', () => {
 });
 
 describe('monthOf', () => {
-  it('lit le mois d’une date', () => {
+  it('reads the month of a date', () => {
     expect(monthOf('2026-08-21')).toEqual({ year: 2026, month: 8 });
   });
 });
 
 describe('gridBounds', () => {
-  it('rend le premier et le dernier jour affichés', () => {
-    // C'est ce qui permet d'interroger la base une seule fois pour toute la
-    // grille, jours voisins compris.
+  it('returns the first and the last day on screen', () => {
+    // This is what allows the database to be queried once for the whole grid,
+    // neighbouring days included.
     const grid = monthGrid({ year: 2026, month: 8 });
     const { from, to } = gridBounds(grid);
 
@@ -122,26 +122,26 @@ describe('gridBounds', () => {
 });
 
 describe('monthBounds', () => {
-  it('borne le mois, sans les jours voisins', () => {
+  it('bounds the month, leaving the neighbouring days out', () => {
     expect(monthBounds({ year: 2026, month: 8 })).toEqual({
       from: '2026-08-01',
       to: '2026-08-31',
     });
   });
 
-  it('connaît les mois courts', () => {
+  it('knows the short months', () => {
     expect(monthBounds({ year: 2026, month: 4 }).to).toBe('2026-04-30');
   });
 
-  it('connaît les années bissextiles', () => {
-    // 2024 est bissextile, 2026 ne l'est pas.
+  it('knows the leap years', () => {
+    // 2024 is a leap year, 2026 is not.
     expect(monthBounds({ year: 2024, month: 2 }).to).toBe('2024-02-29');
     expect(monthBounds({ year: 2026, month: 2 }).to).toBe('2026-02-28');
   });
 
-  it('reste dans le mois là où la grille en sort', () => {
-    // La différence entre les deux : la grille d'août 2026 commence un 27
-    // juillet, et une légende disant « August » ne doit pas tracer ce jour-là.
+  it('stays inside the month where the grid steps out of it', () => {
+    // The difference between the two: the grid for August 2026 opens on 27
+    // July, and a caption reading "August" must not plot that day.
     const grid = monthGrid({ year: 2026, month: 8 });
 
     expect(gridBounds(grid).from < monthBounds({ year: 2026, month: 8 }).from).toBe(true);

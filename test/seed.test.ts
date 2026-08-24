@@ -9,39 +9,38 @@ import { CUSTOM_EXERCISE_NAME, resetDatabase } from './helpers';
 
 beforeEach(resetDatabase);
 
-describe('le catalogue livré', () => {
-  it('n’a aucun nom en double', async () => {
-    // `&nameKey` est unique : un doublon ferait échouer `on('populate')`, donc
-    // rendrait l'app inouvrable pour toute nouvelle installation. C'est le seul
-    // défaut de cette liste qui casse tout d'un coup.
+describe('the shipped catalogue', () => {
+  it('holds no duplicate name', async () => {
+    // `&nameKey` is unique: a duplicate would fail `on('populate')`, and so
+    // make the app impossible to open on any new install. It is the one flaw
+    // in this list that breaks everything at once.
     const keys = buildSeedExercises().map((exercise) => exercise.nameKey);
     expect(new Set(keys).size).toBe(keys.length);
   });
 
-  it('ne contient que des lignes valides', async () => {
+  it('holds none but valid rows', async () => {
     for (const exercise of buildSeedExercises()) {
       expect(checkExerciseShape(exercise)).toEqual([]);
     }
   });
 
-  it('est entièrement livré à la création', async () => {
+  it('is delivered in full when the database is created', async () => {
     const shipped = buildSeedExercises();
     expect(await db.exercises.count()).toBe(shipped.length);
   });
 
-  it('laisse libre le nom que les tests utilisent', async () => {
-    // Sinon chaque test créant un exercice personnalisé tombe d'un coup, pour
-    // une raison sans rapport avec ce qu'il vérifie — ce qui est arrivé le jour
-    // où « Face pull » a été livré.
+  it('leaves free the name the tests use', async () => {
+    // Otherwise every test creating a custom exercise fails at once, for a
+    // reason unrelated to what it asserts — which is what happened the day
+    // "Face pull" shipped.
     await expect(
       createExercise({ name: CUSTOM_EXERCISE_NAME, loadType: 'external', metric: 'reps' }),
     ).resolves.toBeDefined();
   });
 
-  it('n’est pas si long qu’on ne puisse plus le parcourir', async () => {
-    // Une borne, pas un chiffre magique : un sélecteur qu'on ne peut pas
-    // survoler coûte une recherche à chaque séance, alors qu'un exercice
-    // manquant coûte dix secondes une seule fois.
+  it('is not so long that it can no longer be scanned', async () => {
+    // A bound, not a magic number: a picker nobody can skim costs a search
+    // every session, where a missing exercise costs ten seconds once.
     expect((await listSelectableExercises()).length).toBeLessThanOrEqual(80);
   });
 });
@@ -50,7 +49,7 @@ describe('le catalogue livré', () => {
  * The v5 → v6 upgrade, exercised against a database that predates the
  * additions — the only shape where it does anything at all.
  */
-describe('les ajouts au catalogue atteignent une base existante', () => {
+describe('catalogue additions reach an existing database', () => {
   /** Rebuilds a database holding only the first few shipped exercises. */
   async function upgradeFrom(exercises: Exercise[]) {
     db.close();
@@ -75,23 +74,23 @@ describe('les ajouts au catalogue atteignent une base existante', () => {
     await db.open();
   }
 
-  it('ajoute ce qui manque', async () => {
+  it('adds what is missing', async () => {
     const shipped = buildSeedExercises();
     await upgradeFrom(shipped.slice(0, 5));
 
     expect(await db.exercises.count()).toBe(shipped.length);
   });
 
-  it('ne duplique pas ce qui est déjà là', async () => {
+  it('does not duplicate what is already there', async () => {
     const shipped = buildSeedExercises();
     await upgradeFrom(shipped);
 
     expect(await db.exercises.count()).toBe(shipped.length);
   });
 
-  it('ne touche pas à un exercice que l’utilisateur a créé sous le même nom', async () => {
-    // `&nameKey` est unique : écraser reviendrait à perdre son historique, et
-    // ferait avorter la migration. On saute, il garde le sien.
+  it('leaves alone an exercise the user created under the same name', async () => {
+    // `&nameKey` is unique: overwriting would lose their history and abort the
+    // migration. It is skipped, and they keep theirs.
     const shipped = buildSeedExercises();
     const mine: Exercise = {
       ...shipped.find((e) => e.name === 'Front squat')!,
@@ -109,7 +108,7 @@ describe('les ajouts au catalogue atteignent une base existante', () => {
     expect(stored[0].defaultIncrementKg).toBe(1.25);
   });
 
-  it('conserve l’historique attaché aux exercices déjà présents', async () => {
+  it('preserves the history attached to the exercises already there', async () => {
     const shipped = buildSeedExercises();
     const kept = shipped.slice(0, 3);
     await upgradeFrom(kept);

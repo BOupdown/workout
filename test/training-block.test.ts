@@ -40,25 +40,25 @@ const strength = block('Strength', '2026-08-03', '2026-08-30');
 const hypertrophy = block('Hypertrophy', '2026-09-14', '2026-10-11');
 
 describe('daysBetween', () => {
-  it('compte les jours entre deux dates', () => {
+  it('counts the days between two dates', () => {
     expect(daysBetween('2026-08-03', '2026-08-10')).toBe(7);
   });
 
-  it('rend zéro pour le même jour', () => {
+  it('returns zero for the same day', () => {
     expect(daysBetween('2026-08-03', '2026-08-03')).toBe(0);
   });
 
-  it('traverse un mois et une année', () => {
+  it('crosses a month and a year', () => {
     expect(daysBetween('2026-12-25', '2027-01-01')).toBe(7);
   });
 
-  it('reste juste au passage à l’heure d’été', () => {
-    // Le dimanche 29 mars 2026, une journée fait 23 heures en Europe. Une
-    // division sans arrondi rendrait 6 jours pour une semaine pleine.
+  it('stays right across the spring clock change', () => {
+    // On Sunday 29 March 2026, one day runs 23 hours in Europe. A division
+    // without rounding would report 6 days for a full week.
     expect(daysBetween('2026-03-25', '2026-04-01')).toBe(7);
   });
 
-  it('reste juste au passage à l’heure d’hiver', () => {
+  it('stays right across the autumn clock change', () => {
     expect(daysBetween('2026-10-21', '2026-10-28')).toBe(7);
   });
 });
@@ -69,7 +69,7 @@ describe('covers', () => {
     expect(covers(strength, '2026-08-30')).toBe(true);
   });
 
-  it('exclut la veille et le lendemain', () => {
+  it('leaves out the day before and the day after', () => {
     expect(covers(strength, '2026-08-02')).toBe(false);
     expect(covers(strength, '2026-08-31')).toBe(false);
   });
@@ -78,26 +78,26 @@ describe('covers', () => {
 describe('blockOn', () => {
   const all = [hypertrophy, strength];
 
-  it('rend le bloc dès son premier jour', () => {
+  it('returns the block from its first day', () => {
     expect(blockOn(all, '2026-08-03')?.label).toBe('Strength');
   });
 
-  it('rend le bloc jusqu’à son dernier jour inclus', () => {
+  it('returns the block up to and including its last day', () => {
     expect(blockOn(all, '2026-08-30')?.label).toBe('Strength');
   });
 
-  it('rend null dans un trou entre deux blocs', () => {
-    // C'est le prix de la date de fin : les jours sans bloc existent. Ce sont
-    // des jours ordinaires, pas une erreur.
+  it('returns null in a gap between two blocks', () => {
+    // The price of the end date: days belonging to no block exist. They are
+    // ordinary days, not an error.
     expect(blockOn(all, '2026-09-01')).toBeNull();
   });
 
-  it('rend null avant le premier et après le dernier', () => {
+  it('returns null before the first and after the last', () => {
     expect(blockOn(all, '2026-07-01')).toBeNull();
     expect(blockOn(all, '2026-12-01')).toBeNull();
   });
 
-  it('ignore l’ordre d’arrivée de la liste', () => {
+  it('ignores the order the list arrives in', () => {
     expect(blockOn([hypertrophy, strength], '2026-09-20')?.label).toBe('Hypertrophy');
   });
 
@@ -109,7 +109,7 @@ describe('blockOn', () => {
 describe('overlaps', () => {
   const all = [strength, hypertrophy];
 
-  it('laisse passer un bloc placé dans un trou', () => {
+  it('lets through a block placed in a gap', () => {
     expect(overlaps(all, { startsOn: '2026-08-31', endsOn: '2026-09-13' })).toBeNull();
   });
 
@@ -119,36 +119,36 @@ describe('overlaps', () => {
     );
   });
 
-  it('refuse un chevauchement par la fin', () => {
+  it('refuses an overlap at the end', () => {
     expect(overlaps(all, { startsOn: '2026-07-20', endsOn: '2026-08-05' })?.label).toBe(
       'Strength',
     );
   });
 
-  it('refuse un chevauchement par le début', () => {
+  it('refuses an overlap at the start', () => {
     expect(overlaps(all, { startsOn: '2026-08-25', endsOn: '2026-09-05' })?.label).toBe(
       'Strength',
     );
   });
 
-  it('refuse un bloc contenu dans un autre', () => {
+  it('refuses a block contained in another', () => {
     expect(overlaps(all, { startsOn: '2026-08-10', endsOn: '2026-08-12' })?.label).toBe(
       'Strength',
     );
   });
 
-  it('refuse un bloc partageant une seule journée', () => {
-    // Le cas limite : commencer le jour même où le précédent finit.
+  it('refuses a block sharing a single day', () => {
+    // The edge case: starting the very day the previous one ends.
     expect(overlaps(all, { startsOn: '2026-08-30', endsOn: '2026-09-10' })?.label).toBe(
       'Strength',
     );
   });
 
-  it('accepte de commencer le lendemain de la fin', () => {
+  it('accepts starting the day after that end', () => {
     expect(overlaps(all, { startsOn: '2026-08-31', endsOn: '2026-09-10' })).toBeNull();
   });
 
-  it('peut s’ignorer lui-même, pour une modification', () => {
+  it('can ignore itself, for an edit', () => {
     expect(overlaps(all, strength, strength.id)).toBeNull();
   });
 });
@@ -156,69 +156,69 @@ describe('overlaps', () => {
 describe('blockProgressOn', () => {
   const all = [strength, hypertrophy];
 
-  it('compte la première semaine à partir de un', () => {
+  it('counts the first week from one', () => {
     const progress = blockProgressOn(all, '2026-08-03');
     expect(progress?.daysIn).toBe(0);
     expect(progress?.week).toBe(1);
   });
 
-  it('reste en semaine 1 jusqu’au septième jour', () => {
+  it('stays in week 1 up to the seventh day', () => {
     expect(blockProgressOn(all, '2026-08-09')?.week).toBe(1);
   });
 
-  it('passe en semaine 2 le huitième jour', () => {
+  it('moves into week 2 on the eighth day', () => {
     expect(blockProgressOn(all, '2026-08-10')?.week).toBe(2);
   });
 
-  it('annonce la durée totale', () => {
-    // Vingt-huit jours font quatre semaines, et c'est ce qui permet de dire
-    // « semaine 2 sur 4 » au lieu de « semaine 2 ».
+  it('announces the total length', () => {
+    // Twenty-eight days make four weeks, and that is what allows "week 2 of 4"
+    // instead of "week 2".
     expect(blockProgressOn(all, '2026-08-10')?.totalWeeks).toBe(4);
   });
 
-  it('arrondit une durée incomplète vers le haut', () => {
+  it('rounds an incomplete length up', () => {
     const short = block('Peaking', '2026-11-02', '2026-11-11'); // dix jours
     expect(blockProgressOn([short], '2026-11-02')?.totalWeeks).toBe(2);
   });
 
-  it('compte les jours restants, le dernier valant zéro', () => {
+  it('counts the days left, the last one counting as zero', () => {
     expect(blockProgressOn(all, '2026-08-30')?.daysLeft).toBe(0);
     expect(blockProgressOn(all, '2026-08-29')?.daysLeft).toBe(1);
   });
 
-  it('ne dépasse jamais la durée annoncée', () => {
+  it('never runs past the length it announced', () => {
     const progress = blockProgressOn(all, '2026-08-30');
     expect(progress!.week).toBeLessThanOrEqual(progress!.totalWeeks);
   });
 
-  it('rend null dans un trou', () => {
+  it('returns null in a gap', () => {
     expect(blockProgressOn(all, '2026-09-01')).toBeNull();
   });
 });
 
 describe('currentBlock', () => {
-  it('rend le bloc qui couvre aujourd’hui', () => {
+  it('returns the block covering today', () => {
     expect(currentBlock([strength, hypertrophy], '2026-08-20')?.block.label).toBe('Strength');
   });
 
-  it('ignore un bloc planifié dans le futur', () => {
+  it('ignores a block planned for later', () => {
     expect(currentBlock([hypertrophy], '2026-08-20')).toBeNull();
   });
 
-  it('ignore un bloc déjà terminé', () => {
+  it('ignores a block that is already over', () => {
     expect(currentBlock([strength], '2026-09-20')).toBeNull();
   });
 });
 
 describe('orderBlocks', () => {
-  it('trie par date de début', () => {
+  it('sorts by start date', () => {
     expect(orderBlocks([hypertrophy, strength]).map((b) => b.label)).toEqual([
       'Strength',
       'Hypertrophy',
     ]);
   });
 
-  it('ne modifie pas la liste reçue', () => {
+  it('leaves the list it was given alone', () => {
     const input = [hypertrophy, strength];
     orderBlocks(input);
     expect(input.map((b) => b.label)).toEqual(['Hypertrophy', 'Strength']);
@@ -226,13 +226,13 @@ describe('orderBlocks', () => {
 });
 
 describe('tintByBlock', () => {
-  it('donne une teinte différente à deux blocs voisins', () => {
-    // C'est tout le travail : distinguer une période de la suivante.
+  it('gives two neighbouring blocks different tints', () => {
+    // That is the whole job: telling one period from the next.
     const tints = tintByBlock([strength, hypertrophy]);
     expect(tints.get(strength.id)).not.toBe(tints.get(hypertrophy.id));
   });
 
-  it('ne dépend pas de l’ordre du tableau reçu', () => {
+  it('does not depend on the order of the array it is given', () => {
     const forward = tintByBlock([strength, hypertrophy]);
     const backward = tintByBlock([hypertrophy, strength]);
 
@@ -240,13 +240,13 @@ describe('tintByBlock', () => {
     expect(backward.get(hypertrophy.id)).toBe(forward.get(hypertrophy.id));
   });
 
-  it('ne repeint pas un bloc quand on en enregistre un plus ancien', () => {
-    // Le défaut que ce changement corrige : la teinte suivait le rang du bloc
-    // dans la liste, donc consigner un cycle de juillet après coup décalait
-    // tous les suivants — un cycle appris vert revenait jaune.
+  it('does not repaint a block when an older one is recorded', () => {
+    // The flaw this change fixes: the tint followed the block's rank in the
+    // list, so recording a July cycle after the fact pushed every later one
+    // along — and a cycle learned as green came back yellow.
     const before = tintByBlock([strength, hypertrophy]);
 
-    // Créé maintenant, mais commencé avant les deux autres.
+    // Created now, but started before the other two.
     const deload = block('Deload', '2026-07-01', '2026-07-14');
     const after = tintByBlock([deload, strength, hypertrophy]);
 
@@ -254,19 +254,19 @@ describe('tintByBlock', () => {
     expect(after.get(hypertrophy.id)).toBe(before.get(hypertrophy.id));
   });
 
-  it('donne quand même au nouveau venu une teinte à lui', () => {
+  it('still gives the newcomer a tint of its own', () => {
     const deload = block('Deload2', '2026-07-01', '2026-07-14');
     const tints = tintByBlock([deload, strength, hypertrophy]);
 
     expect(new Set(tints.values()).size).toBe(3);
   });
 
-  it('donne au premier bloc la teinte d’accent déjà présente', () => {
-    // Quelqu'un avec un seul cycle voit exactement ce qu'il voyait avant.
+  it('gives the first block the accent tint already in place', () => {
+    // Somebody with a single cycle sees exactly what they saw before.
     expect(tintByBlock([strength]).get(strength.id)).toBe(CYCLE_TINTS[0]);
   });
 
-  it('reboucle au-delà de la palette, sans laisser un bloc sans teinte', () => {
+  it('wraps past the palette, leaving no block without a tint', () => {
     const many = Array.from({ length: 15 }, (_, i) => {
       const day = String(i + 1).padStart(2, '0');
       return block(`B${i}`, `2026-01-${day}`, `2026-01-${day}`);
@@ -279,7 +279,7 @@ describe('tintByBlock', () => {
     }
   });
 
-  it('ne fait jamais se suivre deux fois la même teinte', () => {
+  it('never lets the same tint follow itself', () => {
     const many = Array.from({ length: 13 }, (_, i) => {
       const day = String(i + 1).padStart(2, '0');
       return block(`B${i}`, `2026-01-${day}`, `2026-01-${day}`);

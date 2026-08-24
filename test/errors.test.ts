@@ -16,69 +16,69 @@ beforeEach(async () => {
 const VISIBLE = ['weightKg', 'reps'];
 
 describe('toFieldMessages', () => {
-  it('route une anomalie vers son champ', () => {
+  it('routes an issue to its field', () => {
     const error = new SetValidationError([
-      { field: 'reps', code: 'invalid_reps', message: 'Entier ≥ 1.' },
+      { field: 'reps', code: 'invalid_reps', message: 'Whole number ≥ 1.' },
     ]);
 
     expect(toFieldMessages(error, VISIBLE)).toEqual({
-      fields: { reps: 'Entier ≥ 1.' },
+      fields: { reps: 'Whole number ≥ 1.' },
       general: [],
     });
   });
 
-  it('ne garde que le premier message d’un même champ', () => {
+  it('keeps only the first message for any one field', () => {
     const error = new SetValidationError([
-      { field: 'reps', code: 'a', message: 'Premier.' },
+      { field: 'reps', code: 'a', message: 'First.' },
       { field: 'reps', code: 'b', message: 'Second.' },
     ]);
 
-    expect(toFieldMessages(error, VISIBLE).fields.reps).toBe('Premier.');
+    expect(toFieldMessages(error, VISIBLE).fields.reps).toBe('First.');
   });
 
-  it('remonte en général ce qui vise un champ non affiché', () => {
-    // Sinon le message serait attaché à un input qui n'existe pas à l'écran,
-    // et personne ne le verrait jamais.
+  it('raises as general what aims at a field not on screen', () => {
+    // Otherwise the message would be attached to an input that is not on the
+    // screen, and nobody would ever see it.
     const error = new SetValidationError([
-      { field: 'loggedAt', code: 'invalid_timestamp', message: 'Timestamp invalide.' },
+      { field: 'loggedAt', code: 'invalid_timestamp', message: 'Invalid timestamp.' },
     ]);
 
     const messages = toFieldMessages(error, VISIBLE);
     expect(messages.fields).toEqual({});
-    expect(messages.general).toEqual(['Timestamp invalide.']);
+    expect(messages.general).toEqual(['Invalid timestamp.']);
   });
 
-  it('remonte en général les anomalies de l’entité entière', () => {
+  it('raises as general the issues about the whole entity', () => {
     const error = new SetValidationError([
-      { field: '*', code: 'not_an_object', message: 'Série invalide.' },
+      { field: '*', code: 'not_an_object', message: 'Invalid set.' },
     ]);
 
-    expect(toFieldMessages(error, VISIBLE).general).toEqual(['Série invalide.']);
+    expect(toFieldMessages(error, VISIBLE).general).toEqual(['Invalid set.']);
   });
 
-  it('rend lisible une erreur non typée', () => {
-    const messages = toFieldMessages(new Error('Bloc introuvable : x'), VISIBLE);
-    expect(messages.general).toEqual(['Bloc introuvable : x']);
+  it('makes an untyped error readable', () => {
+    const messages = toFieldMessages(new Error('Block not found: x'), VISIBLE);
+    expect(messages.general).toEqual(['Block not found: x']);
   });
 
-  it('ne laisse jamais rien passer de brut', () => {
-    const messages = toFieldMessages('boum', VISIBLE);
+  it('never lets anything through raw', () => {
+    const messages = toFieldMessages('boom', VISIBLE);
     expect(messages.general).toHaveLength(1);
     expect(messages.fields).toEqual({});
   });
 });
 
-describe('toFieldMessages — sur de vraies erreurs de la base', () => {
+describe('toFieldMessages — on real errors from the database', () => {
   async function squatBlock() {
     const { session } = await startSession();
     return addExerciseToSession(session.id, squat.id);
   }
 
-  it('affiche sous le champ une charge hors bornes', async () => {
+  it('shows a load out of bounds under its field', async () => {
     const block = await squatBlock();
 
     await createSet({ sessionExerciseId: block.id, weightKg: 5000, reps: 5 }).then(
-      () => expect.unreachable('la série aurait dû être refusée'),
+      () => expect.unreachable('the set should have been refused'),
       (error: unknown) => {
         const messages = toFieldMessages(error, VISIBLE);
         expect(messages.fields.weightKg).toContain('1000 kg');
@@ -87,22 +87,22 @@ describe('toFieldMessages — sur de vraies erreurs de la base', () => {
     );
   });
 
-  it('affiche sous le champ des répétitions non entières', async () => {
+  it('shows non-whole reps under their field', async () => {
     const block = await squatBlock();
 
     await createSet({ sessionExerciseId: block.id, weightKg: 60, reps: 5.5 }).then(
-      () => expect.unreachable('la série aurait dû être refusée'),
+      () => expect.unreachable('the set should have been refused'),
       (error: unknown) => {
         expect(toFieldMessages(error, VISIBLE).fields.reps).toContain('whole number');
       },
     );
   });
 
-  it('remonte en bandeau une mesure manquante', async () => {
+  it('raises a missing measure to the banner', async () => {
     const block = await squatBlock();
 
     await createSet({ sessionExerciseId: block.id, reps: 5 }).then(
-      () => expect.unreachable('la série aurait dû être refusée'),
+      () => expect.unreachable('the set should have been refused'),
       (error: unknown) => {
         expect(toFieldMessages(error, VISIBLE).fields.weightKg).toContain('expects a load');
       },
@@ -111,11 +111,11 @@ describe('toFieldMessages — sur de vraies erreurs de la base', () => {
 });
 
 describe('hasMessages', () => {
-  it('est faux sans message', () => {
+  it('is false with no message', () => {
     expect(hasMessages(NO_MESSAGES)).toBe(false);
   });
 
-  it('est vrai avec un message de champ ou un message général', () => {
+  it('is true with a field message or a general one', () => {
     expect(hasMessages({ fields: { reps: 'x' }, general: [] })).toBe(true);
     expect(hasMessages({ fields: {}, general: ['x'] })).toBe(true);
   });

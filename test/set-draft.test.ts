@@ -33,22 +33,22 @@ beforeEach(async () => {
 });
 
 describe('visibleDraftFields', () => {
-  it('affiche charge et répétitions pour une charge externe', () => {
+  it('shows load and reps for an external load', () => {
     // Reps first: the order the fields are read and typed in.
     expect(visibleDraftFields(setFieldRequirements(squat))).toEqual(['reps', 'weightKg']);
   });
 
-  it('masque la charge au poids du corps', () => {
+  it('hides the load for bodyweight', () => {
     expect(visibleDraftFields(setFieldRequirements(pushUps))).toEqual(['reps']);
   });
 
-  it('remplace les répétitions par la durée', () => {
+  it('replaces the reps with the duration', () => {
     expect(visibleDraftFields(setFieldRequirements(plank))).toEqual(['durationSec']);
   });
 });
 
 describe('draftFromSet', () => {
-  it('reprend les valeurs de la série de référence', () => {
+  it('carries over the values of the reference set', () => {
     expect(draftFromSet({ weightKg: 102.5, reps: 5 }, squat)).toEqual({
       weightKg: '102.5',
       reps: '5',
@@ -56,9 +56,9 @@ describe('draftFromSet', () => {
     });
   });
 
-  it('laisse vide un champ interdit, même si la série en porte la valeur', () => {
-    // Garde-fou : une donnée héritée ne doit pas réintroduire un champ que la
-    // validation refuserait.
+  it('leaves a forbidden field empty, value on the set or not', () => {
+    // A guard: inherited data must not bring back a field the validation would
+    // refuse.
     expect(draftFromSet({ weightKg: 20, reps: 25 }, pushUps)).toEqual({
       weightKg: '',
       reps: '25',
@@ -66,45 +66,45 @@ describe('draftFromSet', () => {
     });
   });
 
-  it('remplit la durée pour un exercice au temps', () => {
+  it('fills in the duration for a timed exercise', () => {
     expect(draftFromSet({ durationSec: 90 }, plank).durationSec).toBe('90');
   });
 
-  it('rend un brouillon vide sans série de référence', () => {
+  it('returns an empty draft with no reference set', () => {
     expect(draftFromSet(undefined, squat)).toEqual(EMPTY_DRAFT);
   });
 
-  it('rend un brouillon vide sans exercice', () => {
+  it('returns an empty draft with no exercise', () => {
     expect(draftFromSet({ weightKg: 100, reps: 5 }, undefined)).toEqual(EMPTY_DRAFT);
   });
 
-  it('conserve un lest nul plutôt que de le traiter comme absent', () => {
+  it('keeps an added load of zero rather than treating it as absent', () => {
     expect(draftFromSet({ weightKg: 0, reps: 8 }, pullUp).weightKg).toBe('0');
   });
 });
 
 describe('draftToSetInput', () => {
-  it('produit les mesures attendues par l’exercice', () => {
+  it('produces the measures the exercise expects', () => {
     expect(
-      draftToSetInput('bloc', { weightKg: '102,5', reps: '5', durationSec: '' }, squat),
-    ).toEqual({ sessionExerciseId: 'bloc', weightKg: 102.5, reps: 5 });
+      draftToSetInput('block', { weightKg: '102,5', reps: '5', durationSec: '' }, squat),
+    ).toEqual({ sessionExerciseId: 'block', weightKg: 102.5, reps: 5 });
   });
 
-  it('n’émet aucune charge pour un exercice au poids du corps', () => {
+  it('emits no load for a bodyweight exercise', () => {
     expect(
-      draftToSetInput('bloc', { weightKg: '20', reps: '25', durationSec: '' }, pushUps),
-    ).toEqual({ sessionExerciseId: 'bloc', reps: 25 });
+      draftToSetInput('block', { weightKg: '20', reps: '25', durationSec: '' }, pushUps),
+    ).toEqual({ sessionExerciseId: 'block', reps: 25 });
   });
 
-  it('n’émet aucune répétition pour un exercice au temps', () => {
+  it('emits no reps for a timed exercise', () => {
     expect(
-      draftToSetInput('bloc', { weightKg: '', reps: '10', durationSec: '90' }, plank),
-    ).toEqual({ sessionExerciseId: 'bloc', durationSec: 90 });
+      draftToSetInput('block', { weightKg: '', reps: '10', durationSec: '90' }, plank),
+    ).toEqual({ sessionExerciseId: 'block', durationSec: 90 });
   });
 
-  it('transmet le type de série', () => {
+  it('passes the kind of set through', () => {
     const input = draftToSetInput(
-      'bloc',
+      'block',
       { weightKg: '40', reps: '10', durationSec: '' },
       squat,
       { kind: 'warmup' },
@@ -112,17 +112,17 @@ describe('draftToSetInput', () => {
     expect(input.kind).toBe('warmup');
   });
 
-  it('omet un champ illisible plutôt que de le deviner', () => {
-    const input = draftToSetInput('bloc', { weightKg: 'abc', reps: '5', durationSec: '' }, squat);
+  it('leaves out an unreadable field rather than guessing it', () => {
+    const input = draftToSetInput('block', { weightKg: 'abc', reps: '5', durationSec: '' }, squat);
     expect('weightKg' in input).toBe(false);
   });
 });
 
-describe('draftToSetInput — accord avec la validation', () => {
+describe('draftToSetInput — agreement with the validation', () => {
   /**
-   * Le point non négociable de l'écran : ce que le formulaire produit doit
-   * toujours être accepté par la base. On le vérifie contre la vraie
-   * `createSet`, pas contre une reproduction des règles.
+   * The screen's non-negotiable point: what the form produces has to be
+   * accepted by the database, every time. It is checked against the real
+   * `createSet`, not against a copy of the rules.
    */
   async function blockFor(exercise: Exercise) {
     const { session } = await startSession();
@@ -130,11 +130,11 @@ describe('draftToSetInput — accord avec la validation', () => {
   }
 
   it.each([
-    ['charge externe', () => squat, { weightKg: '102,5', reps: '5', durationSec: '' }],
-    ['poids du corps', () => pushUps, { weightKg: '', reps: '25', durationSec: '' }],
-    ['au temps', () => plank, { weightKg: '', reps: '', durationSec: '90' }],
-    ['lest nul', () => pullUp, { weightKg: '0', reps: '8', durationSec: '' }],
-  ])('un brouillon rempli est accepté — %s', async (_label, pick, draft) => {
+    ['an external load', () => squat, { weightKg: '102,5', reps: '5', durationSec: '' }],
+    ['bodyweight', () => pushUps, { weightKg: '', reps: '25', durationSec: '' }],
+    ['timed', () => plank, { weightKg: '', reps: '', durationSec: '90' }],
+    ['an added load of zero', () => pullUp, { weightKg: '0', reps: '8', durationSec: '' }],
+  ])('a filled-in draft is accepted — %s', async (_label, pick, draft) => {
     const exercise = pick();
     const block = await blockFor(exercise);
 
@@ -142,10 +142,10 @@ describe('draftToSetInput — accord avec la validation', () => {
     expect(set.id).toBeTruthy();
   });
 
-  it('un brouillon pollué par un champ interdit reste accepté', async () => {
-    // L'utilisateur a saisi une charge sur un exercice à charge, puis a
-    // sélectionné un exercice au poids du corps : le champ interdit est filtré
-    // à la conversion, pas refusé par la base.
+  it('a draft polluted by a forbidden field is still accepted', async () => {
+    // The user typed a load on a loaded exercise, then selected a bodyweight
+    // one: the forbidden field is filtered out at conversion, not refused by
+    // the database.
     const block = await blockFor(pushUps);
     const set = await createSet(
       draftToSetInput(block.id, { weightKg: '60', reps: '25', durationSec: '' }, pushUps),
@@ -155,7 +155,7 @@ describe('draftToSetInput — accord avec la validation', () => {
     expect(set.reps).toBe(25);
   });
 
-  it('un champ requis vide produit l’erreur typée de la base', async () => {
+  it('an empty required field produces the typed error from the database', async () => {
     const block = await blockFor(squat);
 
     await expect(
@@ -167,7 +167,7 @@ describe('draftToSetInput — accord avec la validation', () => {
 describe('resolveDraftReference', () => {
   const set = (id: string, sessionId: string, weightKg: number) => ({ id, sessionId, weightKg });
 
-  it('préfère toujours la dernière série du bloc', () => {
+  it('always prefers the last set of the block', () => {
     const block = { sessionId: 's1', sets: [set('a', 's1', 90), set('b', 's1', 100)] };
     const reference = resolveDraftReference(block, [set('vieux', 's0', 60)]);
 
@@ -175,22 +175,22 @@ describe('resolveDraftReference', () => {
     expect(reference.origin).toBe('block');
   });
 
-  it('remonte à l’historique quand le bloc est vide', () => {
+  it('reaches back into the history when the block is empty', () => {
     const reference = resolveDraftReference({ sessionId: 's1', sets: [] }, [set('a', 's0', 95)]);
 
     expect(reference.set).toEqual(set('a', 's0', 95));
     expect(reference.origin).toBe('history');
   });
 
-  it('distingue une série de la séance en cours', () => {
-    // Un second bloc du même exercice dans la même séance : annoncer
-    // « dernière séance » serait faux, la série date de dix minutes.
+  it('tells a set of the running session apart', () => {
+    // A second block of the same exercise within one session: announcing
+    // "last session" would be false, the set is ten minutes old.
     const reference = resolveDraftReference({ sessionId: 's1', sets: [] }, [set('a', 's1', 100)]);
 
     expect(reference.origin).toBe('session');
   });
 
-  it('n’a aucune référence sans bloc ni historique', () => {
+  it('has no reference with neither block nor history', () => {
     expect(resolveDraftReference(undefined, undefined).origin).toBe('none');
     expect(resolveDraftReference({ sessionId: 's1', sets: [] }, []).origin).toBe('none');
     expect(resolveDraftReference({ sessionId: 's1', sets: [] }, undefined).set).toBeUndefined();
@@ -198,63 +198,63 @@ describe('resolveDraftReference', () => {
 });
 
 describe('stepForField', () => {
-  it('suit le pas de progression de l’exercice pour la charge', () => {
+  it('follows the increment set on the exercise for the load', () => {
     expect(stepForField('weightKg', squat)).toBe(2.5);
     expect(stepForField('weightKg', { ...squat, defaultIncrementKg: 5 })).toBe(5);
   });
 
-  it('retombe sur 2,5 kg sans pas déclaré', () => {
+  it('falls back to 2.5 kg with no increment declared', () => {
     expect(stepForField('weightKg', { ...squat, defaultIncrementKg: undefined })).toBe(2.5);
   });
 
-  it('avance d’une répétition et de cinq secondes', () => {
+  it('steps by one rep and by five seconds', () => {
     expect(stepForField('reps', squat)).toBe(1);
     expect(stepForField('durationSec', plank)).toBe(5);
   });
 });
 
 describe('stepDraftValue', () => {
-  it('ajoute et retranche le pas', () => {
+  it('adds the step and takes it away', () => {
     expect(stepDraftValue('100', 2.5)).toBe('102.5');
     expect(stepDraftValue('102.5', -2.5)).toBe('100');
   });
 
-  it('part de zéro sur un champ vide', () => {
+  it('starts from zero on an empty field', () => {
     expect(stepDraftValue('', 2.5)).toBe('2.5');
   });
 
-  it('ne descend jamais sous zéro', () => {
+  it('never goes below zero', () => {
     expect(stepDraftValue('2', -5)).toBe('0');
   });
 
-  it('n’introduit pas d’erreur de flottant', () => {
+  it('introduces no floating-point error', () => {
     expect(stepDraftValue('0.1', 0.2)).toBe('0.3');
   });
 });
 
 describe('draftToSetPatch', () => {
-  it('produit les mesures attendues par l’exercice', () => {
+  it('produces the measures the exercise expects', () => {
     expect(draftToSetPatch({ weightKg: '102.5', reps: '5', durationSec: '' }, squat)).toEqual({
       weightKg: 102.5,
       reps: 5,
     });
   });
 
-  it('n’émet aucune charge pour un exercice au poids du corps', () => {
+  it('emits no load for a bodyweight exercise', () => {
     const patch = draftToSetPatch({ weightKg: '20', reps: '25', durationSec: '' }, pushUps);
     expect(patch).toEqual({ reps: 25 });
   });
 
-  it('transmet le type de série', () => {
+  it('passes the kind of set through', () => {
     const patch = draftToSetPatch({ weightKg: '40', reps: '10', durationSec: '' }, squat, {
       kind: 'warmup',
     });
     expect(patch.kind).toBe('warmup');
   });
 
-  it('efface un champ requis laissé vide, au lieu de le taire', async () => {
-    // L'omettre reviendrait à garder l'ancienne valeur : la correction
-    // paraîtrait ignorée. `undefined` laisse la validation répondre.
+  it('clears a required field left empty, instead of staying silent', async () => {
+    // Leaving it out would keep the old value: the correction would look
+    // ignored. `undefined` lets the validation answer.
     const patch = draftToSetPatch({ weightKg: '', reps: '5', durationSec: '' }, squat);
 
     expect('weightKg' in patch).toBe(true);
@@ -268,7 +268,7 @@ describe('draftToSetPatch', () => {
     await expect(updateSet(set.id, patch)).rejects.toThrow(/expects a load/);
   });
 
-  it('un patch rempli est accepté par la base', async () => {
+  it('a filled-in patch is accepted by the database', async () => {
     const { session } = await startSession();
     const block = await addExerciseToSession(session.id, squat.id);
     const set = await createSet({ sessionExerciseId: block.id, weightKg: 100, reps: 5 });
@@ -285,9 +285,9 @@ describe('draftToSetPatch', () => {
 });
 
 describe('stepRpe', () => {
-  it('démarre à 8 quand rien n’est saisi', () => {
-    // Ni 1 ni un milieu de plage : 8 est la valeur réellement notée, et les
-    // autres sont à un ou deux taps.
+  it('starts at 8 when nothing has been typed', () => {
+    // Neither 1 nor the middle of the range: 8 is the value people actually
+    // record, and the others are one or two taps away.
     expect(stepRpe(null, 1)).toBe(RPE_FIRST);
     expect(stepRpe(null, -1)).toBe(RPE_FIRST);
   });
@@ -297,13 +297,13 @@ describe('stepRpe', () => {
     expect(stepRpe(8, -1)).toBe(7.5);
   });
 
-  it('ne sort pas des bornes', () => {
+  it('does not step outside the bounds', () => {
     expect(stepRpe(RPE_MAX, 1)).toBe(RPE_MAX);
     expect(stepRpe(RPE_MIN, -1)).toBe(RPE_MIN);
   });
 
-  it('ne produit jamais une valeur que la validation refuserait', () => {
-    // La règle est : entre 1 et 10, et rpe × 2 entier.
+  it('never produces a value the validation would refuse', () => {
+    // The rule: between 1 and 10, and rpe × 2 a whole number.
     let value: number | null = null;
     for (let i = 0; i < 60; i += 1) {
       value = stepRpe(value, 1);
@@ -328,49 +328,49 @@ describe('detailPatch', () => {
     ...over,
   });
 
-  it('n’écrit rien quand rien n’a bougé', () => {
+  it('writes nothing when nothing has moved', () => {
     expect(detailPatch(base({ rpe: 8, notes: 'ok' }), base({ rpe: 8, notes: 'ok' }))).toEqual({});
   });
 
-  it('émet undefined, et non une absence, pour un RPE effacé', () => {
-    // La distinction est ce qui permet d'effacer : clé présente à `undefined`
-    // = supprime, clé absente = n'y touche pas.
+  it('emits undefined, not an absence, for a cleared RPE', () => {
+    // The distinction is what makes clearing possible: a key present and set
+    // to `undefined` deletes, an absent key leaves it alone.
     const patch = detailPatch(base({ rpe: 8 }), base({ rpe: null }));
     expect('rpe' in patch).toBe(true);
     expect(patch.rpe).toBeUndefined();
   });
 
-  it('ne stocke pas un échec à false', () => {
+  it('does not store a failure as false', () => {
     const patch = detailPatch(base({ isFailure: true }), base({ isFailure: false }));
     expect('isFailure' in patch).toBe(true);
     expect(patch.isFailure).toBeUndefined();
   });
 
-  it('coupe les espaces des notes', () => {
-    expect(detailPatch(base(), base({ notes: '  épaule droite  ' })).notes).toBe('épaule droite');
+  it('trims the whitespace around notes', () => {
+    expect(detailPatch(base(), base({ notes: '  right shoulder  ' })).notes).toBe('right shoulder');
   });
 
-  it('traite une note devenue vide comme un effacement', () => {
-    const patch = detailPatch(base({ notes: 'gêne' }), base({ notes: '   ' }));
+  it('treats a note gone empty as a clearing', () => {
+    const patch = detailPatch(base({ notes: 'twinge' }), base({ notes: '   ' }));
     expect('notes' in patch).toBe(true);
     expect(patch.notes).toBeUndefined();
   });
 
-  it('ignore un changement qui se réduit à des espaces', () => {
-    expect(detailPatch(base({ notes: 'gêne' }), base({ notes: ' gêne ' }))).toEqual({});
+  it('ignores a change that comes down to whitespace', () => {
+    expect(detailPatch(base({ notes: 'twinge' }), base({ notes: ' twinge ' }))).toEqual({});
   });
 });
 
 describe('detailFromSet', () => {
-  it('distingue « non renseigné » de « zéro »', () => {
+  it('tells "not filled in" from "zero"', () => {
     expect(detailFromSet({})).toEqual({ rpe: null, isFailure: false, notes: '' });
   });
 
-  it('relit ce qui est enregistré', () => {
-    expect(detailFromSet({ rpe: 9.5, isFailure: true, notes: 'dernière' })).toEqual({
+  it('reads back what is stored', () => {
+    expect(detailFromSet({ rpe: 9.5, isFailure: true, notes: 'last one' })).toEqual({
       rpe: 9.5,
       isFailure: true,
-      notes: 'dernière',
+      notes: 'last one',
     });
   });
 });

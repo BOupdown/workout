@@ -29,7 +29,7 @@ beforeEach(async () => {
 });
 
 describe('createExercise', () => {
-  it('dérive id, nameKey, isCustom et createdAt', async () => {
+  it('derives id, nameKey, isCustom and createdAt', async () => {
     const before = Date.now();
     const exercise = await createExercise({
       name: 'Sandbag carry',
@@ -44,7 +44,7 @@ describe('createExercise', () => {
     expect(exercise.archivedAt).toBeUndefined();
   });
 
-  it('vaut false pour perSide par défaut', async () => {
+  it('defaults perSide to false', async () => {
     const exercise = await createExercise({
       name: 'Sandbag carry',
       loadType: 'external',
@@ -53,7 +53,7 @@ describe('createExercise', () => {
     expect(exercise.perSide).toBe(false);
   });
 
-  it('ne matérialise pas les champs optionnels absents', async () => {
+  it('does not materialise the optional fields that are absent', async () => {
     const exercise = await createExercise({
       name: 'Sandbag carry',
       loadType: 'external',
@@ -65,7 +65,7 @@ describe('createExercise', () => {
     expect('defaultIncrementKg' in exercise).toBe(false);
   });
 
-  it('persiste l’exercice et le rend sélectionnable', async () => {
+  it('persists the exercise and makes it pickable', async () => {
     const exercise = await createExercise({
       name: 'Sandbag carry',
       loadType: 'external',
@@ -79,7 +79,7 @@ describe('createExercise', () => {
     expect(selectable.map((e) => e.id)).toContain(exercise.id);
   });
 
-  it('accepte un exercice au poids du corps et au temps', async () => {
+  it('accepts an exercise that is bodyweight and timed', async () => {
     const exercise = await createExercise({
       name: 'Chaise contre le mur',
       loadType: 'bodyweight',
@@ -93,13 +93,13 @@ describe('createExercise', () => {
 });
 
 describe('createExercise — conflit de nom', () => {
-  it('refuse un nom déjà pris à la normalisation près', async () => {
+  it('refuses a name already taken, up to normalisation', async () => {
     await expect(
       createExercise({ name: 'SQUAT', loadType: 'external', metric: 'reps' }),
     ).rejects.toThrow(ExerciseNameConflictError);
   });
 
-  it('refuse aussi une variante accentuée ou ponctuée', async () => {
+  it('refuses an accented or punctuated variant too', async () => {
     await createExercise({ name: 'Sandbag carry', loadType: 'external', metric: 'reps' });
 
     await expect(
@@ -107,20 +107,20 @@ describe('createExercise — conflit de nom', () => {
     ).rejects.toThrow(ExerciseNameConflictError);
   });
 
-  it('porte l’exercice existant pour que l’UI puisse le proposer', async () => {
+  it('carries the existing exercise, so the UI can offer it', async () => {
     await createExercise({ name: 'Squat', loadType: 'bodyweight', metric: 'time' }).then(
-      () => expect.unreachable('la création aurait dû être refusée'),
+      () => expect.unreachable('the creation should have been refused'),
       (err: ExerciseNameConflictError) => {
         expect(err.existing.id).toBe(squat.id);
-        // Le point de la décision : on ne rend jamais silencieusement
-        // l'existant, dont le loadType n'est pas celui demandé.
+        // The point of the decision: the existing one is never returned
+        // silently, its loadType not being the one that was asked for.
         expect(err.existing.loadType).toBe('external');
         expect(err.existing.metric).toBe('reps');
       },
     );
   });
 
-  it('signale qu’un homonyme est archivé', async () => {
+  it('reports that a namesake is archived', async () => {
     const custom = await createExercise({
       name: 'Sandbag carry',
       loadType: 'external',
@@ -129,7 +129,7 @@ describe('createExercise — conflit de nom', () => {
     await archiveExercise(custom.id);
 
     await createExercise({ name: 'Sandbag carry', loadType: 'external', metric: 'reps' }).then(
-      () => expect.unreachable('la création aurait dû être refusée'),
+      () => expect.unreachable('the creation should have been refused'),
       (err: ExerciseNameConflictError) => {
         expect(err.existing.archivedAt).toBeDefined();
         expect(err.message).toContain('archived');
@@ -137,7 +137,7 @@ describe('createExercise — conflit de nom', () => {
     );
   });
 
-  it('n’écrit rien quand le nom est refusé', async () => {
+  it('writes nothing when the name is refused', async () => {
     const before = await db.exercises.count();
     await createExercise({ name: 'SQUAT', loadType: 'external', metric: 'reps' }).catch(() => {});
 
@@ -146,43 +146,43 @@ describe('createExercise — conflit de nom', () => {
 });
 
 describe('findExerciseByName', () => {
-  it('retrouve un exercice à la normalisation près', async () => {
+  it('finds an exercise, up to normalisation', async () => {
     expect((await findExerciseByName('  SQUAT  '))?.id).toBe(squat.id);
   });
 
-  it('ne retourne rien pour un nom libre', async () => {
+  it('returns nothing for a name that is free', async () => {
     expect(await findExerciseByName('Mouvement inexistant')).toBeUndefined();
   });
 });
 
-describe('validation structurelle', () => {
-  it('refuse un nom vide', async () => {
+describe('structural validation', () => {
+  it('refuses an empty name', async () => {
     await expect(
       createExercise({ name: '   ', loadType: 'external', metric: 'reps' }),
     ).rejects.toThrow(ExerciseValidationError);
   });
 
-  it('refuse un nom trop long', async () => {
+  it('refuses a name that is too long', async () => {
     await expect(
       createExercise({ name: 'x'.repeat(81), loadType: 'external', metric: 'reps' }),
     ).rejects.toThrow(ExerciseValidationError);
   });
 
-  it('refuse un groupe musculaire inconnu', async () => {
+  it('refuses an unknown muscle group', async () => {
     await expect(
       createExercise({
         name: 'Sandbag carry',
         loadType: 'external',
         metric: 'reps',
-        muscleGroup: 'tentacules' as Exercise['muscleGroup'],
+        muscleGroup: 'tentacles' as Exercise['muscleGroup'],
       }),
     ).rejects.toThrow(ExerciseValidationError);
   });
 
-  it('refuse un pas de progression sur un exercice au poids du corps', async () => {
+  it('refuses an increment on a bodyweight exercise', async () => {
     await expect(
       createExercise({
-        name: 'Chaise contre le mur',
+        name: 'Wall sit against the door',
         loadType: 'bodyweight',
         metric: 'time',
         defaultIncrementKg: 2.5,
@@ -190,14 +190,14 @@ describe('validation structurelle', () => {
     ).rejects.toThrow(ExerciseValidationError);
   });
 
-  it('refuse un add() direct dont nameKey ne dérive pas de name', async () => {
-    // Sans cet invariant, un couple incohérent contournerait l'index unique
-    // `&nameKey` et fragmenterait l'historique d'un même mouvement.
+  it('refuses a direct add() whose nameKey does not derive from name', async () => {
+    // Without this invariant, an inconsistent pair would slip past the unique
+    // `&nameKey` index and fragment the history of one movement.
     await expect(
       db.exercises.add({
         id: 'incoherent',
         name: 'Bench press',
-        nameKey: 'autre chose',
+        nameKey: 'something else',
         loadType: 'external',
         metric: 'reps',
         perSide: false,
@@ -209,7 +209,7 @@ describe('validation structurelle', () => {
 });
 
 describe('updateExercise — champs libres', () => {
-  it('renomme et redérive nameKey', async () => {
+  it('renames and re-derives nameKey', async () => {
     const updated = await updateExercise(squat.id, { name: 'Squat barre haute' });
 
     expect(updated.name).toBe('Squat barre haute');
@@ -217,7 +217,7 @@ describe('updateExercise — champs libres', () => {
     expect((await db.exercises.get(squat.id))!.nameKey).toBe('squat barre haute');
   });
 
-  it('libère l’ancien nom après renommage', async () => {
+  it('frees the old name after a rename', async () => {
     await updateExercise(squat.id, { name: 'Squat barre haute' });
 
     const recreated = await createExercise({
@@ -228,20 +228,20 @@ describe('updateExercise — champs libres', () => {
     expect(recreated.nameKey).toBe('squat');
   });
 
-  it('refuse un renommage vers un nom déjà pris', async () => {
+  it('refuses a rename onto a name already taken', async () => {
     await expect(updateExercise(squat.id, { name: 'Push-ups' })).rejects.toThrow(
       ExerciseNameConflictError,
     );
     expect((await db.exercises.get(squat.id))!.name).toBe('Squat');
   });
 
-  it('accepte un renommage cosmétique qui ne change pas nameKey', async () => {
+  it('accepts a cosmetic rename that leaves nameKey alone', async () => {
     const updated = await updateExercise(squat.id, { name: 'SQUAT' });
     expect(updated.name).toBe('SQUAT');
     expect(updated.nameKey).toBe('squat');
   });
 
-  it('modifie groupe musculaire, pas de progression et notes', async () => {
+  it('edits muscle group, increment and notes', async () => {
     const updated = await updateExercise(squat.id, {
       muscleGroup: 'glutes',
       defaultIncrementKg: 5,
@@ -253,14 +253,14 @@ describe('updateExercise — champs libres', () => {
     expect(updated.notes).toBe('ceinture');
   });
 
-  it('efface un champ optionnel passé à undefined', async () => {
+  it('clears an optional field handed undefined', async () => {
     const updated = await updateExercise(squat.id, { defaultIncrementKg: undefined });
 
     expect(updated.defaultIncrementKg).toBeUndefined();
     expect((await db.exercises.get(squat.id))!.defaultIncrementKg).toBeUndefined();
   });
 
-  it('laisse intactes les clés absentes du patch', async () => {
+  it('leaves untouched the keys the patch does not carry', async () => {
     const updated = await updateExercise(squat.id, { notes: 'test' });
 
     expect(updated.name).toBe('Squat');
@@ -268,29 +268,29 @@ describe('updateExercise — champs libres', () => {
     expect(updated.defaultIncrementKg).toBe(squat.defaultIncrementKg);
   });
 
-  it('lève sur un exercice inconnu', async () => {
+  it('throws for an exercise it does not know', async () => {
     await expect(updateExercise('inconnu', { notes: 'x' })).rejects.toThrow(/not found/);
   });
 });
 
-describe('updateExercise — nature verrouillée par l’historique', () => {
-  /** Enregistre une série de squat, pour que l'exercice soit « utilisé ». */
+describe('updateExercise — nature locked by the history', () => {
+  /** Logs one squat set, so the exercise counts as "in use". */
   async function logOneSquatSet() {
     const { session } = await startSession();
     const block = await addExerciseToSession(session.id, squat.id);
     await createSet({ sessionExerciseId: block.id, weightKg: 100, reps: 5 });
   }
 
-  it('autorise le changement de nature tant qu’aucune série n’existe', async () => {
+  it('allows the nature to change while no set exists', async () => {
     const updated = await updateExercise(squat.id, { loadType: 'bodyweight', metric: 'time' });
 
     expect(updated.loadType).toBe('bodyweight');
     expect(updated.metric).toBe('time');
   });
 
-  it('efface le pas de progression en basculant au poids du corps', async () => {
-    // Le catalogue donne 2,5 kg au squat ; devenu bodyweight, ce pas n'a plus
-    // de sens. C'est une conséquence dérivée, pas une erreur à remonter.
+  it('clears the increment when switching to bodyweight', async () => {
+    // The catalogue gives the squat a 2.5 kg step; once it is bodyweight, that
+    // step means nothing. A derived consequence, not an error to report.
     expect(squat.defaultIncrementKg).toBe(2.5);
     const updated = await updateExercise(squat.id, { loadType: 'bodyweight' });
 
@@ -298,13 +298,13 @@ describe('updateExercise — nature verrouillée par l’historique', () => {
     expect('defaultIncrementKg' in (await db.exercises.get(squat.id))!).toBe(false);
   });
 
-  it('conserve le pas de progression pour les autres loadType', async () => {
+  it('keeps the increment for the other loadTypes', async () => {
     const updated = await updateExercise(squat.id, { loadType: 'weighted_bodyweight' });
     expect(updated.defaultIncrementKg).toBe(2.5);
   });
 
   it.each(['loadType', 'metric', 'perSide'] as const)(
-    'refuse de modifier %s dès qu’une série existe',
+    'refuses to change %s once a set exists',
     async (field) => {
       await logOneSquatSet();
 
@@ -318,12 +318,12 @@ describe('updateExercise — nature verrouillée par l’historique', () => {
     },
   );
 
-  it('porte le nombre de séries et les champs verrouillés', async () => {
+  it('carries the number of sets and the locked fields', async () => {
     await logOneSquatSet();
     await logOneSquatSet();
 
     await updateExercise(squat.id, { loadType: 'bodyweight', perSide: true }).then(
-      () => expect.unreachable('la modification aurait dû être refusée'),
+      () => expect.unreachable('the edit should have been refused'),
       (err: ExerciseInUseError) => {
         expect(err.setCount).toBe(2);
         expect(err.lockedFields).toEqual(['loadType', 'perSide']);
@@ -332,7 +332,7 @@ describe('updateExercise — nature verrouillée par l’historique', () => {
     );
   });
 
-  it('compte aussi les échauffements', async () => {
+  it('counts the warm-ups too', async () => {
     const { session } = await startSession();
     const block = await addExerciseToSession(session.id, squat.id);
     await createSet({ sessionExerciseId: block.id, kind: 'warmup', weightKg: 40, reps: 10 });
@@ -342,11 +342,11 @@ describe('updateExercise — nature verrouillée par l’historique', () => {
     );
   });
 
-  it('traite comme un no-op le renvoi de la valeur courante', async () => {
+  it('treats sending the current value back as a no-op', async () => {
     await logOneSquatSet();
 
-    // L'UI renvoie souvent le formulaire entier : réécrire la valeur inchangée
-    // d'un champ verrouillé ne doit pas être une erreur.
+    // The UI often sends the whole form back: rewriting the unchanged value of
+    // a locked field must not be an error.
     const updated = await updateExercise(squat.id, {
       loadType: 'external',
       metric: 'reps',
@@ -357,14 +357,14 @@ describe('updateExercise — nature verrouillée par l’historique', () => {
     expect(updated.notes).toBe('barre haute');
   });
 
-  it('laisse les champs libres modifiables sur un exercice utilisé', async () => {
+  it('leaves the free fields editable on an exercise in use', async () => {
     await logOneSquatSet();
     const updated = await updateExercise(squat.id, { name: 'Squat barre haute' });
 
     expect(updated.name).toBe('Squat barre haute');
   });
 
-  it('n’écrit rien quand la modification est refusée', async () => {
+  it('writes nothing when the edit is refused', async () => {
     await logOneSquatSet();
     await updateExercise(squat.id, { loadType: 'bodyweight', notes: 'perdu' }).catch(() => {});
 
@@ -375,14 +375,14 @@ describe('updateExercise — nature verrouillée par l’historique', () => {
 });
 
 describe('archivage', () => {
-  it('sort l’exercice du sélecteur', async () => {
+  it('takes the exercise out of the picker', async () => {
     await archiveExercise(squat.id);
 
     const selectable = await listSelectableExercises();
     expect(selectable.map((e) => e.id)).not.toContain(squat.id);
   });
 
-  it('le fait apparaître dans les archives', async () => {
+  it('makes it appear in the archive', async () => {
     await archiveExercise(squat.id);
 
     const archived = await listArchivedExercises();
@@ -396,7 +396,7 @@ describe('archivage', () => {
     expect(second.archivedAt).toBe(first.archivedAt);
   });
 
-  it('empêche de l’ajouter à une nouvelle séance', async () => {
+  it('prevents it being added to a new session', async () => {
     await archiveExercise(squat.id);
     const { session } = await startSession();
 
@@ -405,13 +405,13 @@ describe('archivage', () => {
     );
   });
 
-  it('lève sur un exercice inconnu', async () => {
+  it('throws for an exercise it does not know', async () => {
     await expect(archiveExercise('inconnu')).rejects.toThrow(/not found/);
   });
 });
 
 describe('archivage — l’historique reste intact', () => {
-  it('conserve les séries déjà enregistrées', async () => {
+  it('keeps the sets already recorded', async () => {
     const { session } = await startSession();
     const block = await addExerciseToSession(session.id, squat.id);
     await createSet({ sessionExerciseId: block.id, weightKg: 100, reps: 5 });
@@ -423,9 +423,9 @@ describe('archivage — l’historique reste intact', () => {
     expect(await db.sessionExercises.get(block.id)).toBeDefined();
   });
 
-  it('laisse finir une séance en cours qui contient déjà l’exercice', async () => {
-    // Asymétrie volontaire : archiver bloque l'ajout d'un *nouveau* bloc, mais
-    // pas la saisie dans un bloc déjà ouvert. On n'interrompt pas une séance.
+  it('lets a running session that already holds the exercise finish', async () => {
+    // A deliberate asymmetry: archiving blocks adding a *new* block, but not
+    // logging into one already open. A session in progress is not interrupted.
     const { session } = await startSession();
     const block = await addExerciseToSession(session.id, squat.id);
     await createSet({ sessionExerciseId: block.id, weightKg: 100, reps: 5 });
@@ -437,8 +437,8 @@ describe('archivage — l’historique reste intact', () => {
   });
 });
 
-describe('désarchivage', () => {
-  it('remet l’exercice dans le sélecteur', async () => {
+describe('unarchiving', () => {
+  it('puts the exercise back in the picker', async () => {
     await archiveExercise(squat.id);
     const restored = await unarchiveExercise(squat.id);
 
@@ -447,7 +447,7 @@ describe('désarchivage', () => {
     expect(await listArchivedExercises()).toHaveLength(0);
   });
 
-  it('retire bien la propriété plutôt que de la mettre à undefined', async () => {
+  it('really removes the property rather than setting it to undefined', async () => {
     await archiveExercise(squat.id);
     await unarchiveExercise(squat.id);
 
@@ -455,12 +455,12 @@ describe('désarchivage', () => {
     expect('archivedAt' in reloaded).toBe(false);
   });
 
-  it('est idempotent sur un exercice non archivé', async () => {
+  it('is idempotent on an exercise that is not archived', async () => {
     const untouched = await unarchiveExercise(pushUps.id);
     expect(untouched.archivedAt).toBeUndefined();
   });
 
-  it('permet de nouveau de l’ajouter à une séance', async () => {
+  it('allows it to be added to a session again', async () => {
     await archiveExercise(squat.id);
     await unarchiveExercise(squat.id);
 

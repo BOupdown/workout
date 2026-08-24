@@ -20,9 +20,9 @@ beforeEach(async () => {
   cycling = await exerciseByKey('cycling');
 });
 
-describe('supprimer un exercice du catalogue', () => {
-  it('le retire du sélecteur pour de bon', async () => {
-    // L'archivage le masque ; ici il n'existe plus.
+describe('deleting an exercise from the catalogue', () => {
+  it('takes it out of the picker for good', async () => {
+    // Archiving hides it; here it no longer exists.
     await deleteExercise(cycling.id);
 
     const offered = await listSelectableExercises();
@@ -31,7 +31,7 @@ describe('supprimer un exercice du catalogue', () => {
     expect(await db.exercises.where('archivedAt').above(0).count()).toBe(0);
   });
 
-  it('marche aussi sur un exercice créé à la main', async () => {
+  it('works on a hand-made exercise too', async () => {
     const mine = await createExercise({
       name: CUSTOM_EXERCISE_NAME,
       loadType: 'external',
@@ -43,9 +43,9 @@ describe('supprimer un exercice du catalogue', () => {
     expect(await db.exercises.get(mine.id)).toBeUndefined();
   });
 
-  it('refuse dès qu’une seule série existe, sans rien effacer', async () => {
-    // Une `SetEntry` pointe sur son exercice : le supprimer effacerait des
-    // séances. C'est le cas où l'archivage est la bonne réponse.
+  it('refuses as soon as one set exists, erasing nothing', async () => {
+    // A `SetEntry` points at its exercise: deleting it would erase training.
+    // This is the case where archiving is the right answer.
     const { session } = await startSession();
     const block = await addExerciseToSession(session.id, squat.id);
     await createSet({ sessionExerciseId: block.id, weightKg: 100, reps: 5, kind: 'work' });
@@ -56,10 +56,9 @@ describe('supprimer un exercice du catalogue', () => {
     expect(await db.sets.count()).toBe(1);
   });
 
-  it('refuse même sur une série d’échauffement', async () => {
-    // Un échauffement est écarté des courbes et des records, mais c'est une
-    // séance quand même : la règle est « une série existe », pas « une série
-    // qui compte ».
+  it('refuses even for a warm-up set', async () => {
+    // A warm-up is kept out of the curves and the records, but it is training
+    // all the same: the rule is "a set exists", not "a set that counts".
     const { session } = await startSession();
     const block = await addExerciseToSession(session.id, squat.id);
     await createSet({ sessionExerciseId: block.id, weightKg: 40, reps: 8, kind: 'warmup' });
@@ -67,7 +66,7 @@ describe('supprimer un exercice du catalogue', () => {
     await expect(deleteExercise(squat.id)).rejects.toBeInstanceOf(ExerciseHasHistoryError);
   });
 
-  it('dit combien de séries bloquent', async () => {
+  it('says how many sets are in the way', async () => {
     const { session } = await startSession();
     const block = await addExerciseToSession(session.id, squat.id);
     await createSet({ sessionExerciseId: block.id, weightKg: 100, reps: 5, kind: 'work' });
@@ -76,9 +75,9 @@ describe('supprimer un exercice du catalogue', () => {
     await expect(deleteExercise(squat.id)).rejects.toMatchObject({ setCount: 2 });
   });
 
-  it('emporte un bloc de séance resté vide', async () => {
-    // Ajouté à une séance puis jamais chargé : le bloc pointerait sur une
-    // ligne disparue, et chaque lecture de la séance aurait à s'en défendre.
+  it('takes a session block that stayed empty with it', async () => {
+    // Added to a session and then never loaded: the block would point at a row
+    // that is gone, and every read of the session would have to defend itself.
     const { session } = await startSession();
     await addExerciseToSession(session.id, cycling.id);
 
@@ -87,7 +86,7 @@ describe('supprimer un exercice du catalogue', () => {
     expect(await db.sessionExercises.where('exerciseId').equals(cycling.id).count()).toBe(0);
   });
 
-  it('libère le nom', async () => {
+  it('frees the name', async () => {
     await deleteExercise(cycling.id);
 
     await expect(
@@ -106,14 +105,14 @@ describe('supprimer un exercice du catalogue', () => {
  * database at the current version replays nothing — which is how the first
  * version of these tests passed with the guard deleted.
  */
-describe('une suppression survit à une mise à jour du catalogue', () => {
+describe('a deletion survives a catalogue update', () => {
   /** Replays the backfill the way a future schema version would. */
   const replayBackfill = () =>
     db.transaction('rw', db.exercises, db.retiredExercises, (transaction) =>
       addMissingSeedExercises(transaction),
     );
 
-  it('ne réintroduit pas un exercice supprimé', async () => {
+  it('does not hand back a deleted exercise', async () => {
     await deleteExercise(cycling.id);
     const after = await db.exercises.count();
 
@@ -123,7 +122,7 @@ describe('une suppression survit à une mise à jour du catalogue', () => {
     expect(await db.exercises.where('nameKey').equals(cycling.nameKey).count()).toBe(0);
   });
 
-  it('n’en réintroduit aucun, sur plusieurs suppressions', async () => {
+  it('hands none of them back, across several deletions', async () => {
     const running = await exerciseByKey('running');
     await deleteExercise(cycling.id);
     await deleteExercise(running.id);
@@ -134,9 +133,9 @@ describe('une suppression survit à une mise à jour du catalogue', () => {
     expect(await db.exercises.where('nameKey').equals(running.nameKey).count()).toBe(0);
   });
 
-  it('réintroduit bien ce qui n’a pas été supprimé', async () => {
-    // Le garde-fou du garde-fou : si le backfill n'ajoutait plus rien du tout,
-    // les tests ci-dessus passeraient pour la mauvaise raison.
+  it('does add back what was never deleted', async () => {
+    // The guard on the guard: if the backfill stopped adding anything at all,
+    // the tests above would pass for the wrong reason.
     await db.exercises.delete(squat.id);
 
     await replayBackfill();
@@ -144,7 +143,7 @@ describe('une suppression survit à une mise à jour du catalogue', () => {
     expect(await db.exercises.where('nameKey').equals(squat.nameKey).count()).toBe(1);
   });
 
-  it('ne duplique pas ce qui est déjà là', async () => {
+  it('does not duplicate what is already there', async () => {
     const before = await db.exercises.count();
 
     await replayBackfill();

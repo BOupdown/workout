@@ -14,54 +14,54 @@ beforeEach(resetDatabase);
 const valid = { nameKey: 'jump rope', retiredAt: 1_787_000_000_000 };
 
 describe('checkRetiredExerciseShape', () => {
-  it('accepte une pierre tombale bien formée', () => {
+  it('accepts a well-formed tombstone', () => {
     expect(checkRetiredExerciseShape(valid)).toEqual([]);
   });
 
-  it('refuse ce qui n’est pas un objet', () => {
+  it('refuses what is not an object', () => {
     expect(checkRetiredExerciseShape(null)).toHaveLength(1);
     expect(checkRetiredExerciseShape('jump rope')).toHaveLength(1);
   });
 
-  it('refuse une clé vide, absente ou blanche', () => {
-    // C'est la clé primaire : Dexie refuserait de son côté, mais par une erreur
-    // de chemin de clé, pas par une phrase sur le fichier.
+  it('refuses a key that is empty, absent or blank', () => {
+    // This is the primary key: Dexie would refuse it too, but through a key
+    // path error rather than a sentence about the file.
     for (const nameKey of [undefined, '', '   ', 42]) {
       const issues = checkRetiredExerciseShape({ ...valid, nameKey });
       expect(issues.map((issue) => issue.field)).toContain('nameKey');
     }
   });
 
-  it('refuse un instant de suppression absurde', () => {
+  it('refuses an absurd deletion instant', () => {
     for (const retiredAt of [undefined, 0, -1, 'hier', Number.NaN]) {
       const issues = checkRetiredExerciseShape({ ...valid, retiredAt });
       expect(issues.map((issue) => issue.field)).toContain('retiredAt');
     }
   });
 
-  it('n’exige pas une forme canonique de la clé', () => {
-    // Délibéré : `toNameKey` produit les clés, et vérifier qu'elles en sont un
-    // point fixe transformerait tout futur changement de cette normalisation en
-    // un refus des propres anciennes sauvegardes de l'utilisateur.
+  it('does not demand a canonical form of the key', () => {
+    // Deliberate: `toNameKey` produces the keys, and asserting they are a fixed
+    // point of it would turn any future change to that normalisation into a
+    // refusal of the user's own older backups.
     expect(checkRetiredExerciseShape({ ...valid, nameKey: 'Jump-Rope' })).toEqual([]);
   });
 
-  it('se range sous ValidationError, comme les autres', () => {
-    // Les écrans attrapent la classe de base ; une erreur hors de cette
-    // hiérarchie s'afficherait comme un échec inconnu.
+  it('sits under ValidationError, like the others', () => {
+    // The screens catch the base class; an error outside that hierarchy would
+    // show up as an unknown failure.
     expect(new RetiredExerciseValidationError([])).toBeInstanceOf(ValidationError);
   });
 });
 
-describe('le garde-fou sur la table', () => {
-  it('refuse une écriture directe mal formée', async () => {
+describe('the guard on the table', () => {
+  it('refuses a malformed direct write', async () => {
     await expect(
       db.retiredExercises.put({ nameKey: '', retiredAt: 1 } as never),
     ).rejects.toBeInstanceOf(RetiredExerciseValidationError);
   });
 
-  it('laisse passer ce que `deleteExercise` écrit', async () => {
-    // Le garde-fou ne doit pas refuser le seul chemin d'écriture réel.
+  it('lets through what `deleteExercise` writes', async () => {
+    // The guard must not refuse the one real write path.
     const jumpRope = await exerciseByKey('jump rope');
 
     await deleteExercise(jumpRope.id);
@@ -70,7 +70,7 @@ describe('le garde-fou sur la table', () => {
   });
 });
 
-describe('une sauvegarde aux pierres tombales abîmées', () => {
+describe('a backup with damaged tombstones', () => {
   /** A real backup, with one tombstone replaced by junk. */
   async function backupWithBrokenTombstone(broken: unknown): Promise<BackupFile> {
     const jumpRope = await exerciseByKey('jump rope');
@@ -81,18 +81,18 @@ describe('une sauvegarde aux pierres tombales abîmées', () => {
     return backup;
   }
 
-  it('est refusée par une erreur de validation, pas par un échec de clé', async () => {
-    // Le fond du correctif : sans le garde-fou, Dexie rejette sur un chemin de
-    // clé introuvable — un message sur une transaction, que personne ne peut
-    // relier à son fichier.
+  it('is refused by a validation error, not by a key failure', async () => {
+    // The substance of the fix: without the guard, Dexie rejects on a key path
+    // it cannot find — a message about a transaction, which nobody can connect
+    // to their file.
     const backup = await backupWithBrokenTombstone({ retiredAt: 1 });
 
     await expect(importDatabase(backup)).rejects.toBeInstanceOf(RetiredExerciseValidationError);
   });
 
-  it('ne laisse rien derrière elle', async () => {
-    // L'import efface avant d'écrire. Le refus doit donc annuler jusqu'aux
-    // effacements, sinon un fichier abîmé vide la base.
+  it('leaves nothing behind it', async () => {
+    // The import clears before it writes. The refusal therefore has to roll the
+    // clearing back too, or a damaged file empties the database.
     const backup = await backupWithBrokenTombstone({ nameKey: 'squat', retiredAt: -5 });
     const exercisesBefore = await db.exercises.count();
 
@@ -102,7 +102,7 @@ describe('une sauvegarde aux pierres tombales abîmées', () => {
     expect(await db.retiredExercises.count()).toBe(1);
   });
 
-  it('restaure normalement quand elles sont saines', async () => {
+  it('restores as usual when they are sound', async () => {
     const jumpRope = await exerciseByKey('jump rope');
     await deleteExercise(jumpRope.id);
     const backup = await exportDatabase();

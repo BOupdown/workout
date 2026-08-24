@@ -17,7 +17,7 @@ const rules = (
 ): Pick<Exercise, 'loadType' | 'metric' | 'perSide'> => ({ loadType, metric, perSide });
 
 describe('parseNumberInput', () => {
-  it('accepte la virgule décimale française', () => {
+  it('accepts a decimal comma', () => {
     expect(parseNumberInput('102,5')).toBe(102.5);
   });
 
@@ -29,23 +29,23 @@ describe('parseNumberInput', () => {
     expect(parseNumberInput('  60  ')).toBe(60);
   });
 
-  it('accepte un zéro', () => {
-    // Une pullUp sans lest vaut 0, ce n'est pas une absence de valeur.
+  it('accepts a zero', () => {
+    // A pull-up with no added load is 0, which is not a missing value.
     expect(parseNumberInput('0')).toBe(0);
   });
 
-  it('accepte une décimale en cours de frappe', () => {
+  it('accepts a decimal still being typed', () => {
     expect(parseNumberInput('102,')).toBe(102);
     expect(parseNumberInput(',5')).toBe(0.5);
   });
 
-  it('retourne null sur un champ vide', () => {
+  it('returns null for an empty field', () => {
     expect(parseNumberInput('')).toBeNull();
     expect(parseNumberInput('   ')).toBeNull();
   });
 
   it.each(['abc', '1 2', '1,2,3', '0x10', '1e5', '+5', '∞'])(
-    'retourne null sur « %s »',
+    'returns null for "%s"',
     (input) => {
       expect(parseNumberInput(input)).toBeNull();
     },
@@ -53,19 +53,19 @@ describe('parseNumberInput', () => {
 });
 
 describe('formatNumber', () => {
-  it('rend la virgule décimale', () => {
+  it('renders the decimal comma', () => {
     expect(formatNumber(102.5)).toBe('102.5');
   });
 
-  it('n’ajoute pas de décimale inutile', () => {
+  it('adds no needless decimal', () => {
     expect(formatNumber(60)).toBe('60');
   });
 
-  it('absorbe les erreurs de flottant', () => {
+  it('absorbs floating-point error', () => {
     expect(formatNumber(0.1 + 0.2)).toBe('0.3');
   });
 
-  it('fait l’aller-retour avec parseNumberInput', () => {
+  it('round-trips through parseNumberInput', () => {
     expect(parseNumberInput(formatNumber(102.5))).toBe(102.5);
   });
 });
@@ -83,7 +83,7 @@ describe('formatDuration', () => {
     [60, '1:00'],
     [0, '0:00'],
     [3661, '1:01:01'],
-  ])('rend %i secondes en « %s »', (seconds, expected) => {
+  ])('renders %i seconds as "%s"', (seconds, expected) => {
     expect(formatDuration(seconds)).toBe(expected);
   });
 });
@@ -97,98 +97,97 @@ describe('formatElapsed', () => {
     [60 * 60_000, '1h 00m'],
     [72 * 60_000, '1h 12m'],
     [125 * 60_000, '2h 05m'],
-  ])('rend %i ms en « %s »', (ms, expected) => {
+  ])('renders %i ms as "%s"', (ms, expected) => {
     expect(formatElapsed(ms)).toBe(expected);
   });
 
-  it('ne part pas en négatif si l’horloge dérive', () => {
+  it('does not go negative when the clock drifts', () => {
     expect(formatElapsed(-5000)).toBe('0 min');
   });
 });
 
 describe('describeSet', () => {
-  /** Ce qui se lit, dans l'ordre. */
+  /** What is read, in order. */
   const reading = (...args: Parameters<typeof describeSet>) =>
     describeSet(...args)
       .map((part) => part.text)
       .join(' ');
 
-  /** La partie mise en avant, celle qu'on scanne dans une colonne. */
+  /** The part carrying the emphasis, the one scanned down a column. */
   const emphasised = (...args: Parameters<typeof describeSet>) =>
     describeSet(...args)
       .filter((part) => part.strong)
       .map((part) => part.text);
 
-  it('lit les répétitions avant la charge', () => {
-    // Comme on les saisit : reps à gauche, charge à droite.
+  it('reads reps before load', () => {
+    // The way they are typed: reps on the left, load on the right.
     expect(reading({ weightKg: 102.5, reps: 5 }, rules('external', 'reps'))).toBe('5 × 102.5');
   });
 
-  it('garde la charge en avant, même en seconde position', () => {
-    // L'ordre et l'emphase sont deux questions séparées. Sur un historique
-    // on parcourt une colonne de charges — 100, 102.5, 105 — et c'est ce
-    // nombre-là qui doit accrocher l'œil, pas le nombre de répétitions.
+  it('keeps the load emphasised, second though it comes', () => {
+    // Order and emphasis are two separate questions. Reading a history means
+    // running down a column of loads — 100, 102.5, 105 — and that is the number
+    // which has to catch the eye, not the rep count.
     expect(emphasised({ weightKg: 102.5, reps: 5 }, rules('external', 'reps'))).toEqual(['102.5']);
   });
 
-  it('met les répétitions en avant au poids du corps', () => {
-    // Là ce sont elles qui progressent, donc elles sont à la fois premières
-    // et mises en avant.
+  it('emphasises the reps for bodyweight', () => {
+    // There they are what progresses, so they come both first and emphasised.
     expect(reading({ reps: 25 }, rules('bodyweight', 'reps'))).toBe('25 reps');
     expect(emphasised({ reps: 25 }, rules('bodyweight', 'reps'))).toEqual(['25']);
   });
 
-  it('signale un exercice compté par côté, avec charge', () => {
-    // Le modèle porte `perSide` depuis le premier schéma pour trancher
-    // « 10 reps : 10 ou 20 ? ». Tant qu'il n'était affiché nulle part,
-    // l'ambiguïté qu'il existe pour lever restait entière.
+  it('flags an exercise counted per side, load included', () => {
+    // The model has carried `perSide` since the first schema, to settle
+    // "10 reps: ten or twenty?". While it appeared nowhere on screen, the very
+    // ambiguity it exists to remove stayed exactly where it was.
     expect(reading({ weightKg: 20, reps: 10 }, rules('external', 'reps', true))).toBe(
       '10 × 20/side',
     );
   });
 
-  it('met « /side » à la fin, pas au milieu', () => {
-    // Cette assertion disait l'inverse, au motif que « 20/side » pourrait se
-    // lire 20 kg par côté. En salle la série se dit « 10 fois 20, par côté »,
-    // et couper les deux nombres pour n'en qualifier qu'un se lit plus mal que
-    // l'ambiguïté que ça évite.
+  it('puts "/side" at the end, not in the middle', () => {
+    // This assertion used to say the opposite, on the grounds that "20/side"
+    // could read as 20 kg a side. In the gym the set is said "ten times twenty,
+    // each side", and splitting the two figures to qualify only one of them
+    // reads worse than the ambiguity it avoids.
     const parts = describeSet({ weightKg: 20, reps: 10 }, rules('external', 'reps', true));
     expect(parts.at(-1)?.text).toBe('20/side');
     expect(parts.some((part) => part.text.startsWith('10/side'))).toBe(false);
   });
 
-  it('le signale aussi au poids du corps', () => {
+  it('flags it for bodyweight too', () => {
     expect(reading({ reps: 12 }, rules('bodyweight', 'reps', true))).toBe('12 reps/side');
   });
 
-  it('ne dit rien quand l’exercice est bilatéral', () => {
+  it('says nothing when the exercise is bilateral', () => {
     expect(reading({ weightKg: 100, reps: 5 }, rules('external', 'reps'))).toBe('5 × 100');
   });
 
-  it('signale aussi une position tenue par côté', () => {
-    // Cette assertion disait l'inverse — « une durée n'a pas de côtés » — et
-    // tenait tant qu'aucun exercice livré n'était à la fois au temps et
-    // unilatéral. Le gainage latéral en a deux : 45 s en font 90 de travail.
+  it('flags a hold counted per side as well', () => {
+    // This assertion used to say the opposite — "a duration has no sides" —
+    // and held while no shipped exercise was both timed and unilateral. The
+    // side plank has two: 45 s of it is 90 s of work.
     expect(reading({ durationSec: 45 }, rules('bodyweight', 'time', true))).toBe('0:45 per side');
     expect(emphasised({ durationSec: 45 }, rules('bodyweight', 'time', true))).toEqual(['0:45']);
   });
 
-  it('laisse une durée bilatérale nue', () => {
+  it('leaves a bilateral duration bare', () => {
     expect(reading({ durationSec: 90 }, rules('bodyweight', 'time'))).toBe('1:30');
   });
 
-  it('reste lisible sur une durée manquante, par côté ou non', () => {
+  it('stays readable with the duration missing, per side or not', () => {
     expect(reading({}, rules('bodyweight', 'time', true))).toBe('?');
     expect(reading({}, rules('bodyweight', 'time'))).toBe('?');
   });
 
-  it('reste lisible sur une série incomplète', () => {
+  it('stays readable on an incomplete set', () => {
     expect(reading({}, rules('external', 'reps'))).toBe('?');
     expect(reading({}, rules('bodyweight', 'time'))).toBe('?');
   });
 
-  it('n’a jamais plus d’une partie mise en avant', () => {
-    // Deux gros nombres côte à côte, c'est aucun des deux.
+  it('never carries more than one emphasised part', () => {
+    // Two big numbers side by side is neither of them.
     const cases: Parameters<typeof describeSet>[] = [
       [{ weightKg: 100, reps: 5 }, rules('external', 'reps')],
       [{ reps: 12 }, rules('bodyweight', 'reps', true)],
@@ -204,30 +203,30 @@ describe('describeSet', () => {
 });
 
 describe('formatSetSummary', () => {
-  it('rend répétitions × charge', () => {
+  it('renders reps × load', () => {
     expect(formatSetSummary({ weightKg: 100, reps: 5 }, rules('external', 'reps'))).toBe(
       '5 × 100',
     );
   });
 
-  it('n’affiche que les répétitions au poids du corps', () => {
+  it('shows the reps alone for bodyweight', () => {
     expect(formatSetSummary({ reps: 25 }, rules('bodyweight', 'reps'))).toBe('25 reps');
   });
 
-  it('n’affiche que les répétitions quand le lest est nul', () => {
-    // « 0 × 8 » n'apprendrait rien : c'est une pullUp à vide.
+  it('shows the reps alone when the added load is zero', () => {
+    // "0 × 8" would teach nothing: it is a pull-up with nothing on the belt.
     expect(
       formatSetSummary({ weightKg: 0, reps: 8 }, rules('weighted_bodyweight', 'reps')),
     ).toBe('8 reps');
   });
 
-  it('marque l’assistance comme retirée', () => {
+  it('marks the assistance as taken off', () => {
     expect(formatSetSummary({ weightKg: 20, reps: 8 }, rules('assisted', 'reps'))).toBe(
       '8 × -20',
     );
   });
 
-  it('rend une durée pour un exercice au temps', () => {
+  it('renders a duration for a timed exercise', () => {
     expect(formatSetSummary({ durationSec: 90 }, rules('bodyweight', 'time'))).toBe('1:30');
   });
 });

@@ -34,16 +34,16 @@ afterEach(() => {
 });
 
 /*
- * Budget large, et pour une raison structurelle plutôt qu'une course :
- * `freshScreen` appelle `vi.resetModules()`, donc chaque test réévalue tout le
- * graphe d'imports de l'écran — Dexie, les icônes, toutes les feuilles. C'est
- * ~875 ms par test en isolation, et bien plus quand la suite tourne en
- * parallèle. Les 5 s par défaut suffisaient jusqu'à ce que le graphe grossisse.
+ * A generous budget, for a structural reason rather than a slow machine:
+ * `freshScreen` calls `vi.resetModules()`, so every test re-evaluates the whole
+ * import graph of the screen — Dexie, the icons, every sheet. That is ~875 ms
+ * per test in isolation, and a good deal more when the suite runs in parallel.
+ * The default 5 s was enough until the graph grew.
  */
-describe('persistance demandée par l’app', { timeout: 30_000 }, () => {
-  it('demande la persistance dès qu’une séance démarre', async () => {
-    // Le point de tout ce changement : laissée derrière un bouton des réglages,
-    // la demande n'était jamais faite, ce qui revient à n'avoir aucune
+describe('persistence the app asks for', { timeout: 30_000 }, () => {
+  it('asks for persistence as soon as a session starts', async () => {
+    // The point of this whole change: left behind a button in the settings,
+    // the request was never made, which amounts to having no
     // protection.
     const user = userEvent.setup();
     const ActiveSessionScreen = await freshScreen();
@@ -51,13 +51,13 @@ describe('persistance demandée par l’app', { timeout: 30_000 }, () => {
     render(<ActiveSessionScreen />);
     await user.click(await screen.findByRole('button', { name: 'Start a session' }));
 
-    // Budget explicite : ces tests réimportent le module à chaud, et sous charge
-    // parallèle la seconde par défaut ne suffit pas toujours. C'est le délai qui
-    // change, pas ce qui est vérifié.
+    // An explicit budget: these tests re-import the module from cold, and under
+    // parallel load the default second is not always enough. What changes is
+    // the deadline, not what is being asserted.
     await expect.poll(() => persist.mock.calls.length, { timeout: 5000 }).toBe(1);
   });
 
-  it('ne redemande pas quand c’est déjà accordé', async () => {
+  it('does not ask again when it has already been granted', async () => {
     persisted.mockResolvedValue(true);
 
     const user = userEvent.setup();
@@ -70,17 +70,17 @@ describe('persistance demandée par l’app', { timeout: 30_000 }, () => {
     expect(persist).not.toHaveBeenCalled();
   });
 
-  it('ne demande qu’une fois par lancement, quoi qu’il arrive ensuite', async () => {
-    // Une demande à chaque série serait un travail inutile, et sur les
-    // navigateurs qui affichent une invite, un harcèlement.
+  it('asks once per launch, whatever happens afterwards', async () => {
+    // A request on every set would be wasted work, and on the browsers that
+    // show a prompt, harassment.
     const user = userEvent.setup();
     const ActiveSessionScreen = await freshScreen();
 
     render(<ActiveSessionScreen />);
     await user.click(await screen.findByRole('button', { name: 'Start a session' }));
-    // Budget explicite : ces tests réimportent le module à chaud, et sous charge
-    // parallèle la seconde par défaut ne suffit pas toujours. C'est le délai qui
-    // change, pas ce qui est vérifié.
+    // An explicit budget: these tests re-import the module from cold, and under
+    // parallel load the default second is not always enough. What changes is
+    // the deadline, not what is being asserted.
     await expect.poll(() => persist.mock.calls.length, { timeout: 5000 }).toBe(1);
 
     await user.click(await screen.findByRole('button', { name: /Add exercise/ }));
@@ -91,7 +91,7 @@ describe('persistance demandée par l’app', { timeout: 30_000 }, () => {
     expect(persist).toHaveBeenCalledTimes(1);
   });
 
-  it('ne casse rien là où l’API n’existe pas', async () => {
+  it('breaks nothing where the API does not exist', async () => {
     Reflect.deleteProperty(navigator, 'storage');
 
     const user = userEvent.setup();
@@ -100,7 +100,8 @@ describe('persistance demandée par l’app', { timeout: 30_000 }, () => {
     render(<ActiveSessionScreen />);
     await user.click(await screen.findByRole('button', { name: 'Start a session' }));
 
-    // La séance démarre quand même : la persistance est un bonus, pas un prérequis.
+    // The session starts all the same: persistence is a bonus, not a
+    // prerequisite.
     expect(await screen.findByRole('button', { name: /Add exercise/ })).toBeDefined();
   });
 });

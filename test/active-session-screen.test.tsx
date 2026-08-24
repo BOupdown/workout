@@ -29,10 +29,10 @@ async function sessionWithHistory() {
 
 const savedSets = () => db.sets.count();
 
-describe('la promesse des deux taps', () => {
-  it('enregistre une série en deux taps quand l’exercice est déjà dans la séance', async () => {
-    // C'est la thèse de l'app, et jusqu'ici aucun test ne la tenait : un tap sur
-    // la ligne (qui l'active *et* recharge le brouillon), un tap sur Save.
+describe('the two-tap promise', () => {
+  it('logs a set in two taps when the exercise is already in the session', async () => {
+    // This is the app's whole thesis, and until now no test held it: one tap on
+    // the row (which activates it *and* reloads the draft), one tap on Save.
     const user = userEvent.setup();
     await sessionWithHistory();
 
@@ -47,9 +47,9 @@ describe('la promesse des deux taps', () => {
     await expect.poll(savedSets).toBe(2);
   });
 
-  it('répète une série à l’identique en un seul tap', async () => {
-    // Le brouillon n'est pas vidé après un enregistrement : la même charge et
-    // les mêmes reps repartent sans rien retaper.
+  it('repeats a set identically in a single tap', async () => {
+    // The draft is not cleared after a save: the same load and the same reps go
+    // again with nothing to type.
     const user = userEvent.setup();
     await sessionWithHistory();
 
@@ -67,7 +67,7 @@ describe('la promesse des deux taps', () => {
     expect(logged).toHaveLength(3);
   });
 
-  it('pré-remplit la saisie avec la série précédente', async () => {
+  it('prefills the entry with the previous set', async () => {
     await sessionWithHistory();
     render(<ActiveSessionScreen />);
 
@@ -80,8 +80,8 @@ describe('la promesse des deux taps', () => {
   });
 });
 
-describe('le minuteur de repos et la zone du pouce', () => {
-  it('démarre un repos dès qu’une série est écrite', async () => {
+describe('the rest timer and the reach of the thumb', () => {
+  it('starts a rest as soon as a set is written', async () => {
     const user = userEvent.setup();
     await sessionWithHistory();
 
@@ -92,12 +92,12 @@ describe('le minuteur de repos et la zone du pouce', () => {
     expect(window.localStorage.getItem('workout.rest-timer')).toContain('durationSec');
   });
 
-  it('n’insère jamais la barre entre la liste et le panneau de saisie', async () => {
-    // L'invariant qui protège le tap unique : la barre prend sa place *au-dessus*
-    // de la liste, jamais entre la liste et le panneau. Sans ça, elle pousserait
-    // « Save set » vers le haut à l'instant même où la série part, et déplacerait
-    // la cible sous le pouce. Vérifié sur l'ordre du DOM, faute de mise en page
-    // sous jsdom.
+  it('never slips the bar between the list and the entry panel', async () => {
+    // The invariant protecting the single tap: the bar takes its place *above*
+    // the list, never between the list and the panel. Without that it would
+    // push "Save set" upwards at the very instant the set is logged, moving the
+    // target out from under the thumb. Asserted on DOM order, there being no
+    // layout under jsdom.
     const user = userEvent.setup();
     await sessionWithHistory();
 
@@ -119,7 +119,7 @@ describe('le minuteur de repos et la zone du pouce', () => {
     expect(restIndex).toBeLessThan(panelIndex - 1);
   });
 
-  it('ne laisse aucun repos courir après la fin de la séance', async () => {
+  it('leaves no rest running once the session is over', async () => {
     const user = userEvent.setup();
     await sessionWithHistory();
 
@@ -135,7 +135,7 @@ describe('le minuteur de repos et la zone du pouce', () => {
 });
 
 describe('le record personnel', () => {
-  it('marque la série qui détient le record', async () => {
+  it('marks the set that holds the record', async () => {
     const { session } = await startSession();
     const block = await addExerciseToSession(session.id, squat.id);
     await createSet({ sessionExerciseId: block.id, weightKg: 100, reps: 5, kind: 'work' });
@@ -151,8 +151,8 @@ describe('le record personnel', () => {
     expect(marked.getAttribute('aria-label')).toContain('110');
   });
 
-  it('déplace la marque quand une série plus lourde arrive', async () => {
-    // Le point de la dérivation : rien n'est mémorisé au moment de l'écriture.
+  it('moves the mark when a heavier set arrives', async () => {
+    // The point of deriving it: nothing is remembered at the moment of writing.
     const user = userEvent.setup();
     const { session } = await startSession();
     const block = await addExerciseToSession(session.id, squat.id);
@@ -176,12 +176,12 @@ describe('le record personnel', () => {
     expect(screen.queryAllByRole('button', { name: /personal record/ })).toHaveLength(1);
   });
 
-  it('ne marque aucun échauffement, si lourd soit-il', async () => {
-    // Volontairement modeste. L'exclusion des échauffements est prouvée sur
-    // `recordSet` dans progression.test.ts, seul endroit où elle est
-    // atteignable : ici `recentSetsForExercise` les a déjà écartés avant que la
-    // règle ne s'applique. Ce test constate le résultat, il ne prouve pas la
-    // règle — vérifié par mutation, il ne tombe pas si la règle disparaît.
+  it('marks no warm-up, however heavy', async () => {
+    // Deliberately modest. Excluding warm-ups is proven on `recordSet` in
+    // progression.test.ts, the only place it is reachable: here
+    // `recentSetsForExercise` has already set them aside before the rule
+    // applies. This test observes the result, it does not prove the rule —
+    // checked by mutation, it does not fail when the rule is removed.
     const { session } = await startSession();
     const block = await addExerciseToSession(session.id, squat.id);
     await createSet({ sessionExerciseId: block.id, weightKg: 100, reps: 5, kind: 'work' });
@@ -197,7 +197,7 @@ describe('le record personnel', () => {
     ).toContain('100');
   });
 
-  it('ne marque rien quand aucune série de travail n existe', async () => {
+  it('marks nothing when no work set exists', async () => {
     const { session } = await startSession();
     const block = await addExerciseToSession(session.id, squat.id);
     await createSet({ sessionExerciseId: block.id, weightKg: 60, reps: 10, kind: 'warmup' });
@@ -211,7 +211,7 @@ describe('le record personnel', () => {
   });
 });
 
-describe('repartir d’une séance passée', () => {
+describe('starting again from a past session', () => {
   /** A finished session, optionally named, laid out with two exercises. */
   async function finishedSession(title?: string) {
     const { session } = await startSession(title === undefined ? {} : { title });
@@ -229,9 +229,9 @@ describe('repartir d’une séance passée', () => {
     return within(await screen.findByRole('list', { name: 'Past sessions' }));
   };
 
-  it('rouvre la disposition choisie, vide de séries', async () => {
-    // Le moment où la promesse des deux taps ne tenait pas : démarrer imposait
-    // de rajouter chaque exercice à la main.
+  it('reopens the chosen layout, empty of sets', async () => {
+    // The moment the two-tap promise did not hold: starting meant adding every
+    // exercise back by hand.
     const user = userEvent.setup();
     await finishedSession('Push A');
 
@@ -242,13 +242,13 @@ describe('repartir d’une séance passée', () => {
 
     expect(await screen.findByRole('button', { name: /^Squat/ }, { timeout: 5000 })).toBeDefined();
     expect(screen.getByRole('button', { name: /^Push-ups/ })).toBeDefined();
-    // Une seule série en base : celle de la séance d'origine.
+    // A single set in the database: the one from the original session.
     await expect.poll(savedSets).toBe(1);
   });
 
-  it('laisse choisir laquelle, pas seulement la dernière', async () => {
-    // Le défaut de la première version : sur un split, la séance qu'on veut
-    // reprendre n'est presque jamais celle qu'on vient de faire.
+  it('lets you choose which one, not merely the last', async () => {
+    // The flaw in the first version: on a split, the session you want to reuse
+    // is almost never the one you have just done.
     const user = userEvent.setup();
     await finishedSession('Push A');
     await finishedSession('Legs');
@@ -263,7 +263,7 @@ describe('repartir d’une séance passée', () => {
       .toBe(true);
   });
 
-  it('ne montre qu’une entrée par nom de routine', async () => {
+  it('shows one entry per routine name', async () => {
     const user = userEvent.setup();
     await finishedSession('Push A');
     await finishedSession('Push A');
@@ -275,20 +275,20 @@ describe('repartir d’une séance passée', () => {
     expect(picker.queryAllByRole('button', { name: /Push A/ })).toHaveLength(1);
   });
 
-  it('n’offre rien quand aucune séance passée ne porte d’exercice', async () => {
+  it('offers nothing when no past session holds an exercise', async () => {
     const user = userEvent.setup();
     const { session } = await startSession();
     await endSession(session.id);
 
     render(<ActiveSessionScreen />);
-    // Pas d openPicker ici : il attend la liste, et c est justement son absence
-    // qu on verifie.
+    // No openPicker here: it waits on the list, and its absence is precisely
+    // what is being asserted.
     await user.click(await screen.findByRole('button', { name: /Start from a past session/ }));
 
     expect(await screen.findByText(/Nothing to reuse yet/)).toBeDefined();
   });
 
-  it('dit ce qui a été laissé de côté', async () => {
+  it('says what was left behind', async () => {
     const user = userEvent.setup();
     await finishedSession('Push A');
     await archiveExercise(pushUps.id);
@@ -299,12 +299,12 @@ describe('repartir d’une séance passée', () => {
 
     expect(await screen.findByText(/archived since, and left out/, {}, { timeout: 5000 })).toBeDefined();
     expect(screen.getByRole('button', { name: /^Squat/ })).toBeDefined();
-    // Le motif exclut le bandeau, qui nomme lui aussi l exercice ecarte : ce
-    // qui doit manquer, c est la *ligne* d exercice.
+    // The pattern excludes the banner, which names the skipped exercise too:
+    // what has to be missing is the exercise *row*.
     expect(screen.queryByRole('button', { name: /^Push-ups(to do|[0-9]+ )/ })).toBeNull();
   });
 
-  it('ne dit rien quand tout a pu être repris', async () => {
+  it('says nothing when everything could be carried over', async () => {
     const user = userEvent.setup();
     await finishedSession('Push A');
 
@@ -317,8 +317,8 @@ describe('repartir d’une séance passée', () => {
   });
 });
 
-describe('après une série enregistrée', () => {
-  /** Une séance à deux exercices, le premier portant déjà une série. */
+describe('after a set is logged', () => {
+  /** A session of two exercises, the first already holding a set. */
   async function twoExercises() {
     const { session } = await startSession();
     const a = await addExerciseToSession(session.id, squat.id);
@@ -328,9 +328,9 @@ describe('après une série enregistrée', () => {
     return { session, a, b };
   }
 
-  it('ne déplace rien : le tap unique répète', async () => {
-    // La promesse centrale de l'écran. Elle valait déjà hors superset ; les
-    // supersets partis, elle vaut partout.
+  it('moves nothing: the single tap repeats', async () => {
+    // The screen's central promise. It already held outside supersets; with
+    // supersets gone, it holds everywhere.
     const user = userEvent.setup();
     await twoExercises();
     render(<ActiveSessionScreen />);
@@ -344,7 +344,7 @@ describe('après une série enregistrée', () => {
     expect(screen.getByRole('region', { name: /Log a set of Squat/ })).toBeDefined();
   });
 
-  it('démarre le repos', async () => {
+  it('starts the rest', async () => {
     const user = userEvent.setup();
     await twoExercises();
     render(<ActiveSessionScreen />);
@@ -359,10 +359,10 @@ describe('après une série enregistrée', () => {
   });
 });
 
-describe('un exercice compté par côté', () => {
-  it('le dit sur le champ de saisie, où ça décide du chiffre tapé', async () => {
-    // Le retour d'usage : rien ne distinguait un unilatéral d'un autre
-    // exercice, alors que « 10 reps » y vaut vingt répétitions.
+describe('an exercise counted per side', () => {
+  it('says so on the entry field, where it decides the figure typed', async () => {
+    // What using it taught: nothing told a unilateral exercise from any other,
+    // where "10 reps" is twenty repetitions.
     const oneArm = await exerciseByKey('one arm dumbbell row');
     const { session } = await startSession();
     await addExerciseToSession(session.id, oneArm.id);
@@ -377,7 +377,7 @@ describe('un exercice compté par côté', () => {
     expect(within(panel).getByLabelText('Reps / side')).toBeDefined();
   });
 
-  it('le dit sur la série une fois enregistrée', async () => {
+  it('says so on the set once it is logged', async () => {
     const oneArm = await exerciseByKey('one arm dumbbell row');
     const { session } = await startSession();
     const block = await addExerciseToSession(session.id, oneArm.id);
@@ -390,11 +390,11 @@ describe('un exercice compté par côté', () => {
       { name: /^Edit set 1/ },
       { timeout: 5000 },
     );
-    // La mention ferme la lecture : « 10 × 22/side », comme la série se dit.
+    // The mention closes the reading: "10 × 22/side", the way the set is said.
     expect(tile.getAttribute('aria-label')).toContain('10 × 22/side');
   });
 
-  it('ne dit rien sur un exercice bilatéral', async () => {
+  it('says nothing for a bilateral exercise', async () => {
     const { session } = await startSession();
     const block = await addExerciseToSession(session.id, squat.id);
     await createSet({ sessionExerciseId: block.id, weightKg: 100, reps: 5, kind: 'work' });

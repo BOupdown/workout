@@ -25,10 +25,10 @@ const headings = () =>
   screen.queryAllByRole('heading', { level: 3 }).map((node) => node.textContent);
 
 describe('ExerciseIndexScreen', () => {
-  it('classe par muscle, et rien d’autre', async () => {
-    // Un seul axe : sortir les exercices travaillés dans leur propre section
-    // mettait un titre « est-ce que je l'ai fait » au milieu de titres
-    // « qu'est-ce que ça travaille », et sortait le développé couché de Chest.
+  it('groups by muscle, and by nothing else', async () => {
+    // One axis only: pulling the trained exercises into their own section put
+    // a "have I done it" heading among "what does it work" headings, and took
+    // the bench press out of Chest.
     await logOneSet(squat);
 
     render(<ExerciseIndexScreen />);
@@ -54,7 +54,7 @@ describe('ExerciseIndexScreen', () => {
       { timeout: 5000 },
     );
 
-  it('garde un exercice travaillé sous son muscle', async () => {
+  it('keeps a trained exercise under its muscle', async () => {
     await logOneSet(squat);
 
     render(<ExerciseIndexScreen />);
@@ -62,7 +62,7 @@ describe('ExerciseIndexScreen', () => {
     await firstRowUnder('Quads').toContain('Squat');
   });
 
-  it('ne le montre qu’une fois', async () => {
+  it('shows it only once', async () => {
     await logOneSet(squat);
 
     render(<ExerciseIndexScreen />);
@@ -71,11 +71,11 @@ describe('ExerciseIndexScreen', () => {
     expect(screen.getAllByRole('button', { name: /^Squat/ })).toHaveLength(1);
   });
 
-  it('le remonte en tête de son groupe', async () => {
-    // Le tri « déjà travaillé d'abord » ne disparaît pas, il se déplace à
-    // l'intérieur du groupe : `groupByMuscle` conserve l'ordre reçu. « Leg
-    // press » est cinquième par ordre alphabétique dans Quads, donc le voir en
-    // tête ne peut venir que de ce tri.
+  it('lifts it to the head of its group', async () => {
+    // The "trained first" ordering does not disappear, it moves inside the
+    // group: `groupByMuscle` preserves the order it is given. "Leg press" is
+    // fifth alphabetically within Quads, so seeing it at the head can only come
+    // from that ordering.
     const legPress = await exerciseByKey('leg press');
     await logOneSet(legPress);
 
@@ -84,7 +84,7 @@ describe('ExerciseIndexScreen', () => {
     await firstRowUnder('Quads').toContain('Leg press');
   });
 
-  it('reste à plat pendant une recherche', async () => {
+  it('stays flat while searching', async () => {
     const user = userEvent.setup();
     render(<ExerciseIndexScreen />);
     await expect.poll(() => headings()[0], { timeout: 5000 }).toBe('Chest');
@@ -95,9 +95,9 @@ describe('ExerciseIndexScreen', () => {
     expect(screen.getByRole('button', { name: /^Squat/ })).toBeDefined();
   });
 
-  it('reste à plat dans les archives', async () => {
-    // Une poignée de lignes : les classer donnerait une colonne de sections
-    // d'un seul élément.
+  it('stays flat in the archive', async () => {
+    // A handful of rows: grouping them would give a column of sections holding
+    // one item each.
     const user = userEvent.setup();
     await archiveExercise(squat.id);
 

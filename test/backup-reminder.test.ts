@@ -11,19 +11,19 @@ const NOW = 1_800_000_000_000;
 const daysAgo = (days: number) => NOW - days * DAY_MS;
 
 describe('backupReminder', () => {
-  it('ne dit rien quand rien n’a été enregistré depuis', () => {
-    // Un mois sans salle ne met aucune donnée en danger : alerter là
-    // n'apprendrait qu'à ignorer le bandeau.
+  it('says nothing when nothing has been recorded since', () => {
+    // A month away from the gym puts no data at risk: nagging then would only
+    // teach the user to ignore the banner.
     expect(
       backupReminder({ lastBackupAt: daysAgo(90), sessionsSince: 0, now: NOW }),
     ).toBeNull();
   });
 
-  it('ne dit rien non plus si rien n’a jamais été exporté mais rien fait', () => {
+  it('says nothing either when nothing was ever exported and nothing done', () => {
     expect(backupReminder({ lastBackupAt: null, sessionsSince: 0, now: NOW })).toBeNull();
   });
 
-  it('laisse passer la toute première séance sans rien dire', () => {
+  it('lets the very first session pass without a word', () => {
     expect(
       backupReminder({
         lastBackupAt: null,
@@ -33,7 +33,7 @@ describe('backupReminder', () => {
     ).toBeNull();
   });
 
-  it('signale une base jamais sauvegardée', () => {
+  it('speaks up for a database that was never backed up', () => {
     const reminder = backupReminder({
       lastBackupAt: null,
       sessionsSince: FIRST_REMINDER_SESSIONS,
@@ -45,13 +45,13 @@ describe('backupReminder', () => {
     expect(reminder?.daysSince).toBeNull();
   });
 
-  it('se tait juste après un export', () => {
+  it('goes quiet right after an export', () => {
     expect(
       backupReminder({ lastBackupAt: daysAgo(1), sessionsSince: 1, now: NOW }),
     ).toBeNull();
   });
 
-  it('revient après assez de séances', () => {
+  it('comes back after enough sessions', () => {
     const reminder = backupReminder({
       lastBackupAt: daysAgo(2),
       sessionsSince: REMINDER_SESSIONS,
@@ -63,7 +63,7 @@ describe('backupReminder', () => {
     expect(reminder?.daysSince).toBe(2);
   });
 
-  it('revient aussi après assez de temps, même avec une seule séance', () => {
+  it('comes back after enough time too, on a single session', () => {
     const reminder = backupReminder({
       lastBackupAt: daysAgo(REMINDER_DAYS),
       sessionsSince: 1,
@@ -74,7 +74,7 @@ describe('backupReminder', () => {
     expect(reminder?.daysSince).toBe(REMINDER_DAYS);
   });
 
-  it('compte les jours en entiers, sans arrondir vers le haut', () => {
+  it('counts whole days, never rounding one up', () => {
     const reminder = backupReminder({
       lastBackupAt: NOW - (REMINDER_DAYS * DAY_MS + DAY_MS / 2),
       sessionsSince: 1,
@@ -84,8 +84,8 @@ describe('backupReminder', () => {
     expect(reminder?.daysSince).toBe(REMINDER_DAYS);
   });
 
-  it('ne rend jamais un nombre de jours négatif', () => {
-    // Horloge reculée : mieux vaut zéro qu'un « il y a -3 jours ».
+  it('never reports a negative number of days', () => {
+    // Clock set back: zero reads better than "-3 days ago".
     const reminder = backupReminder({
       lastBackupAt: NOW + 5 * DAY_MS,
       sessionsSince: REMINDER_SESSIONS,

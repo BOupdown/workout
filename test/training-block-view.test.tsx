@@ -30,18 +30,19 @@ const openBlocks = async (user: ReturnType<typeof userEvent.setup>) => {
   await user.click(within(panel).getByRole('button'));
 };
 
-describe('la bande de bloc', () => {
-  it('propose clairement d’en ajouter un quand il n’y en a pas', async () => {
-    // Le défaut signalé : une ligne fine avec un « + » ne dit pas ce qu'elle
-    // est, et un contrôle qu'on ne reconnaît pas est un contrôle inutilisé.
+describe('the block bar', () => {
+  it('offers plainly to add one when there is none', async () => {
+    // The flaw that was reported: a thin row holding a "+" does not say what it
+    // is, and a control nobody recognises is a control nobody uses.
     render(<CalendarView />);
 
     const panel = await blockPanel();
     expect(within(panel).getByRole('button').textContent).toMatch(/Add a training block/);
   });
 
-  it('annonce le bloc en cours et sa semaine', async () => {
-    // Le point de la fonctionnalité : savoir où on en est sans compter de cases.
+  it('announces the running block and its week', async () => {
+    // The point of the feature: knowing where you stand without counting
+    // squares.
     await createTrainingBlock('Strength', daysAgo(9), daysAgo(-18));
 
     render(<CalendarView />);
@@ -50,7 +51,7 @@ describe('la bande de bloc', () => {
     expect((await blockPanel()).textContent).toMatch(/week 2/);
   });
 
-  it('démarre un bloc depuis la feuille', async () => {
+  it('starts a block from the sheet', async () => {
     const user = userEvent.setup();
     render(<CalendarView />);
 
@@ -65,7 +66,7 @@ describe('la bande de bloc', () => {
     ]);
   });
 
-  it('refuse de démarrer sans nom', async () => {
+  it('refuses to start without a name', async () => {
     const user = userEvent.setup();
     render(<CalendarView />);
 
@@ -76,7 +77,7 @@ describe('la bande de bloc', () => {
     expect((start as HTMLButtonElement).disabled).toBe(true);
   });
 
-  it('supprime un bloc sans toucher aux autres', async () => {
+  it('deletes a block without touching the others', async () => {
     const user = userEvent.setup();
     await createTrainingBlock('Strength', daysAgo(30), daysAgo(11));
     await createTrainingBlock('Deload', daysAgo(3), daysAgo(-3));
@@ -92,8 +93,8 @@ describe('la bande de bloc', () => {
     ]);
   });
 
-  it('refuse un bloc qui en chevauche un autre, et nomme le coupable', async () => {
-    // On n'est pas dans deux cycles à la fois. Le message doit être actionnable.
+  it('refuses a block that overlaps another, and names the culprit', async () => {
+    // You are not in two cycles at once. The message has to be actionable.
     const user = userEvent.setup();
     await createTrainingBlock('Strength', today(), daysAgo(-27));
 
@@ -110,8 +111,8 @@ describe('la bande de bloc', () => {
   });
 });
 
-describe('le compte des semaines', () => {
-  it('démarre à la semaine 1 le premier jour', async () => {
+describe('counting the weeks', () => {
+  it('starts at week 1 on the first day', async () => {
     await createTrainingBlock('Strength', today(), daysAgo(-27));
 
     render(<CalendarView />);
@@ -119,9 +120,9 @@ describe('le compte des semaines', () => {
     await expect.poll(async () => (await blockPanel()).textContent).toMatch(/week 1/);
   });
 
-  it('bascule en semaine 2 le huitième jour', async () => {
-    // Sept jours écoulés font encore la semaine 1 ; c'est au huitième que ça
-    // change, et c'est exactement la question « dois-je passer à autre chose ».
+  it('tips into week 2 on the eighth day', async () => {
+    // Seven days gone is still week 1; the eighth is where it changes, and that
+    // is exactly the "should I move on" question.
     await createTrainingBlock('Strength', daysAgo(7), daysAgo(-20));
     expect(daysBetween(daysAgo(7), today())).toBe(7);
 
@@ -131,14 +132,14 @@ describe('le compte des semaines', () => {
   });
 });
 
-describe('les blocs sur la grille', () => {
+describe('blocks on the grid', () => {
   const cellFor = (date: string) =>
     screen.getByRole('button', { name: new RegExp(`^${date}`) }).getAttribute('aria-label');
 
-  it('marque aussi un bloc déjà terminé', async () => {
-    // Le défaut signalé : un bloc passé s'affichait comme un jour vide, donc on
-    // ne pouvait pas lire la structure du mois — la raison d'être des blocs
-    // sur un calendrier.
+  it('marks a block that is already over too', async () => {
+    // The flaw that was reported: a past block drew as an empty day, so the
+    // shape of the month could not be read — which is the whole reason blocks
+    // appear on a calendar.
     await createTrainingBlock('Peaking', daysAgo(20), daysAgo(11));
     await createTrainingBlock('Strength', daysAgo(10), daysAgo(-17));
 
@@ -149,19 +150,19 @@ describe('les blocs sur la grille', () => {
     expect(cellFor(today())).toMatch(/Strength/);
   });
 
-  it('laisse nu un jour hors de tout bloc', async () => {
+  it('leaves a day outside every block bare', async () => {
     await createTrainingBlock('Strength', daysAgo(10), daysAgo(-17));
 
     render(<CalendarView />);
     await screen.findByRole('button', { name: new RegExp(`^${today()}`) }, { timeout: 5000 });
 
-    // Le bloc en cours sert de témoin que les requêtes ont répondu.
+    // The running block acts as the witness that the queries have answered.
     await expect.poll(() => cellFor(today())).toMatch(/Strength/);
     expect(cellFor(daysAgo(20))).not.toMatch(/Strength/);
   });
 
-  it('nomme le bloc auquel chaque jour appartient', async () => {
-    // Ce que le lecteur d'écran reçoit à la place de la teinte.
+  it('names the block each day belongs to', async () => {
+    // What the screen reader gets in place of the tint.
     await createTrainingBlock('Deload', daysAgo(3), daysAgo(-3));
 
     render(<CalendarView />);

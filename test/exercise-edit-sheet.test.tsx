@@ -32,7 +32,7 @@ const natureControls = () => [
 ];
 
 describe('ExerciseEditSheet', () => {
-  it('laisse tout modifiable tant qu’aucune série n’existe', async () => {
+  it('leaves everything editable while no set exists', async () => {
     const fresh = await createExercise({ name: 'Sandbag carry', loadType: 'external', metric: 'reps' });
 
     render(<ExerciseEditSheet exercise={fresh} onSaved={vi.fn()} onDeleted={vi.fn()} onClose={vi.fn()} />);
@@ -43,9 +43,10 @@ describe('ExerciseEditSheet', () => {
     }
   });
 
-  it('gèle la nature dès qu’une série existe, et dit combien', async () => {
-    // C'est `ExerciseInUseError` : changer ce que mesure un exercice réécrirait
-    // le sens des séries déjà là. L'écran l'empêche au lieu de le rapporter.
+  it('freezes the nature once a set exists, and says how many', async () => {
+    // This is `ExerciseInUseError`: changing what an exercise measures would
+    // rewrite the meaning of the sets already logged. The screen prevents it
+    // rather than reporting it.
     await logOneSet(squat);
 
     render(<ExerciseEditSheet exercise={squat} onSaved={vi.fn()} onDeleted={vi.fn()} onClose={vi.fn()} />);
@@ -56,8 +57,8 @@ describe('ExerciseEditSheet', () => {
     }
   });
 
-  it('laisse le nom modifiable malgré le gel', async () => {
-    // Corriger une faute de frappe ne change le sens d'aucune série.
+  it('leaves the name editable despite the freeze', async () => {
+    // Fixing a typo changes the meaning of no set.
     const user = userEvent.setup();
     const onSaved = vi.fn();
     await logOneSet(squat);
@@ -75,9 +76,9 @@ describe('ExerciseEditSheet', () => {
     expect(onSaved).toHaveBeenCalled();
   });
 
-  it('renvoyer une nature inchangée reste un no-op, pas un rejet', async () => {
-    // Le vrai risque du gel : le formulaire réémet loadType/metric/perSide tels
-    // quels, et `updateExercise` ne doit compter que les changements effectifs.
+  it('sending back an unchanged nature is a no-op, not a refusal', async () => {
+    // The real risk of the freeze: the form sends loadType/metric/perSide back
+    // as they were, and `updateExercise` must count only actual changes.
     const user = userEvent.setup();
     await logOneSet(squat);
 
@@ -90,7 +91,7 @@ describe('ExerciseEditSheet', () => {
     expect((await db.exercises.get(squat.id))?.name).toBe(squat.name);
   });
 
-  it('refuse un renommage vers un nom déjà pris, sans écrire', async () => {
+  it('refuses a rename onto a name already taken, writing nothing', async () => {
     const user = userEvent.setup();
     const fresh = await createExercise({ name: 'Sandbag carry', loadType: 'external', metric: 'reps' });
 
@@ -105,7 +106,7 @@ describe('ExerciseEditSheet', () => {
     expect((await db.exercises.get(fresh.id))?.name).toBe('Sandbag carry');
   });
 
-  it('archive derrière une confirmation, sans perdre l’historique', async () => {
+  it('archives behind a confirmation, losing no history', async () => {
     const user = userEvent.setup();
     await logOneSet(squat);
     const setsBefore = await db.sets.count();
@@ -121,7 +122,7 @@ describe('ExerciseEditSheet', () => {
     expect(await db.sets.count()).toBe(setsBefore);
   });
 
-  it('propose la restauration, sans confirmation, sur un exercice archivé', async () => {
+  it('offers to restore, with no confirmation, an archived exercise', async () => {
     const user = userEvent.setup();
     const archived = await createExercise({
       name: 'Sandbag carry',
@@ -142,7 +143,7 @@ describe('ExerciseEditSheet', () => {
 });
 
 describe('supprimer depuis la feuille', () => {
-  it('propose la suppression sur un exercice jamais fait', async () => {
+  it('offers deletion for an exercise never performed', async () => {
     const fresh = await createExercise({
       name: 'Sandbag carry',
       loadType: 'external',
@@ -161,9 +162,9 @@ describe('supprimer depuis la feuille', () => {
     expect(await screen.findByRole('button', { name: /Delete this exercise/ })).toBeDefined();
   });
 
-  it('ne la propose pas dès qu’une série existe', async () => {
-    // La règle n'est pas décorative : sans elle l'écran offrirait un geste que
-    // la base refuse, et qui effacerait des séances s'il passait.
+  it('stops offering it as soon as one set exists', async () => {
+    // The rule is not decorative: without it the screen would offer a gesture
+    // the database refuses, and which would erase training if it went through.
     await logOneSet(squat);
 
     render(
@@ -179,10 +180,10 @@ describe('supprimer depuis la feuille', () => {
     expect(screen.queryByRole('button', { name: /Delete this exercise/ })).toBeNull();
   });
 
-  it('ne la propose pas tant que le compte n’est pas connu', async () => {
-    // `useLiveQuery` rend `undefined` avant de répondre. Traiter ça comme zéro
-    // afficherait « Delete » une fraction de seconde sur un exercice chargé
-    // d'historique — le seul instant où le geste est faux.
+  it('holds it back until the count is known', async () => {
+    // `useLiveQuery` returns `undefined` before it answers. Treating that as
+    // zero would flash "Delete" for a fraction of a second on an exercise laden
+    // with history — the one moment where the gesture is wrong.
     await logOneSet(squat);
 
     render(
@@ -197,7 +198,7 @@ describe('supprimer depuis la feuille', () => {
     expect(screen.queryByRole('button', { name: /Delete this exercise/ })).toBeNull();
   });
 
-  it('supprime derrière une confirmation, et prévient le parent', async () => {
+  it('deletes behind a confirmation, and tells the parent', async () => {
     const user = userEvent.setup();
     const onDeleted = vi.fn();
     const fresh = await createExercise({
@@ -222,7 +223,7 @@ describe('supprimer depuis la feuille', () => {
     expect(onDeleted).toHaveBeenCalled();
   });
 
-  it('ne supprime rien tant qu’on n’a pas confirmé', async () => {
+  it('deletes nothing until it has been confirmed', async () => {
     const user = userEvent.setup();
     const fresh = await createExercise({
       name: 'Sandbag carry',

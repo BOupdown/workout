@@ -40,10 +40,10 @@ function renderEditor(set: SetEntry, onClose = vi.fn()) {
 
 const stored = (id: string) => db.sets.get(id);
 
-describe('SetEditorSheet — ce qui qualifie une série', () => {
-  it('reste replié sur une série nue', async () => {
-    // La feuille sert d'abord à corriger un chiffre : le reste ne doit pas
-    // pousser « Save » vers le bas.
+describe('SetEditorSheet — what qualifies a set', () => {
+  it('stays folded on a bare set', async () => {
+    // The sheet is there first to correct a figure: the rest must not push
+    // "Save" down the screen.
     renderEditor(await loggedSet());
 
     const disclosure = screen.getByRole('button', { name: /How it felt/ });
@@ -51,9 +51,9 @@ describe('SetEditorSheet — ce qui qualifie une série', () => {
     expect(screen.queryByLabelText('Raise the RPE')).toBeNull();
   });
 
-  it('s’ouvre seule et résume quand la série porte déjà quelque chose', async () => {
-    // Une note qu'on ne voit pas est une note qu'on ne corrigera jamais.
-    renderEditor(await loggedSet({ rpe: 8, isFailure: true, notes: 'épaule' }));
+  it('opens itself and sums up when the set already carries something', async () => {
+    // A note nobody sees is a note nobody will ever correct.
+    renderEditor(await loggedSet({ rpe: 8, isFailure: true, notes: 'shoulder' }));
 
     const disclosure = screen.getByRole('button', { name: /RPE 8/ });
     expect(disclosure.getAttribute('aria-expanded')).toBe('true');
@@ -61,7 +61,7 @@ describe('SetEditorSheet — ce qui qualifie une série', () => {
     expect(disclosure.textContent).toContain('note');
   });
 
-  it('enregistre RPE, échec et note', async () => {
+  it('stores RPE, failure and note', async () => {
     const user = userEvent.setup();
     const set = await loggedSet();
     renderEditor(set);
@@ -70,18 +70,18 @@ describe('SetEditorSheet — ce qui qualifie une série', () => {
     await user.click(screen.getByLabelText('Raise the RPE')); // unset → 8
     await user.click(screen.getByLabelText('Raise the RPE')); // → 8.5
     await user.click(screen.getByRole('button', { name: /Taken to failure/ }));
-    await user.type(screen.getByLabelText('Note on this set'), '  épaule droite  ');
+    await user.type(screen.getByLabelText('Note on this set'), '  right shoulder  ');
     await user.click(screen.getByRole('button', { name: 'Save' }));
 
     await expect.poll(async () => (await stored(set.id))?.rpe).toBe(8.5);
     const saved = await stored(set.id);
     expect(saved?.isFailure).toBe(true);
-    expect(saved?.notes).toBe('épaule droite');
+    expect(saved?.notes).toBe('right shoulder');
   });
 
-  it('n’écrit ni false ni chaîne vide en effaçant', async () => {
+  it('writes neither false nor an empty string when cleared', async () => {
     const user = userEvent.setup();
-    const set = await loggedSet({ rpe: 9, isFailure: true, notes: 'gêne' });
+    const set = await loggedSet({ rpe: 9, isFailure: true, notes: 'twinge' });
     renderEditor(set);
 
     await user.click(screen.getByRole('button', { name: 'Clear' }));
@@ -97,7 +97,7 @@ describe('SetEditorSheet — ce qui qualifie une série', () => {
       .toEqual([]);
   });
 
-  it('laisse les mesures intactes quand seuls les qualifiers changent', async () => {
+  it('leaves the measures untouched when only the qualifiers change', async () => {
     const user = userEvent.setup();
     const set = await loggedSet();
     renderEditor(set);
@@ -112,11 +112,12 @@ describe('SetEditorSheet — ce qui qualifie une série', () => {
     expect(saved?.reps).toBe(5);
   });
 
-  it('ne descend pas sous 1 ni au-dessus de 10', async () => {
+  it('goes neither below 1 nor above 10', async () => {
     const user = userEvent.setup();
     renderEditor(await loggedSet({ rpe: 10 }));
 
-    // Déjà au plafond : le bouton doit être hors service, pas produire 10.5.
+    // Already at the ceiling: the button has to be out of service, not
+    // produce 10.5.
     expect((screen.getByLabelText('Raise the RPE') as HTMLButtonElement).disabled).toBe(true);
     await user.click(screen.getByLabelText('Lower the RPE'));
     expect(screen.getByLabelText('Lower the RPE').nextElementSibling?.textContent).toBe('9.5');

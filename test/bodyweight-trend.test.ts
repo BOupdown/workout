@@ -6,7 +6,7 @@ const entry = (date: string, weightKg: number): BodyWeight =>
   ({ date, weightKg }) as BodyWeight;
 
 describe('buildWeightTrend', () => {
-  it('trie les pesées, quel que soit l’ordre reçu', () => {
+  it('sorts the weigh-ins, whatever order they arrive in', () => {
     const trend = buildWeightTrend(
       [entry('2026-08-20', 80), entry('2026-08-01', 82)],
       '2026-08-01',
@@ -16,10 +16,10 @@ describe('buildWeightTrend', () => {
     expect(trend.points.map((point) => point.date)).toEqual(['2026-08-01', '2026-08-20']);
   });
 
-  it('place les points selon la date, pas selon leur rang', () => {
-    // Le cœur du sujet : peser les 1er, 2 et 3 puis le 31 n'est pas quatre
-    // faits également espacés. Un axe indexé dessinerait une pente régulière
-    // là où il y a un trou de quatre semaines.
+  it('places the points by date, not by rank', () => {
+    // The heart of it: weighing yourself on the 1st, 2nd and 3rd and then on
+    // the 31st is not four evenly spaced facts. An indexed axis would draw a
+    // steady slope across a four-week hole.
     const trend = buildWeightTrend(
       [
         entry('2026-08-01', 80),
@@ -37,10 +37,10 @@ describe('buildWeightTrend', () => {
     expect(trend.fractions[3]).toBeCloseTo(1);
   });
 
-  it('mesure l’écart sur la fenêtre, pas sur les pesées', () => {
-    // Deux pesées à une semaine d'intervalle dans un mois restent à une
-    // semaine d'intervalle, près de leur place sur le calendrier au-dessus,
-    // au lieu d'être étirées d'un bord à l'autre.
+  it('measures the span over the window, not over the weigh-ins', () => {
+    // Two weigh-ins a week apart inside a month stay a week apart, close to
+    // where they sit on the calendar above, instead of being stretched from
+    // one edge to the other.
     const trend = buildWeightTrend(
       [entry('2026-08-10', 80), entry('2026-08-17', 79)],
       '2026-08-01',
@@ -51,7 +51,7 @@ describe('buildWeightTrend', () => {
     expect(trend.fractions[1]).toBeCloseTo(16 / 30);
   });
 
-  it('rend l’écart entre la première et la dernière pesée', () => {
+  it('returns the difference between the first and the last weigh-in', () => {
     const trend = buildWeightTrend(
       [entry('2026-08-01', 82), entry('2026-08-31', 79.5)],
       '2026-08-01',
@@ -61,15 +61,15 @@ describe('buildWeightTrend', () => {
     expect(trend.delta).toBeCloseTo(-2.5);
   });
 
-  it('ne donne pas d’écart sur une seule pesée', () => {
-    // Une mesure n'est pas une tendance.
+  it('gives no difference from a single weigh-in', () => {
+    // One measurement is not a trend.
     const trend = buildWeightTrend([entry('2026-08-10', 80)], '2026-08-01', '2026-08-31');
 
     expect(trend.points).toHaveLength(1);
     expect(trend.delta).toBeNull();
   });
 
-  it('ne rend rien sur une fenêtre sans pesée', () => {
+  it('returns nothing for a window holding no weigh-in', () => {
     const trend = buildWeightTrend([], '2026-08-01', '2026-08-31');
 
     expect(trend.points).toEqual([]);
@@ -77,16 +77,16 @@ describe('buildWeightTrend', () => {
     expect(trend.delta).toBeNull();
   });
 
-  it('ne produit pas de NaN sur une fenêtre d’un seul jour', () => {
-    // `to === from` donne une portée nulle : une division non gardée sortirait
-    // des positions NaN, et le tracé SVG disparaîtrait sans erreur.
+  it('produces no NaN for a window one day wide', () => {
+    // `to === from` gives a span of zero: an unguarded division would yield
+    // NaN positions, and the SVG path would vanish with no error.
     const trend = buildWeightTrend([entry('2026-08-10', 80)], '2026-08-10', '2026-08-10');
 
     expect(Number.isFinite(trend.fractions[0])).toBe(true);
   });
 
-  it('garde les positions dans la fenêtre', () => {
-    // Une pesée hors bornes ne doit pas tracer hors du cadre.
+  it('keeps the positions inside the window', () => {
+    // A weigh-in out of bounds must not draw outside the frame.
     const trend = buildWeightTrend(
       [entry('2026-07-20', 81), entry('2026-09-05', 79)],
       '2026-08-01',

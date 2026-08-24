@@ -11,19 +11,19 @@ const headings = () =>
   screen.queryAllByRole('heading', { level: 3 }).map((node) => node.textContent);
 
 /**
- * Attend que le catalogue soit classé à l'écran.
+ * Waits until the catalogue is grouped on screen.
  *
- * Le champ de recherche est dans l'en-tête, donc rendu avant que la requête
- * réponde : l'attendre lui ne prouve rien sur la liste. Ces tests assertaient
- * juste après la frappe et lisaient parfois l'écran en cours de chargement —
- * verts seuls, rouges sous charge.
+ * The search field sits in the header, so it renders before the query answers:
+ * waiting on it proves nothing about the list. These tests used to assert right
+ * after typing and sometimes read the screen mid-load — green on their own, red
+ * under load.
  */
 const grouped = () => expect.poll(() => headings()[0], { timeout: 5000 }).toBe('Chest');
 
 describe('ExercisePicker, en parcours', () => {
-  it('classe le catalogue par muscle, dans l’ordre anatomique', async () => {
-    // Le retour d'usage : à 58 entrées, une colonne alphabétique unique cesse
-    // d'être une liste et devient un mur.
+  it('groups the catalogue by muscle, in anatomical order', async () => {
+    // What using it taught: at 58 entries, a single alphabetical column stops
+    // being a list and becomes a wall.
     render(<ExercisePicker onPick={vi.fn()} onClose={vi.fn()} />);
 
     await screen.findByText('Bench press');
@@ -33,18 +33,18 @@ describe('ExercisePicker, en parcours', () => {
     expect(shown.indexOf('Quads')).toBeGreaterThan(shown.indexOf('Triceps'));
   });
 
-  it('ne répète pas le muscle sur chaque ligne', async () => {
-    // Sous un titre qui dit déjà « Chest », c'est une colonne du même mot.
+  it('does not repeat the muscle on every row', async () => {
+    // Under a heading that already says "Chest", it is a column of one word.
     render(<ExercisePicker onPick={vi.fn()} onClose={vi.fn()} />);
 
     const row = await screen.findByRole('button', { name: /Bench press/ });
     expect(row.textContent).toBe('Bench press');
   });
 
-  it('laisse tout le catalogue atteignable', async () => {
-    // La propriété qui compte : classer ne doit rien faire disparaître. Sans
-    // ce test, un groupe oublié dans l'ordre sortirait du sélecteur en
-    // silence — l'exercice existe, il est juste introuvable.
+  it('leaves the whole catalogue reachable', async () => {
+    // The property that matters: grouping must make nothing disappear. Without
+    // this test, a group left out of the order would drop from the picker in
+    // silence — the exercise exists, it simply cannot be found.
     const catalogue = await listSelectableExercises();
 
     render(<ExercisePicker onPick={vi.fn()} onClose={vi.fn()} />);
@@ -55,16 +55,16 @@ describe('ExercisePicker, en parcours', () => {
     }
   });
 
-  it('range un exercice sans muscle sous « Other », plutôt que de le perdre', async () => {
+  it('files an exercise with no muscle under "Other", rather than losing it', async () => {
     render(<ExercisePicker onPick={vi.fn()} onClose={vi.fn()} />);
     await screen.findByText('Bench press');
 
-    // Le catalogue livré donne un muscle à tout : la section n'existe que si
-    // l'utilisateur crée un exercice sans en choisir un.
+    // The shipped catalogue gives everything a muscle: the section only exists
+    // when the user creates an exercise without picking one.
     expect(headings()).not.toContain('Other');
   });
 
-  it('choisit toujours un exercice', async () => {
+  it('still picks an exercise', async () => {
     const user = userEvent.setup();
     const onPick = vi.fn();
     render(<ExercisePicker onPick={onPick} onClose={vi.fn()} />);
@@ -76,21 +76,21 @@ describe('ExercisePicker, en parcours', () => {
 });
 
 describe('ExercisePicker, en recherche', () => {
-  it('passe à plat : la recherche a déjà filtré', async () => {
-    // Des titres au-dessus de deux résultats se mettent entre l'œil et le nom.
+  it('goes flat: the search has already filtered', async () => {
+    // Headings above two results come between the eye and the name.
     const user = userEvent.setup();
     render(<ExercisePicker onPick={vi.fn()} onClose={vi.fn()} />);
 
     await user.type(await screen.findByLabelText('Search exercises'), 'press');
 
-    // Le résultat d'abord : « aucun titre » est vrai aussi pendant le
-    // chargement, donc l'asserter seul passerait sans rien prouver.
+    // The result first: "no headings" is true while loading as well, so
+    // asserting it alone would pass without proving anything.
     expect(await screen.findByRole('button', { name: /Bench press/ })).toBeDefined();
     expect(headings()).toEqual([]);
   });
 
-  it('remet le muscle sur la ligne, faute de titre', async () => {
-    // À plat, plus rien ne dit ce que travaille « Close-grip bench press ».
+  it('puts the muscle back on the row, for want of a heading', async () => {
+    // Flat, nothing is left to say what "Close-grip bench press" works.
     const user = userEvent.setup();
     render(<ExercisePicker onPick={vi.fn()} onClose={vi.fn()} />);
 
@@ -100,14 +100,14 @@ describe('ExercisePicker, en recherche', () => {
     expect(within(row).getByText('triceps')).toBeDefined();
   });
 
-  it('revient au classement quand la recherche est effacée', async () => {
+  it('returns to the grouping when the search is cleared', async () => {
     const user = userEvent.setup();
     render(<ExercisePicker onPick={vi.fn()} onClose={vi.fn()} />);
 
     const field = await screen.findByLabelText('Search exercises');
-    // Le champ s'affiche avant la liste : il est dans l'en-tête, pas dans la
-    // requête. Attendre le premier titre plutôt que le champ, sinon on lit
-    // l'écran pendant qu'il charge encore.
+    // The field appears before the list: it lives in the header, not in the
+    // query. Wait on the first heading rather than the field, or the screen
+    // gets read while it is still loading.
     await grouped();
 
     await user.type(field, 'press');
@@ -118,8 +118,8 @@ describe('ExercisePicker, en recherche', () => {
     await grouped();
   });
 
-  it('ne classe pas les blancs', async () => {
-    // Une recherche vide de sens ne doit pas casser le parcours.
+  it('does not group on whitespace', async () => {
+    // A search that means nothing must not break the journey.
     const user = userEvent.setup();
     render(<ExercisePicker onPick={vi.fn()} onClose={vi.fn()} />);
     await grouped();

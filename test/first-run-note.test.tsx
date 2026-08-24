@@ -11,16 +11,16 @@ beforeEach(async () => {
 
 const note = () => screen.queryByRole('heading', { name: 'Your training stays here' });
 
-describe('la note du premier lancement', () => {
-  it('se montre sur un appareil neuf', async () => {
+describe('the first-run note', () => {
+  it('shows up on a fresh device', async () => {
     render(<FirstRunNote />);
 
     expect(note()).not.toBeNull();
   });
 
-  it('dit où vivent les données, pas comment marche l’app', async () => {
-    // Ce n'est pas une visite guidée : une phrase, celle qui change ce que
-    // l'utilisateur croit avant d'avoir quoi que ce soit à perdre.
+  it('says where the data lives, not how the app works', async () => {
+    // This is not a guided tour: one sentence, the one that changes what the
+    // user believes before they have anything to lose.
     render(<FirstRunNote />);
 
     const panel = note()!.closest('div')!.parentElement!;
@@ -29,7 +29,7 @@ describe('la note du premier lancement', () => {
     expect(screen.getAllByRole('button')).toHaveLength(1);
   });
 
-  it('disparaît quand on l’a lue', async () => {
+  it('goes away once it has been read', async () => {
     const user = userEvent.setup();
     render(<FirstRunNote />);
 
@@ -38,8 +38,9 @@ describe('la note du premier lancement', () => {
     expect(note()).toBeNull();
   });
 
-  it('ne revient jamais', async () => {
-    // Le seul vrai défaut possible : la revoir à la quatrième séance.
+  it('never comes back', async () => {
+    // The one real way to get this wrong: meeting it again on the fourth
+    // session.
     const user = userEvent.setup();
     const first = render(<FirstRunNote />);
     await user.click(screen.getByRole('button', { name: 'Got it' }));
@@ -50,7 +51,7 @@ describe('la note du premier lancement', () => {
     expect(note()).toBeNull();
   });
 
-  it('ne se montre pas sur un appareil déjà prévenu', async () => {
+  it('stays away on a device that was already told', async () => {
     window.localStorage.setItem('workout.told-where-data-lives', '1');
 
     render(<FirstRunNote />);
@@ -58,9 +59,9 @@ describe('la note du premier lancement', () => {
     expect(note()).toBeNull();
   });
 
-  it('ne survit pas à une réinstallation qui efface le stockage', async () => {
-    // `localStorage` part avec les données du site : quelqu'un qui repart de
-    // zéro doit être prévenu de nouveau, puisque sa base l'est aussi.
+  it('does not survive a reinstall that clears the storage', async () => {
+    // `localStorage` goes with the site data: somebody starting from nothing
+    // has to be told again, since their database is starting from nothing too.
     const user = userEvent.setup();
     const first = render(<FirstRunNote />);
     await user.click(screen.getByRole('button', { name: 'Got it' }));

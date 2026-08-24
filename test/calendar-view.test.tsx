@@ -21,8 +21,8 @@ beforeEach(async () => {
 const dayCell = (date: string) =>
   screen.findByRole('button', { name: new RegExp(`^${date}`) }, { timeout: 5000 });
 
-describe('le sélecteur de Progress', () => {
-  it('ouvre les exercices par défaut', async () => {
+describe('the Progress selector', () => {
+  it('opens on the exercises by default', async () => {
     render(<ExerciseIndexScreen />);
 
     const exercises = await screen.findByRole('tab', { name: /exercises/i });
@@ -30,7 +30,7 @@ describe('le sélecteur de Progress', () => {
     expect(screen.getByLabelText('Search exercises')).toBeDefined();
   });
 
-  it('bascule sur le calendrier et en revient', async () => {
+  it('switches to the calendar and back', async () => {
     const user = userEvent.setup();
     render(<ExerciseIndexScreen />);
 
@@ -44,7 +44,7 @@ describe('le sélecteur de Progress', () => {
 });
 
 describe('le calendrier', () => {
-  it('rend six semaines pleines au maximum, toutes de sept jours', async () => {
+  it('renders at most six full weeks, every one of seven days', async () => {
     render(<CalendarView />);
 
     const cells = await screen.findAllByRole(
@@ -57,7 +57,7 @@ describe('le calendrier', () => {
     expect(cells.length).toBeLessThanOrEqual(42);
   });
 
-  it('marque un jour où l’on s’est entraîné', async () => {
+  it('marks a day that was trained', async () => {
     const { session } = await startSession();
     await addExerciseToSession(session.id, squat.id);
     await endSession(session.id);
@@ -65,16 +65,16 @@ describe('le calendrier', () => {
     render(<CalendarView />);
     await dayCell(today());
 
-    // La cellule existe avant que la requête n'ait répondu : c'est le libellé
-    // qu'il faut attendre, pas l'élément.
+    // The cell exists before the query has answered: it is the label that has
+    // to be waited for, not the element.
     await expect
       .poll(() => screen.getByRole('button', { name: new RegExp(`^${today()}`) }).getAttribute('aria-label'))
       .toMatch(/trained/);
   });
 
-  it('ne marque pas un jour sans séance', async () => {
-    // Un poids sert de témoin : tant qu'il n'est pas affiché, les requêtes
-    // n'ont pas répondu et constater une absence ne prouverait rien.
+  it('leaves a day with no session unmarked', async () => {
+    // A weight acts as the witness: until it is on screen the queries have not
+    // answered, and finding nothing would prove nothing.
     await setBodyWeight(today(), 80.5);
 
     render(<CalendarView />);
@@ -89,7 +89,7 @@ describe('le calendrier', () => {
     ).not.toMatch(/trained/);
   });
 
-  it('enregistre un poids un jour sans séance — ce qui était impossible avant', async () => {
+  it('records a weight on a day with no session — once impossible', async () => {
     const user = userEvent.setup();
     render(<CalendarView />);
 
@@ -102,9 +102,10 @@ describe('le calendrier', () => {
     await expect.poll(async () => (await getBodyWeight(today()))?.weightKg).toBe(77.2);
   });
 
-  it('affiche un poids saisi ailleurs', async () => {
-    // L'invariant du déménagement : la séance et le calendrier lisent la même
-    // valeur, donc un poids noté en séance apparaît ici sans rien de plus.
+  it('shows a weight entered somewhere else', async () => {
+    // The invariant behind the move: the session and the calendar read the
+    // same value, so a weight entered during a session appears here with
+    // nothing further to do.
     await setBodyWeight(today(), 80.5);
 
     render(<CalendarView />);
@@ -115,7 +116,7 @@ describe('le calendrier', () => {
       .toMatch(/80\.5 kg/);
   });
 
-  it('efface un poids quand on vide le champ', async () => {
+  it('clears a weight when the field is emptied', async () => {
     const user = userEvent.setup();
     await setBodyWeight(today(), 80.5);
 
@@ -129,7 +130,7 @@ describe('le calendrier', () => {
     await expect.poll(async () => await getBodyWeight(today())).toBeUndefined();
   });
 
-  it('change de mois sans perdre la grille', async () => {
+  it('changes month without losing the grid', async () => {
     const user = userEvent.setup();
     render(<CalendarView />);
 

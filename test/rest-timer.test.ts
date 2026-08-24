@@ -16,74 +16,74 @@ const START = 1_700_000_000_000;
 const timer = (durationSec = 90, startedAt = START): RestTimer => ({ startedAt, durationSec });
 
 describe('restProgress', () => {
-  it('décompte à partir de la durée pleine', () => {
+  it('counts down from the full duration', () => {
     const progress = restProgress(timer(90), START);
     expect(progress.phase).toBe('running');
     expect(progress.remainingSec).toBe(90);
     expect(progress.fraction).toBe(0);
   });
 
-  it('garde la dernière seconde affichée pendant toute sa durée', () => {
-    // À 89,5 s écoulées il reste une demi-seconde : le compteur doit encore
-    // montrer 1, pas 0, sinon il annonce la fin avant qu'elle arrive.
+  it('holds the last second on screen for the whole of it', () => {
+    // At 89.5 s gone there is half a second left: the counter must still show
+    // 1, not 0, or it announces the end before it arrives.
     expect(restProgress(timer(90), START + 89_500).remainingSec).toBe(1);
   });
 
-  it('bascule à zéro exactement à la fin', () => {
+  it('tips to zero exactly at the end', () => {
     const progress = restProgress(timer(90), START + 90_000);
     expect(progress.phase).toBe('over');
     expect(progress.remainingSec).toBe(0);
     expect(progress.fraction).toBe(1);
   });
 
-  it('compte le dépassement une fois le repos écoulé', () => {
+  it('counts the overrun once the rest has run out', () => {
     const progress = restProgress(timer(90), START + 100_000);
     expect(progress.phase).toBe('over');
     expect(progress.overdueSec).toBe(10);
   });
 
-  it('ne dépasse jamais 1 en fraction', () => {
+  it('never goes past 1 as a fraction', () => {
     expect(restProgress(timer(90), START + 500_000).fraction).toBe(1);
   });
 
-  it("traite un instant antérieur au départ comme un départ", () => {
-    // Horloge système reculée pendant un repos : mieux vaut un repos entier
-    // qu'un décompte négatif.
+  it('treats an instant before the start as the start', () => {
+    // System clock set back mid-rest: a whole rest reads better than a
+    // negative countdown.
     const progress = restProgress(timer(90), START - 5_000);
     expect(progress.remainingSec).toBe(90);
     expect(progress.fraction).toBe(0);
   });
 
-  it('survit à un écran verrouillé, puisque tout vient de l’horloge', () => {
-    // Aucun tick pendant 60 s : le résultat est le même que si l’app était
-    // restée au premier plan.
+  it('survives a locked screen, since everything comes from the clock', () => {
+    // Not a single tick for 60 s: the result is the same as if the app had
+    // stayed in the foreground.
     expect(restProgress(timer(90), START + 60_000).remainingSec).toBe(30);
   });
 });
 
 describe('isRestStale', () => {
-  it('ne périme pas un repos qui vient de finir', () => {
+  it('does not expire a rest that has only just ended', () => {
     expect(isRestStale(timer(90), START + 90_000 + 1_000)).toBe(false);
   });
 
-  it('périme un repos oublié depuis longtemps', () => {
+  it('expires a rest forgotten long ago', () => {
     expect(isRestStale(timer(90), START + 90_000 + STALE_AFTER_MS + 1)).toBe(true);
   });
 });
 
 describe('extendRest', () => {
-  it('sur un repos en cours, ajoute à la durée sans toucher au départ', () => {
+  it('on a running rest, adds to the duration without moving the start', () => {
     const extended = extendRest(timer(90), 30, START + 30_000);
     expect(extended.durationSec).toBe(120);
     expect(extended.startedAt).toBe(START);
-    // 60 s restaient, il en reste 90.
+    // 60 s were left, 90 are left now.
     expect(restProgress(extended, START + 30_000).remainingSec).toBe(90);
   });
 
-  it('sur un repos déjà terminé, redémarre depuis maintenant', () => {
-    // Le cas qui rendait le bouton inutile : allonger la durée d'un repos
-    // dépassé de 41 s ne faisait que réduire le compteur de dépassement, et ne
-    // rendait aucune seconde de repos.
+  it('on a rest already over, restarts from now', () => {
+    // The case that made the button useless: adding to the duration of a rest
+    // 41 s past its end only shrank the overrun counter, and handed back not
+    // one second of rest.
     const now = START + 131_000;
     const extended = extendRest(timer(90), 30, now);
 
@@ -95,49 +95,49 @@ describe('extendRest', () => {
     expect(progress.remainingSec).toBe(30);
   });
 
-  it('redémarre aussi un repos qui vient tout juste de finir', () => {
+  it('restarts a rest that has only just ended too', () => {
     const now = START + 90_000;
     expect(restProgress(extendRest(timer(90), 30, now), now).remainingSec).toBe(30);
   });
 
-  it('ne descend pas sous le plancher', () => {
+  it('does not go below the floor', () => {
     expect(extendRest(timer(90), -1_000, START).durationSec).toBe(MIN_REST_SEC);
   });
 });
 
 describe('clampRestDuration', () => {
-  it('borne des deux côtés', () => {
+  it('bounds it at both ends', () => {
     expect(clampRestDuration(0)).toBe(MIN_REST_SEC);
     expect(clampRestDuration(99_999)).toBe(MAX_REST_SEC);
   });
 
-  it('retombe sur la valeur par défaut pour un nombre invalide', () => {
+  it('falls back to the default for an invalid number', () => {
     expect(clampRestDuration(Number.NaN)).toBe(DEFAULT_REST_SEC);
   });
 
-  it('arrondit à la seconde', () => {
+  it('rounds to the second', () => {
     expect(clampRestDuration(90.6)).toBe(91);
   });
 });
 
 describe('parseRestTimer', () => {
-  it('relit ce qui a été écrit', () => {
+  it('reads back what was written', () => {
     expect(parseRestTimer(JSON.stringify(timer(120)))).toEqual(timer(120));
   });
 
-  it('rend null sur une clé absente', () => {
+  it('returns null for a missing key', () => {
     expect(parseRestTimer(null)).toBeNull();
   });
 
-  it('rend null sur du JSON cassé plutôt que de jeter', () => {
-    // Écrit par une autre version, ou tronqué : l’écran de séance ne doit pas
-    // tomber pour un minuteur.
+  it('returns null on broken JSON rather than throwing', () => {
+    // Written by another version, or truncated: the session screen must not go
+    // down over a timer.
     expect(parseRestTimer('{oops')).toBeNull();
     expect(parseRestTimer('"a string"')).toBeNull();
     expect(parseRestTimer('{"startedAt":"hier","durationSec":90}')).toBeNull();
   });
 
-  it('borne une durée stockée aberrante', () => {
+  it('bounds a stored duration that makes no sense', () => {
     expect(parseRestTimer('{"startedAt":1,"durationSec":999999}')?.durationSec).toBe(MAX_REST_SEC);
   });
 });

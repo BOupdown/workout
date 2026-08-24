@@ -22,8 +22,8 @@ afterEach(() => {
 
 const chart = () => screen.queryByRole('img', { name: /Bodyweight over/ });
 
-describe('le graphe de poids dans le calendrier', () => {
-  it('trace les pesées du mois affiché', async () => {
+describe('the bodyweight chart in the calendar', () => {
+  it('plots the weigh-ins of the month on screen', async () => {
     await setBodyWeight('2026-08-01', 82);
     await setBodyWeight('2026-08-20', 79.5);
 
@@ -33,9 +33,9 @@ describe('le graphe de poids dans le calendrier', () => {
     expect(chart()?.getAttribute('aria-label')).toContain('from 82 to 79.5');
   });
 
-  it('ne trace rien sur une seule pesée', async () => {
-    // Une mesure est un nombre, pas une tendance — et la case du calendrier
-    // l'affiche déjà.
+  it('plots nothing from a single weigh-in', async () => {
+    // One measurement is a number, not a trend — and the calendar cell is
+    // already showing it.
     await setBodyWeight('2026-08-10', 80);
 
     render(<CalendarView />);
@@ -44,14 +44,14 @@ describe('le graphe de poids dans le calendrier', () => {
     expect(chart()).toBeNull();
   });
 
-  it('ne trace rien sur un mois vide', async () => {
+  it('plots nothing for an empty month', async () => {
     render(<CalendarView />);
 
     await screen.findByText('August 2026');
     expect(chart()).toBeNull();
   });
 
-  it('annonce l’écart entre la première et la dernière pesée', async () => {
+  it('states the gap between the first and the last weigh-in', async () => {
     await setBodyWeight('2026-08-01', 82);
     await setBodyWeight('2026-08-20', 79.5);
 
@@ -61,7 +61,7 @@ describe('le graphe de poids dans le calendrier', () => {
     expect(await screen.findByText('-2.5 kg')).toBeDefined();
   });
 
-  it('signe le gain, pour qu’il ne se lise pas comme une perte', async () => {
+  it('signs a gain, so it cannot read as a loss', async () => {
     await setBodyWeight('2026-08-01', 79);
     await setBodyWeight('2026-08-20', 81);
 
@@ -70,10 +70,10 @@ describe('le graphe de poids dans le calendrier', () => {
     expect(await screen.findByText('+2 kg')).toBeDefined();
   });
 
-  it('ne compte pas les jours voisins que la grille affiche', async () => {
-    // La grille d'août 2026 commence le 27 juillet : ces cases sont tapables et
-    // portent un poids, mais une légende disant « August 2026 » qui tracerait
-    // le 27 juillet serait fausse sur elle-même.
+  it('leaves out the neighbouring days the grid still draws', async () => {
+    // The grid for August 2026 opens on 27 July: those cells are tappable and
+    // carry a weight, but a caption reading "August 2026" that plotted 27 July
+    // would contradict itself.
     await setBodyWeight('2026-07-27', 90);
     await setBodyWeight('2026-08-05', 80);
     await setBodyWeight('2026-08-25', 79);
@@ -86,7 +86,7 @@ describe('le graphe de poids dans le calendrier', () => {
     expect(label).toContain('from 80 to 79');
   });
 
-  it('suit le mois qu’on regarde', async () => {
+  it('follows the month being looked at', async () => {
     const user = userEvent.setup();
     await setBodyWeight('2026-07-05', 85);
     await setBodyWeight('2026-07-28', 83);

@@ -1,7 +1,7 @@
 /**
- * Installe un IndexedDB en mémoire sur les globales, avant tout import de Dexie.
+ * Installs an in-memory IndexedDB on the globals, before Dexie is imported.
  *
- * Dexie détecte les capacités du moteur au chargement (notamment la borne
- * `maxKey` supportée), d'où l'import en tout premier.
+ * Dexie probes the engine's capabilities when it loads — the supported `maxKey`
+ * bound among them — which is why this import comes first of all.
  */
 import 'fake-indexeddb/auto';

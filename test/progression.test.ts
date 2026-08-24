@@ -23,7 +23,7 @@ beforeEach(async () => {
   ({ squat, pushUps, plank, pullUp } = await referenceExercises());
 });
 
-/** Série minimale : seuls les champs lus par la progression sont renseignés. */
+/** A minimal set: only the fields progression reads are filled in. */
 const set = (over: Partial<SetEntry>): SetEntry =>
   ({
     id: Math.random().toString(36).slice(2),
@@ -38,25 +38,25 @@ const set = (over: Partial<SetEntry>): SetEntry =>
   }) as SetEntry;
 
 describe('progressionMetric', () => {
-  it('suit la charge pour un exercice à charge externe', () => {
+  it('follows the load for an externally loaded exercise', () => {
     expect(progressionMetric(squat)).toBe('weightKg');
   });
 
-  it('suit le lest pour un exercice lesté', () => {
+  it('follows the added load for a weighted bodyweight exercise', () => {
     expect(progressionMetric(pullUp)).toBe('weightKg');
   });
 
-  it('suit les répétitions au poids du corps', () => {
+  it('follows the reps for bodyweight', () => {
     expect(progressionMetric(pushUps)).toBe('reps');
   });
 
-  it('suit la durée pour un exercice au temps', () => {
+  it('follows the duration for a timed exercise', () => {
     expect(progressionMetric(plank)).toBe('durationSec');
   });
 });
 
 describe('buildProgression', () => {
-  it('réduit chaque séance à sa meilleure série', () => {
+  it('reduces every session to its best set', () => {
     const points = buildProgression(
       [
         set({ sessionId: 's1', performedAt: 100, weightKg: 90, reps: 5 }),
@@ -71,7 +71,7 @@ describe('buildProgression', () => {
     expect(points[0].setCount).toBe(3);
   });
 
-  it('départage deux séries de même charge par les répétitions', () => {
+  it('separates two sets of equal load on the reps', () => {
     const points = buildProgression(
       [
         set({ performedAt: 100, weightKg: 100, reps: 5 }),
@@ -83,8 +83,8 @@ describe('buildProgression', () => {
     expect(points[0].reps).toBe(7);
   });
 
-  it('exclut les échauffements', () => {
-    // Les inclure ferait plonger la courbe à chaque montée en charge loggée.
+  it('leaves the warm-ups out', () => {
+    // Including them would sink the curve every time a ramp-up is logged.
     const points = buildProgression(
       [
         set({ performedAt: 100, kind: 'warmup', weightKg: 40, reps: 10 }),
@@ -97,7 +97,7 @@ describe('buildProgression', () => {
     expect(points[0].setCount).toBe(1);
   });
 
-  it('trie les séances de la plus ancienne à la plus récente', () => {
+  it('sorts the sessions from the oldest to the most recent', () => {
     const points = buildProgression(
       [
         set({ sessionId: 'c', performedAt: 300, weightKg: 105, reps: 5 }),
@@ -111,7 +111,7 @@ describe('buildProgression', () => {
     expect(points.map((p) => p.value)).toEqual([95, 100, 105]);
   });
 
-  it('suit les répétitions au poids du corps, sans annotation de charge', () => {
+  it('follows the reps for bodyweight, with no load annotation', () => {
     const points = buildProgression(
       [set({ performedAt: 100, reps: 25 }), set({ performedAt: 100, reps: 30 })],
       pushUps,
@@ -121,22 +121,22 @@ describe('buildProgression', () => {
     expect(points[0].reps).toBeUndefined();
   });
 
-  it('suit la durée pour un exercice au temps', () => {
+  it('follows the duration for a timed exercise', () => {
     const points = buildProgression([set({ performedAt: 100, durationSec: 90 })], plank);
     expect(points[0].value).toBe(90);
   });
 
-  it('ignore une série dépourvue de la grandeur suivie', () => {
+  it('ignores a set missing the quantity being followed', () => {
     expect(buildProgression([set({ performedAt: 100, reps: 5 })], squat)).toEqual([]);
   });
 
-  it('rend une liste vide sans série', () => {
+  it('returns an empty list when there is no set', () => {
     expect(buildProgression([], squat)).toEqual([]);
   });
 });
 
-describe('buildProgression — sur de vraies séries', () => {
-  it('reconstruit la progression de deux séances', async () => {
+describe('buildProgression — on real sets', () => {
+  it('rebuilds the progression across two sessions', async () => {
     const older = Date.parse('2026-08-09T09:00:00Z');
     const first = await startSession({ startedAt: older });
     const blockA = await addExerciseToSession(first.session.id, squat.id);
@@ -167,12 +167,12 @@ describe('progressionDelta', () => {
     setCount: 1,
   });
 
-  it('compare les deux dernières séances', () => {
+  it('compares the last two sessions', () => {
     expect(progressionDelta([point(95), point(100)])).toBe(5);
     expect(progressionDelta([point(100), point(95)])).toBe(-5);
   });
 
-  it('ne compare rien avec une seule séance', () => {
+  it('compares nothing when there is one session', () => {
     expect(progressionDelta([point(100)])).toBeNull();
     expect(progressionDelta([])).toBeNull();
   });
@@ -188,19 +188,19 @@ describe('buildChartGeometry', () => {
       setCount: 1,
     }));
 
-  it('projette le premier point à gauche et le dernier à droite', () => {
+  it('puts the first point on the left and the last on the right', () => {
     const { plotted } = buildChartGeometry(points(90, 100, 110), box);
 
     expect(plotted[0].x).toBe(16);
     expect(plotted[2].x).toBe(304);
   });
 
-  it('place les valeurs hautes en haut', () => {
+  it('places the high values at the top', () => {
     const { plotted } = buildChartGeometry(points(90, 110), box);
     expect(plotted[1].y).toBeLessThan(plotted[0].y);
   });
 
-  it('garde le tracé dans la boîte', () => {
+  it('keeps the path inside the box', () => {
     const { plotted } = buildChartGeometry(points(90, 100, 110, 105), box);
 
     for (const p of plotted) {
@@ -209,31 +209,31 @@ describe('buildChartGeometry', () => {
     }
   });
 
-  it('centre un point unique plutôt que de le coller au bord', () => {
+  it('centres a lone point rather than pinning it to the edge', () => {
     const { plotted } = buildChartGeometry(points(100), box);
     expect(plotted[0].x).toBe(160);
   });
 
-  it('ne divise pas par zéro quand toutes les valeurs sont identiques', () => {
-    // Trois séances au même poids : amplitude nulle, piège classique.
+  it('does not divide by zero when every value is the same', () => {
+    // Three sessions at the same weight: a range of zero, the classic trap.
     const { plotted } = buildChartGeometry(points(100, 100, 100), box);
 
     expect(plotted.every((p) => Number.isFinite(p.y))).toBe(true);
     expect(new Set(plotted.map((p) => p.y)).size).toBe(1);
   });
 
-  it('referme la nappe sur la base du tracé', () => {
+  it('closes the area back onto the base of the path', () => {
     const { area } = buildChartGeometry(points(90, 100), box);
 
     expect(area.endsWith('Z')).toBe(true);
     expect(area).toContain(String(box.height - box.padding.bottom));
   });
 
-  it('désigne le point le plus haut', () => {
+  it('names the highest point', () => {
     expect(buildChartGeometry(points(90, 120, 100), box).peakIndex).toBe(1);
   });
 
-  it('produit des graduations rondes et peu nombreuses', () => {
+  it('produces round ticks, and few of them', () => {
     const { ticks } = buildChartGeometry(points(92.5, 117.5), box);
 
     expect(ticks.length).toBeLessThanOrEqual(4);
@@ -243,25 +243,26 @@ describe('buildChartGeometry', () => {
 });
 
 describe('isBetterPerformance', () => {
-  it('departage sur la valeur', () => {
+  it('separates them on the value', () => {
     expect(isBetterPerformance({ value: 102.5 }, { value: 100 }, 'weightKg')).toBe(true);
     expect(isBetterPerformance({ value: 97.5 }, { value: 100 }, 'weightKg')).toBe(false);
   });
 
-  it('departage a charge egale sur les reps', () => {
+  it('separates equal loads on the reps', () => {
     expect(
       isBetterPerformance({ value: 100, reps: 6 }, { value: 100, reps: 5 }, 'weightKg'),
     ).toBe(true);
   });
 
-  it('ne departage pas sur les reps quand la charge n est pas la quantite suivie', () => {
-    // En metrique reps, la valeur *est* les reps : un second champ n a pas de sens.
+  it('does not separate on the reps when the load is not what is followed', () => {
+    // Under the reps metric, the value *is* the reps: a second field would
+    // mean nothing.
     expect(isBetterPerformance({ value: 10, reps: 99 }, { value: 10, reps: 1 }, 'reps')).toBe(
       false,
     );
   });
 
-  it('est stricte : une performance egale ne detrone pas', () => {
+  it('is strict: an equal performance dethrones nobody', () => {
     expect(isBetterPerformance({ value: 100, reps: 5 }, { value: 100, reps: 5 }, 'weightKg')).toBe(
       false,
     );
@@ -269,32 +270,32 @@ describe('isBetterPerformance', () => {
 });
 
 describe('recordSet', () => {
-  it('rend null sans aucune serie', () => {
+  it('returns null when there is no set at all', () => {
     expect(recordSet([], squat)).toBeNull();
   });
 
-  it('retient la charge la plus lourde', () => {
+  it('keeps the heaviest load', () => {
     const best = set({ weightKg: 110, reps: 3, performedAt: 2000 });
     const found = recordSet([set({ weightKg: 100, reps: 5 }), best], squat);
     expect(found?.id).toBe(best.id);
   });
 
-  it('departage a charge egale sur les reps', () => {
+  it('separates equal loads on the reps', () => {
     const best = set({ weightKg: 100, reps: 8, performedAt: 2000 });
     const found = recordSet([set({ weightKg: 100, reps: 5 }), best], squat);
     expect(found?.id).toBe(best.id);
   });
 
-  it('laisse le record au premier qui l a atteint', () => {
-    // Refaire exactement la meme performance ne bat personne.
+  it('leaves the record with the first to reach it', () => {
+    // Matching a performance exactly beats nobody.
     const first = set({ weightKg: 100, reps: 5, performedAt: 1000 });
     const later = set({ weightKg: 100, reps: 5, performedAt: 5000 });
     expect(recordSet([later, first], squat)?.id).toBe(first.id);
   });
 
-  it('ignore l ordre d arrivee de la liste', () => {
+  it('ignores the order the list arrives in', () => {
     // `recentSetsForExercise` rend l ordre antichronologique : sans tri interne,
-    // une egalite donnerait le record a la plus recente.
+    // a tie would hand the record to the most recent.
     const first = set({ weightKg: 100, reps: 5, performedAt: 1000, order: 0 });
     const second = set({ weightKg: 100, reps: 5, performedAt: 1000, order: 1 });
     expect(recordSet([second, first], squat)?.id).toBe(first.id);
@@ -302,30 +303,30 @@ describe('recordSet', () => {
   });
 
   it('exclut les echauffements', () => {
-    // Un echauffement lourd n est pas une performance.
+    // A heavy warm-up is not a performance.
     const work = set({ weightKg: 100, reps: 5 });
     const warmup = set({ weightKg: 200, reps: 1, kind: 'warmup', performedAt: 2000 });
     expect(recordSet([work, warmup], squat)?.id).toBe(work.id);
   });
 
-  it('suit les reps pour un exercice au poids du corps', () => {
+  it('follows the reps for a bodyweight exercise', () => {
     const best = set({ reps: 20, performedAt: 2000 });
     expect(recordSet([set({ reps: 12 }), best], pushUps)?.id).toBe(best.id);
   });
 
-  it('suit la duree pour un exercice chronometre', () => {
+  it('follows the duration for a stopwatch exercise', () => {
     const best = set({ durationSec: 120, performedAt: 2000 });
     expect(recordSet([set({ durationSec: 60 }), best], plank)?.id).toBe(best.id);
   });
 
-  it('ignore une serie sans la mesure suivie', () => {
+  it('ignores a set without the measure being followed', () => {
     const usable = set({ weightKg: 80, reps: 5 });
     expect(recordSet([set({ reps: 5 }), usable], squat)?.id).toBe(usable.id);
   });
 
-  it('designe la meme serie que le sommet de la courbe', () => {
-    // L invariant qui justifie la regle partagee : le record ne peut pas se
-    // trouver sous le point le plus haut de sa propre courbe.
+  it('names the same set as the peak of the curve', () => {
+    // The invariant behind sharing the rule: the record cannot sit below the
+    // highest point of its own curve.
     const sets = [
       set({ weightKg: 100, reps: 5, sessionId: 's1', performedAt: 1000 }),
       set({ weightKg: 110, reps: 3, sessionId: 's2', performedAt: 2000 }),

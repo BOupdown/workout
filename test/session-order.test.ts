@@ -4,54 +4,54 @@ import { canMoveBlock, moveBlock } from '../lib/session-order';
 const order = ['a', 'b', 'c'];
 
 describe('moveBlock', () => {
-  it('remonte un bloc d’un cran', () => {
+  it('moves a block up one place', () => {
     expect(moveBlock(order, 'b', -1)).toEqual(['b', 'a', 'c']);
   });
 
-  it('descend un bloc d’un cran', () => {
+  it('moves a block down one place', () => {
     expect(moveBlock(order, 'b', 1)).toEqual(['a', 'c', 'b']);
   });
 
-  it('refuse de remonter le premier', () => {
+  it('refuses to move the first one up', () => {
     expect(moveBlock(order, 'a', -1)).toBeNull();
   });
 
-  it('refuse de descendre le dernier', () => {
+  it('refuses to move the last one down', () => {
     expect(moveBlock(order, 'c', 1)).toBeNull();
   });
 
-  it('refuse un identifiant inconnu', () => {
+  it('refuses an unknown id', () => {
     expect(moveBlock(order, 'zzz', -1)).toBeNull();
   });
 
-  it('ne modifie pas la liste reçue', () => {
+  it('leaves the list it was given alone', () => {
     const source = [...order];
     moveBlock(source, 'b', 1);
     expect(source).toEqual(order);
   });
 
-  it('rend toujours une couverture exacte', () => {
-    // C'est ce que reorderSessionExercises exige : les mêmes identifiants,
-    // chacun une fois. Un résultat plus court ou dupliqué serait rejeté.
+  it('always returns the same ids, each exactly once', () => {
+    // This is what reorderSessionExercises requires: the same ids, each one
+    // once. A shorter or duplicated result would be refused.
     const moved = moveBlock(order, 'a', 1);
     expect(moved).not.toBeNull();
     expect([...moved!].sort()).toEqual([...order].sort());
     expect(new Set(moved!).size).toBe(order.length);
   });
 
-  it('un aller-retour revient au point de départ', () => {
+  it('a move there and back lands where it started', () => {
     const down = moveBlock(order, 'a', 1)!;
     expect(moveBlock(down, 'a', -1)).toEqual(order);
   });
 
-  it('gère une liste d’un seul bloc', () => {
+  it('handles a list holding a single block', () => {
     expect(moveBlock(['solo'], 'solo', -1)).toBeNull();
     expect(moveBlock(['solo'], 'solo', 1)).toBeNull();
   });
 });
 
 describe('canMoveBlock', () => {
-  it('répond sans construire le résultat', () => {
+  it('answers without building the result', () => {
     expect(canMoveBlock(order, 'a', -1)).toBe(false);
     expect(canMoveBlock(order, 'a', 1)).toBe(true);
   });

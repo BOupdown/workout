@@ -23,7 +23,7 @@ async function sessionWithOneBlock() {
 const storedSession = (id: Id) => db.sessions.get(id);
 
 describe('SessionNotesSheet', () => {
-  it('écrit le titre en quittant le champ, et le rogne', async () => {
+  it('writes the title on leaving the field, trimmed', async () => {
     const user = userEvent.setup();
     const { sessionId } = await sessionWithOneBlock();
 
@@ -36,10 +36,10 @@ describe('SessionNotesSheet', () => {
     await expect.poll(async () => (await storedSession(sessionId))?.title).toBe('Push A');
   });
 
-  it('écrit ce qui est en attente quand on ferme sans quitter le champ', async () => {
-    // La fragilité corrigée : n'écrire qu'au blur perdait la saisie si l'écran
-    // se fermait depuis le champ. `fireEvent.click` ne déplace pas le focus,
-    // ce qui isole exactement ce chemin.
+  it('writes what is pending when closing straight from the field', async () => {
+    // The fragility this fixed: writing only on blur lost the typing when the
+    // screen closed from inside the field. `fireEvent.click` does not move the
+    // focus, which isolates exactly that path.
     const user = userEvent.setup();
     const onClose = vi.fn();
     const { sessionId, blockId } = await sessionWithOneBlock();
@@ -58,7 +58,7 @@ describe('SessionNotesSheet', () => {
     expect(onClose).toHaveBeenCalled();
   });
 
-  it('efface la clé plutôt que d’enregistrer une chaîne vide', async () => {
+  it('clears the key rather than storing an empty string', async () => {
     const user = userEvent.setup();
     const { sessionId } = await sessionWithOneBlock();
     await db.sessions.update(sessionId, { title: 'Push A' });
@@ -80,7 +80,7 @@ describe('SessionNotesSheet', () => {
       .toBe(false);
   });
 
-  it('ne touche pas au champ absent du patch', async () => {
+  it('leaves alone the field the patch does not carry', async () => {
     const user = userEvent.setup();
     const { sessionId } = await sessionWithOneBlock();
     await db.sessions.update(sessionId, { title: 'Push A', notes: 'garder' });
@@ -98,8 +98,8 @@ describe('SessionNotesSheet', () => {
     expect((await storedSession(sessionId))?.notes).toBe('garder');
   });
 
-  it('liste chaque exercice, y compris ceux sans note', async () => {
-    // On ouvre cet écran *pour* écrire une note, pas pour retrouver laquelle en
+  it('lists every exercise, the ones with no note included', async () => {
+    // This screen is opened *to* write a note, not to find which one already
     // accepte une.
     const { sessionId } = await sessionWithOneBlock();
     render(<SessionNotesSheet sessionId={sessionId} onClose={vi.fn()} />);

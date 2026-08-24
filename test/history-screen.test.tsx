@@ -26,9 +26,9 @@ async function finishedSession(title?: string) {
 const DAY = new Intl.DateTimeFormat('en-GB', { weekday: 'short', day: 'numeric', month: 'short' });
 
 describe('HistoryScreen', () => {
-  it('date une séance nommée, dont le nom ne dit pas quel jour c’était', async () => {
-    // Un programme nomme ses séances : six semaines de "Push" donnent six
-    // lignes identiques si la date ne figure que dans le titre par défaut.
+  it('dates a named session, whose name does not say which day it was', async () => {
+    // A programme names its sessions: six weeks of "Push" come out as six
+    // identical rows if the date only ever shows as the fallback title.
     const session = await finishedSession('Push');
 
     render(<HistoryScreen />);
@@ -38,7 +38,7 @@ describe('HistoryScreen', () => {
     expect(await screen.findByText(new RegExp(`^${day} · 1 exercise`))).toBeTruthy();
   });
 
-  it('ne répète pas le jour quand il tient déjà lieu de titre', async () => {
+  it('does not repeat the day when it already stands in as the title', async () => {
     const session = await finishedSession();
     const day = DAY.format(session.startedAt);
 

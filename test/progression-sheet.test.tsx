@@ -38,22 +38,22 @@ const headline = async () => {
 };
 
 describe('ProgressionSheet', () => {
-  it('lit les répétitions avant la charge, comme partout ailleurs', async () => {
-    // Cet en-tête est composé à la main, sans passer par `describeSet`, et
-    // n'était couvert par aucun test : il a gardé « 100 kg × 5 » au-dessus
-    // d'une liste passée à « 5 × 100 » sans que rien ne le signale.
+  it('reads reps before load, as everywhere else', async () => {
+    // This headline is assembled by hand rather than through `describeSet`,
+    // and no test covered it: it kept "100 kg × 5" above a list that had moved
+    // to "5 × 100", with nothing to point it out.
     await logSession(squat, [{ weightKg: 100, reps: 5 }]);
 
     render(<ProgressionSheet exercise={squat} onClose={vi.fn()} />);
 
-    // Les parties sont des <span> voisins, donc sans espace entre elles : ce
-    // qui compte ici est l'ordre, pas la mise en forme.
+    // The parts are neighbouring <span>s, so no space separates them: what is
+    // being asserted here is the order, not the spacing.
     expect(await headline()).toMatch(/^5 ×\s*100/);
   });
 
-  it('garde la charge en chiffre de tête', async () => {
-    // Les répétitions passent devant, mais c'est la charge que ce graphe
-    // trace : elle garde la taille du titre, les reps restent une mention.
+  it('keeps the load as the headline figure', async () => {
+    // Reps lead, but the load is what this chart plots: it keeps the headline
+    // size, and the reps stay an aside.
     await logSession(squat, [{ weightKg: 100, reps: 5 }]);
 
     render(<ProgressionSheet exercise={squat} onClose={vi.fn()} />);
@@ -63,8 +63,8 @@ describe('ProgressionSheet', () => {
     expect(screen.getByText('100').closest('p')?.className).toContain('text-5xl');
   });
 
-  it('écrit le record dans le même ordre', async () => {
-    // Deux ordres sur le même écran, c'est un écran qu'on relit deux fois.
+  it('writes the record in the same order', async () => {
+    // Two orders on one screen is a screen that has to be read twice.
     await logSession(squat, [{ weightKg: 100, reps: 5 }]);
     await logSession(squat, [{ weightKg: 90, reps: 8 }]);
 
@@ -74,10 +74,10 @@ describe('ProgressionSheet', () => {
     expect(record.parentElement?.textContent).toContain('5 × 100');
   });
 
-  it('ne fabrique pas de « × » quand il n’y a pas de charge', async () => {
-    // `reps` n'accompagne la valeur que lorsqu'elle est une charge. Sur un
-    // exercice au poids du corps la valeur *est* les répétitions, et « 20 × 20 »
-    // serait la même donnée écrite deux fois.
+  it('invents no "×" when there is no load', async () => {
+    // `reps` only accompanies the value when that value is a load. On a
+    // bodyweight exercise the value *is* the reps, and "20 × 20" would be the
+    // same figure written twice.
     await logSession(pushUps, [{ reps: 20 }]);
 
     render(<ProgressionSheet exercise={pushUps} onClose={vi.fn()} />);
@@ -85,7 +85,7 @@ describe('ProgressionSheet', () => {
     expect(await headline()).not.toContain('×');
   });
 
-  it('détaille les séances dans le même ordre', async () => {
+  it('details the sessions in that same order', async () => {
     await logSession(squat, [
       { weightKg: 100, reps: 5 },
       { weightKg: 100, reps: 4 },

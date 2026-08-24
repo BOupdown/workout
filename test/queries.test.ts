@@ -22,7 +22,7 @@ beforeEach(async () => {
   ({ squat, pushUps, plank } = await referenceExercises());
 });
 
-/** Séance complète : squat (échauffement + 2 séries), pushUps (1), plank (1). */
+/** A complete session: squat (warm-up + 2 sets), pushUps (1), plank (1). */
 async function buildFullSession(startedAt = new Date(2026, 7, 16, 19, 0).getTime()) {
   const { session } = await startSession({ startedAt, title: 'Full body' });
 
@@ -40,11 +40,11 @@ async function buildFullSession(startedAt = new Date(2026, 7, 16, 19, 0).getTime
 }
 
 describe('getSessionDetail', () => {
-  it('ne retourne rien pour une séance inconnue', async () => {
+  it('returns nothing for a session it does not know', async () => {
     expect(await getSessionDetail('inconnue')).toBeUndefined();
   });
 
-  it('reprend les champs de la séance', async () => {
+  it('carries over the fields the session owns', async () => {
     const { session } = await buildFullSession();
     const detail = (await getSessionDetail(session.id))!;
 
@@ -54,7 +54,7 @@ describe('getSessionDetail', () => {
     expect(detail.startedAt).toBe(session.startedAt);
   });
 
-  it('rend les blocs dans l’ordre de la séance', async () => {
+  it('returns the blocks in session order', async () => {
     const { session } = await buildFullSession();
     const detail = (await getSessionDetail(session.id))!;
 
@@ -62,7 +62,7 @@ describe('getSessionDetail', () => {
     expect(detail.entries.map((e) => e.order)).toEqual([0, 1, 2]);
   });
 
-  it('résout l’exercice de chaque bloc', async () => {
+  it('resolves the exercise of every block', async () => {
     const { session } = await buildFullSession();
     const detail = (await getSessionDetail(session.id))!;
 
@@ -71,7 +71,7 @@ describe('getSessionDetail', () => {
     expect(detail.entries[2].exercise.metric).toBe('time');
   });
 
-  it('rattache chaque série à son bloc, triée par order', async () => {
+  it('attaches every set to its block, sorted by order', async () => {
     const { session } = await buildFullSession();
     const detail = (await getSessionDetail(session.id))!;
 
@@ -80,14 +80,14 @@ describe('getSessionDetail', () => {
     expect(detail.entries[0].sets.map((s) => s.weightKg)).toEqual([40, 100, 100]);
   });
 
-  it('conserve les échauffements', async () => {
+  it('keeps the warm-ups', async () => {
     const { session } = await buildFullSession();
     const detail = (await getSessionDetail(session.id))!;
 
     expect(detail.entries[0].sets.map((s) => s.kind)).toEqual(['warmup', 'work', 'work']);
   });
 
-  it('retourne un bloc sans série avec une liste vide', async () => {
+  it('returns a block with no set holding an empty list', async () => {
     const { session } = await startSession();
     await addExerciseToSession(session.id, squat.id);
 
@@ -96,14 +96,14 @@ describe('getSessionDetail', () => {
     expect(detail.entries[0].sets).toEqual([]);
   });
 
-  it('retourne une séance vide sans bloc', async () => {
+  it('returns an empty session with no block', async () => {
     const { session } = await startSession();
     const detail = (await getSessionDetail(session.id))!;
 
     expect(detail.entries).toEqual([]);
   });
 
-  it('distingue deux blocs du même exercice', async () => {
+  it('tells two blocks of the same exercise apart', async () => {
     const { session } = await startSession();
     const first = await addExerciseToSession(session.id, squat.id);
     const second = await addExerciseToSession(session.id, squat.id);
@@ -118,7 +118,7 @@ describe('getSessionDetail', () => {
     expect(detail.entries[1].sets[0].weightKg).toBe(60);
   });
 
-  it('n’emprunte aucune série à une autre séance', async () => {
+  it('borrows no set from another session', async () => {
     const first = await buildFullSession(new Date(2026, 7, 9, 19, 0).getTime());
     const second = await buildFullSession(new Date(2026, 7, 16, 19, 0).getTime());
 
@@ -130,7 +130,7 @@ describe('getSessionDetail', () => {
     expect(first.session.id).not.toBe(second.session.id);
   });
 
-  it('reflète un réordonnancement des blocs', async () => {
+  it('reflects a reordering of the blocks', async () => {
     const { session, squatBlock, pompesBlock, gainageBlock } = await buildFullSession();
     await reorderSessionExercises(session.id, [gainageBlock.id, squatBlock.id, pompesBlock.id]);
 
@@ -138,7 +138,7 @@ describe('getSessionDetail', () => {
     expect(detail.entries.map((e) => e.exercise.name)).toEqual(['Plank', 'Squat', 'Push-ups']);
   });
 
-  it('reflète le retrait d’un bloc', async () => {
+  it('reflects a block being removed', async () => {
     const { session, pompesBlock } = await buildFullSession();
     await removeExerciseFromSession(pompesBlock.id, { force: true });
 
@@ -147,10 +147,10 @@ describe('getSessionDetail', () => {
     expect(detail.entries.flatMap((e) => e.sets)).toHaveLength(4);
   });
 
-  it('retourne normalement un exercice archivé', async () => {
-    // Le point de la décision : l'archivage ne concerne que la sélection.
-    // Filtrer ici ferait disparaître un bloc d'une séance passée alors que ses
-    // séries existent toujours.
+  it('returns an archived exercise as usual', async () => {
+    // The point of the decision: archiving only concerns the picker. Filtering
+    // here would make a block vanish from a past session while its sets are
+    // still there.
     const { session } = await buildFullSession();
     await archiveExercise(squat.id);
 
@@ -161,9 +161,9 @@ describe('getSessionDetail', () => {
     expect(detail.entries[0].sets).toHaveLength(3);
   });
 
-  it('nomme le trou plutôt que de refuser la séance entière', async () => {
-    // Cette assertion attendait autrefois une exception. Elle emportait l'écran
-    // de séance *et* tout l'historique — voir `placeholderExercise`.
+  it('names the hole rather than refusing the whole session', async () => {
+    // This assertion used to expect an exception. It took the session screen
+    // *and* the whole history down with it — see `placeholderExercise`.
     const { session } = await buildFullSession();
     await db.exercises.delete(squat.id);
 
@@ -171,17 +171,17 @@ describe('getSessionDetail', () => {
 
     expect(detail.entries[0].exercise.name).toBe('Missing exercise');
     expect(detail.entries[0].sets).toHaveLength(3);
-    // Les autres blocs sont intacts.
+    // The other blocks are untouched.
     expect(detail.entries.map((e) => e.exercise.name)).toContain('Push-ups');
   });
 });
 
 describe('listSessionSummaries', () => {
-  it('ne retourne rien sur une base vierge', async () => {
+  it('returns nothing from an empty database', async () => {
     expect(await listSessionSummaries()).toEqual([]);
   });
 
-  it('trie de la plus récente à la plus ancienne', async () => {
+  it('sorts from the most recent to the oldest', async () => {
     await buildFullSession(new Date(2026, 7, 2, 19, 0).getTime());
     await buildFullSession(new Date(2026, 7, 9, 19, 0).getTime());
     await buildFullSession(new Date(2026, 7, 16, 19, 0).getTime());
@@ -190,23 +190,23 @@ describe('listSessionSummaries', () => {
     expect(summaries.map((s) => s.date)).toEqual(['2026-08-16', '2026-08-09', '2026-08-02']);
   });
 
-  it('compte blocs et séries sans se tromper', async () => {
+  it('counts blocks and sets without getting it wrong', async () => {
     await buildFullSession();
     const [summary] = await listSessionSummaries();
 
     expect(summary.exerciseCount).toBe(3);
-    // Échauffement compris : 3 séries de squat, 1 de pushUps, 1 de plank.
+    // Warm-up included: 3 squat sets, 1 of pushUps, 1 of plank.
     expect(summary.setCount).toBe(5);
   });
 
-  it('liste les noms d’exercices dans l’ordre de la séance', async () => {
+  it('lists the exercise names in session order', async () => {
     await buildFullSession();
     const [summary] = await listSessionSummaries();
 
     expect(summary.exerciseNames).toEqual(['Squat', 'Push-ups', 'Plank']);
   });
 
-  it('garde exerciseNames aligné sur exerciseCount, doublons compris', async () => {
+  it('keeps exerciseNames aligned with exerciseCount, duplicates included', async () => {
     const { session } = await startSession();
     await addExerciseToSession(session.id, squat.id);
     await addExerciseToSession(session.id, pushUps.id);
@@ -218,7 +218,7 @@ describe('listSessionSummaries', () => {
     expect(summary.exerciseCount).toBe(summary.exerciseNames.length);
   });
 
-  it('gère une séance sans aucun bloc', async () => {
+  it('handles a session holding no block at all', async () => {
     await startSession();
     const [summary] = await listSessionSummaries();
 
@@ -227,7 +227,7 @@ describe('listSessionSummaries', () => {
     expect(summary.setCount).toBe(0);
   });
 
-  it('ne compte pas les séries des autres séances', async () => {
+  it('does not count the sets of other sessions', async () => {
     await buildFullSession(new Date(2026, 7, 9, 19, 0).getTime());
     const { session } = await startSession({ startedAt: new Date(2026, 7, 16, 19, 0).getTime() });
     const block = await addExerciseToSession(session.id, squat.id);
@@ -238,9 +238,9 @@ describe('listSessionSummaries', () => {
     expect(summaries[1].setCount).toBe(5);
   });
 
-  it('reste correct sur une séance volumineuse', async () => {
-    // Vérifie que le comptage indexé donne le même résultat qu'une lecture
-    // complète, à un volume où la différence de coût compte réellement.
+  it('stays correct on a large session', async () => {
+    // Checks that the indexed count gives the same answer as reading
+    // everything, at a volume where the difference in cost really tells.
     const { session } = await startSession();
     const block = await addExerciseToSession(session.id, squat.id);
     for (let i = 0; i < 80; i++) {
@@ -252,7 +252,7 @@ describe('listSessionSummaries', () => {
     expect(summary.exerciseCount).toBe(1);
   });
 
-  it('reprend le titre quand il existe', async () => {
+  it('carries the title over where there is one', async () => {
     await buildFullSession();
     await startSession({ startedAt: new Date(2026, 7, 17, 19, 0).getTime() });
 
@@ -261,7 +261,7 @@ describe('listSessionSummaries', () => {
     expect(summaries[1].title).toBe('Full body');
   });
 
-  it('calcule la durée d’une séance clôturée', async () => {
+  it('works out the duration of a closed session', async () => {
     const startedAt = new Date(2026, 7, 16, 19, 0).getTime();
     const { session } = await startSession({ startedAt });
     await endSession(session.id, startedAt + 4_500_000);
@@ -271,7 +271,7 @@ describe('listSessionSummaries', () => {
     expect(summary.durationMs).toBe(4_500_000);
   });
 
-  it('laisse la durée absente tant que la séance est en cours', async () => {
+  it('leaves the duration absent while the session is running', async () => {
     await startSession();
     const [summary] = await listSessionSummaries();
 
@@ -279,7 +279,7 @@ describe('listSessionSummaries', () => {
     expect('durationMs' in summary).toBe(false);
   });
 
-  it('nomme normalement un exercice archivé', async () => {
+  it('names an archived exercise as usual', async () => {
     await buildFullSession();
     await archiveExercise(squat.id);
 
@@ -297,11 +297,11 @@ describe('listSessionSummaries — pagination', () => {
     }
   });
 
-  it('respecte la limite demandée', async () => {
+  it('respects the limit it was asked for', async () => {
     expect(await listSessionSummaries({ limit: 2 })).toHaveLength(2);
   });
 
-  it('enchaîne les pages sans recouvrement ni trou', async () => {
+  it('walks the pages with no overlap and no hole', async () => {
     const first = await listSessionSummaries({ limit: 2 });
     const second = await listSessionSummaries({ limit: 2, before: first[1].startedAt });
     const third = await listSessionSummaries({ limit: 2, before: second[1].startedAt });
@@ -322,7 +322,7 @@ describe('listSessionSummaries — pagination', () => {
     expect(page).toHaveLength(4);
   });
 
-  it('retourne une page vide au-delà de la plus ancienne', async () => {
+  it('returns an empty page past the oldest one', async () => {
     const all = await listSessionSummaries();
     const beyond = await listSessionSummaries({ before: all[all.length - 1].startedAt });
 
@@ -330,23 +330,23 @@ describe('listSessionSummaries — pagination', () => {
   });
 });
 
-describe('une référence qui ne résout plus', () => {
+describe('a reference that no longer resolves', () => {
   /**
-   * L'état n'arrive que par une base abîmée — une sauvegarde restaurée à qui il
-   * manque une ligne. Ce qui compte est ce que l'app en fait : lever emportait
-   * l'écran de séance *et* tout l'historique, y compris les séances intactes,
-   * sans plus rien laisser à exporter.
+   * The state only arrives through a damaged database — a restored backup with
+   * a row missing. What matters is what the app does with it: throwing took the
+   * session screen *and* the whole history down, intact sessions included,
+   * leaving nothing left to export.
    */
   async function danglingBlock() {
     const { session } = await startSession();
     const block = await addExerciseToSession(session.id, squat.id);
     await createSet({ sessionExerciseId: block.id, weightKg: 100, reps: 5 });
-    // Directement dans la table : aucun chemin d'écriture ne produit ça.
+    // Straight into the table: no write path produces this.
     await db.exercises.delete(squat.id);
     return session;
   }
 
-  it('laisse la séance lisible, le trou nommé', async () => {
+  it('leaves the session readable, and the hole named', async () => {
     const session = await danglingBlock();
     const detail = await getSessionDetail(session.id);
 

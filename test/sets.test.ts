@@ -33,30 +33,30 @@ beforeEach(async () => {
 });
 
 describe('setFieldRequirements', () => {
-  it('exige une charge pour un exercice à charge externe', () => {
+  it('requires a load for an externally loaded exercise', () => {
     expect(setFieldRequirements(squat).weightKg).toBe('required');
     expect(setFieldRequirements(squat).weightLabel).toBe('Load');
   });
 
-  it('interdit la charge au poids du corps', () => {
+  it('forbids a load for bodyweight', () => {
     expect(setFieldRequirements(pushUps).weightKg).toBe('forbidden');
     expect(setFieldRequirements(pushUps).weightLabel).toBeNull();
   });
 
-  it('bascule reps ↔ durée selon la metric', () => {
+  it('switches reps ↔ duration according to the metric', () => {
     expect(setFieldRequirements(plank).durationSec).toBe('required');
     expect(setFieldRequirements(plank).reps).toBe('forbidden');
     expect(setFieldRequirements(squat).reps).toBe('required');
     expect(setFieldRequirements(squat).durationSec).toBe('forbidden');
   });
 
-  it('nomme la charge selon sa nature', () => {
+  it('names the load according to its kind', () => {
     expect(setFieldRequirements(pullUp).weightLabel).toBe('Added');
   });
 });
 
 describe('createSet — cas valides', () => {
-  it('numérote les séries dans l’ordre d’ajout', async () => {
+  it('numbers the sets in the order they are added', async () => {
     const a = await createSet({ sessionExerciseId: blocks.squat, kind: 'warmup', weightKg: 40, reps: 10 });
     const b = await createSet({ sessionExerciseId: blocks.squat, weightKg: 100, reps: 5 });
     const c = await createSet({ sessionExerciseId: blocks.squat, weightKg: 100, reps: 5 });
@@ -64,12 +64,12 @@ describe('createSet — cas valides', () => {
     expect([a.order, b.order, c.order]).toEqual([0, 1, 2]);
   });
 
-  it('considère une série comme série de travail par défaut', async () => {
+  it('takes a set to be a work set by default', async () => {
     const set = await createSet({ sessionExerciseId: blocks.squat, weightKg: 100, reps: 5 });
     expect(set.kind).toBe('work');
   });
 
-  it('dérive les champs dénormalisés depuis les parents', async () => {
+  it('derives the denormalised fields from the parents', async () => {
     const set = await createSet({ sessionExerciseId: blocks.squat, weightKg: 100, reps: 5 });
 
     expect(set.sessionId).toBe(sessionId);
@@ -77,7 +77,7 @@ describe('createSet — cas valides', () => {
     expect(set.performedAt).toBe(startedAt);
   });
 
-  it('horodate la saisie indépendamment de la date de séance', async () => {
+  it('timestamps the entry independently of the session date', async () => {
     const before = Date.now();
     const set = await createSet({ sessionExerciseId: blocks.squat, weightKg: 100, reps: 5 });
 
@@ -85,21 +85,21 @@ describe('createSet — cas valides', () => {
     expect(set.performedAt).toBe(startedAt);
   });
 
-  it('n’écrit aucune charge pour un exercice au poids du corps', async () => {
+  it('writes no load for a bodyweight exercise', async () => {
     const set = await createSet({ sessionExerciseId: blocks.pushUps, reps: 25 });
 
     expect(set.weightKg).toBeUndefined();
     expect('weightKg' in set).toBe(false);
   });
 
-  it('accepte une série au temps', async () => {
+  it('accepts a timed set', async () => {
     const set = await createSet({ sessionExerciseId: blocks.plank, durationSec: 90 });
 
     expect(set.durationSec).toBe(90);
     expect(set.reps).toBeUndefined();
   });
 
-  it('accepte un lest nul puis sa progression', async () => {
+  it('accepts an added load of zero, then its progression', async () => {
     const sansLest = await createSet({ sessionExerciseId: blocks.pullUp, weightKg: 0, reps: 8 });
     const avecLest = await createSet({ sessionExerciseId: blocks.pullUp, weightKg: 10, reps: 4 });
 
@@ -108,7 +108,7 @@ describe('createSet — cas valides', () => {
   });
 });
 
-describe('createSet — invariants dépendants de l’exercice', () => {
+describe('createSet — invariants that depend on the exercise', () => {
   const rejects = async (input: Parameters<typeof createSet>[0], field: string) => {
     await expect(createSet(input)).rejects.toThrow(SetValidationError);
     await createSet(input).catch((err: SetValidationError) => {
@@ -116,27 +116,27 @@ describe('createSet — invariants dépendants de l’exercice', () => {
     });
   };
 
-  it('refuse une charge sur un exercice au poids du corps', async () => {
+  it('refuses a load on a bodyweight exercise', async () => {
     await rejects({ sessionExerciseId: blocks.pushUps, weightKg: 20, reps: 10 }, 'weightKg');
   });
 
-  it('refuse des répétitions sur un exercice au temps', async () => {
+  it('refuses reps on a timed exercise', async () => {
     await rejects({ sessionExerciseId: blocks.plank, reps: 10 }, 'reps');
   });
 
-  it('refuse une durée sur un exercice en répétitions', async () => {
+  it('refuses a duration on an exercise counted in reps', async () => {
     await rejects({ sessionExerciseId: blocks.squat, weightKg: 60, durationSec: 30 }, 'durationSec');
   });
 
-  it('refuse une charge manquante', async () => {
+  it('refuses a missing load', async () => {
     await rejects({ sessionExerciseId: blocks.squat, reps: 5 }, 'weightKg');
   });
 
-  it('refuse des répétitions manquantes', async () => {
+  it('refuses missing reps', async () => {
     await rejects({ sessionExerciseId: blocks.squat, weightKg: 60 }, 'reps');
   });
 
-  it('cite l’exercice concerné dans le message', async () => {
+  it('names the exercise concerned in the message', async () => {
     await createSet({ sessionExerciseId: blocks.pushUps, weightKg: 20, reps: 10 }).catch(
       (err: SetValidationError) => {
         expect(err.message).toContain('Push-ups');
@@ -145,16 +145,16 @@ describe('createSet — invariants dépendants de l’exercice', () => {
   });
 });
 
-describe('createSet — invariants structurels', () => {
+describe('createSet — structural invariants', () => {
   it.each([
-    ['répétitions non entières', { weightKg: 60, reps: 5.5 }, 'reps'],
-    ['charge négative', { weightKg: -20, reps: 5 }, 'weightKg'],
-    ['charge aberrante', { weightKg: 5000, reps: 5 }, 'weightKg'],
-    ['RPE hors bornes', { weightKg: 60, reps: 5, rpe: 12 }, 'rpe'],
-    ['RPE hors demi-points', { weightKg: 60, reps: 5, rpe: 8.3 }, 'rpe'],
-  ])('refuse %s', async (_label, payload, field) => {
+    ['reps that are not whole', { weightKg: 60, reps: 5.5 }, 'reps'],
+    ['a negative load', { weightKg: -20, reps: 5 }, 'weightKg'],
+    ['a load that makes no sense', { weightKg: 5000, reps: 5 }, 'weightKg'],
+    ['an RPE out of bounds', { weightKg: 60, reps: 5, rpe: 12 }, 'rpe'],
+    ['an RPE off the half-points', { weightKg: 60, reps: 5, rpe: 8.3 }, 'rpe'],
+  ])('refuses %s', async (_label, payload, field) => {
     await createSet({ sessionExerciseId: blocks.squat, ...payload }).then(
-      () => expect.unreachable('la série aurait dû être refusée'),
+      () => expect.unreachable('the set should have been refused'),
       (err: SetValidationError) => {
         expect(err).toBeInstanceOf(SetValidationError);
         expect(err.issues.map((i) => i.field)).toContain(field);
@@ -162,7 +162,7 @@ describe('createSet — invariants structurels', () => {
     );
   });
 
-  it('n’écrit rien quand la validation échoue', async () => {
+  it('writes nothing when the validation fails', async () => {
     await createSet({ sessionExerciseId: blocks.squat, weightKg: 100, reps: 5 });
     await createSet({ sessionExerciseId: blocks.squat, weightKg: -1, reps: 5 }).catch(() => {});
 
@@ -170,7 +170,7 @@ describe('createSet — invariants structurels', () => {
   });
 });
 
-describe('hooks Dexie — contournement de la couche d’écriture', () => {
+describe('Dexie hooks — going around the write layer', () => {
   const rawSet = (overrides: Partial<SetEntry>) =>
     ({
       id: 'brut',
@@ -186,34 +186,34 @@ describe('hooks Dexie — contournement de la couche d’écriture', () => {
       ...overrides,
     }) as SetEntry;
 
-  /** Série brute amputée d'un champ requis, pour éprouver le hook structurel. */
+  /** A raw set missing a required field, to exercise the structural hook. */
   const rawSetWithout = (field: keyof SetEntry): SetEntry => {
     const entry = rawSet({}) as unknown as Record<string, unknown>;
     delete entry[field];
     return entry as unknown as SetEntry;
   };
 
-  it('refuse un add() direct avec un kind inconnu', async () => {
+  it('refuses a direct add() carrying an unknown kind', async () => {
     await expect(
       db.sets.add(rawSet({ kind: 'bidon' as SetEntry['kind'] })),
     ).rejects.toThrow(SetValidationError);
   });
 
   it.each(['sessionId', 'exerciseId', 'performedAt', 'loggedAt', 'order'] as const)(
-    'refuse un add() direct sans %s',
+    'refuses a direct add() with no %s',
     async (field) => {
       await expect(db.sets.add(rawSetWithout(field))).rejects.toThrow(SetValidationError);
     },
   );
 
-  it('refuse un update() direct qui casse un invariant', async () => {
+  it('refuses a direct update() that breaks an invariant', async () => {
     const set = await createSet({ sessionExerciseId: blocks.squat, weightKg: 100, reps: 5 });
     await expect(db.sets.update(set.id, { reps: -3 })).rejects.toThrow(SetValidationError);
   });
 });
 
 describe('updateSet', () => {
-  it('corrige une charge', async () => {
+  it('corrects a load', async () => {
     const set = await createSet({ sessionExerciseId: blocks.squat, weightKg: 100, reps: 5, rpe: 8 });
     const updated = await updateSet(set.id, { weightKg: 102.5 });
 
@@ -221,7 +221,7 @@ describe('updateSet', () => {
     expect((await db.sets.get(set.id))!.weightKg).toBe(102.5);
   });
 
-  it('efface un champ optionnel passé à undefined', async () => {
+  it('clears an optional field handed undefined', async () => {
     const set = await createSet({ sessionExerciseId: blocks.squat, weightKg: 100, reps: 5, rpe: 8 });
     const updated = await updateSet(set.id, { rpe: undefined });
 
@@ -229,7 +229,7 @@ describe('updateSet', () => {
     expect((await db.sets.get(set.id))!.rpe).toBeUndefined();
   });
 
-  it('laisse intactes les clés absentes du patch', async () => {
+  it('leaves untouched the keys the patch does not carry', async () => {
     const set = await createSet({ sessionExerciseId: blocks.squat, weightKg: 100, reps: 5, rpe: 8 });
     const updated = await updateSet(set.id, { reps: 6 });
 
@@ -237,7 +237,7 @@ describe('updateSet', () => {
     expect(updated.weightKg).toBe(100);
   });
 
-  it('refuse un patch qui rendrait la série incohérente', async () => {
+  it('refuses a patch that would leave the set inconsistent', async () => {
     const set = await createSet({ sessionExerciseId: blocks.pushUps, reps: 25 });
     await expect(updateSet(set.id, { weightKg: 50 })).rejects.toThrow(SetValidationError);
 
@@ -248,7 +248,7 @@ describe('updateSet', () => {
 });
 
 describe('deleteSet', () => {
-  it('supprime sans renuméroter les suivantes', async () => {
+  it('deletes without renumbering the ones that follow', async () => {
     const a = await createSet({ sessionExerciseId: blocks.squat, weightKg: 100, reps: 5 });
     const b = await createSet({ sessionExerciseId: blocks.squat, weightKg: 100, reps: 5 });
     const c = await createSet({ sessionExerciseId: blocks.squat, weightKg: 100, reps: 5 });
@@ -260,7 +260,7 @@ describe('deleteSet', () => {
     expect(remaining.map((s) => s.order)).toEqual([0, 2]);
   });
 
-  it('laisse la série suivante s’ajouter après la dernière', async () => {
+  it('lets the next set be added after the last one', async () => {
     const a = await createSet({ sessionExerciseId: blocks.squat, weightKg: 100, reps: 5 });
     const b = await createSet({ sessionExerciseId: blocks.squat, weightKg: 100, reps: 5 });
     await deleteSet(b.id);
@@ -272,58 +272,58 @@ describe('deleteSet', () => {
 
 describe('recentSetsForExercise', () => {
   beforeEach(async () => {
-    // Séance précédente, une semaine plus tôt.
+    // The previous session, a week earlier.
     const older = Date.parse('2026-08-09T09:00:00Z');
     const { session } = await startSession({ startedAt: older });
     const block = await addExerciseToSession(session.id, squat.id);
     await createSet({ sessionExerciseId: block.id, weightKg: 95, reps: 5 });
     await createSet({ sessionExerciseId: block.id, weightKg: 95, reps: 5 });
 
-    // Séance du jour : un échauffement puis deux séries de travail.
+    // Today's session: a warm-up, then two work sets.
     await createSet({ sessionExerciseId: blocks.squat, kind: 'warmup', weightKg: 40, reps: 10 });
     await createSet({ sessionExerciseId: blocks.squat, weightKg: 100, reps: 5 });
     await createSet({ sessionExerciseId: blocks.squat, weightKg: 100, reps: 5 });
   });
 
-  it('remonte les séries les plus récentes d’abord', async () => {
+  it('brings the most recent sets back first', async () => {
     const recent = await recentSetsForExercise(squat.id, 5);
     const timestamps = recent.map((s) => s.performedAt);
 
     expect(timestamps).toEqual([...timestamps].sort((a, b) => b - a));
   });
 
-  it('respecte l’ordre exact à l’intérieur d’une séance', async () => {
+  it('respects the exact order within a session', async () => {
     const recent = await recentSetsForExercise(squat.id, 5);
     expect(recent[0].order).toBe(2);
     expect(recent[1].order).toBe(1);
   });
 
-  it('exclut les échauffements par défaut', async () => {
+  it('leaves the warm-ups out by default', async () => {
     const recent = await recentSetsForExercise(squat.id, 10);
 
     expect(recent.every((s) => s.kind === 'work')).toBe(true);
     expect(recent).toHaveLength(4);
   });
 
-  it('inclut les échauffements sur demande', async () => {
+  it('includes the warm-ups on request', async () => {
     const recent = await recentSetsForExercise(squat.id, 10, { includeWarmups: true });
 
     expect(recent).toHaveLength(5);
     expect(recent.some((s) => s.kind === 'warmup')).toBe(true);
   });
 
-  it('respecte la limite demandée', async () => {
+  it('respects the limit it was asked for', async () => {
     expect(await recentSetsForExercise(squat.id, 2)).toHaveLength(2);
   });
 
-  it('n’en mélange pas les exercices', async () => {
+  it('does not mix the exercises up', async () => {
     await createSet({ sessionExerciseId: blocks.pushUps, reps: 25 });
     expect(await recentSetsForExercise(pushUps.id, 10)).toHaveLength(1);
   });
 
-  it('reste correct sur un volume qui dépasse la limite', async () => {
-    // Vérifie que la requête traverse bien l'index composé à trois composantes,
-    // et pas seulement les quelques lignes des tests précédents.
+  it('stays correct on a volume beyond the limit', async () => {
+    // Checks that the query really walks the three-member compound index, and
+    // not merely the handful of rows the earlier tests leave behind.
     for (let i = 0; i < 60; i++) {
       await createSet({ sessionExerciseId: blocks.squat, weightKg: 60 + i, reps: 5 });
     }

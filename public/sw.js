@@ -1,21 +1,21 @@
 /*
- * Service worker de Workout.
+ * Workout's service worker.
  *
- * Stratégie choisie pour ne PAS sacrifier la fraîcheur à l'autonomie :
+ * The strategy, chosen so that offline capability costs nothing in freshness:
  *
- *   navigation (HTML)      réseau d'abord, cache en secours
- *   /_next/static/…        cache d'abord (noms hachés, contenu immuable)
- *   manifeste et icônes    cache d'abord, rafraîchi en arrière-plan
- *   le reste               réseau, sans interception
+ *   navigation (HTML)      network first, cache as a fallback
+ *   /_next/static/…        cache first (hashed names, immutable content)
+ *   manifest and icons     cache first, refreshed in the background
+ *   everything else        network, not intercepted
  *
- * Le réseau d'abord sur les pages est le point clé : en ligne, l'utilisateur
- * reçoit toujours le dernier HTML, donc les mises à jour restent automatiques
- * comme avant ce worker. Le cache ne sert que lorsque le réseau échoue.
+ * Network first on pages is the key point: online, the user always gets the
+ * latest HTML, so updates stay as automatic as they were before this worker
+ * existed. The cache only serves when the network fails.
  *
- * `skipWaiting()` n'est jamais appelé tout seul. Échanger les assets sous une
- * page déjà chargée casse le chargement des chunks — au milieu d'une séance,
- * ce serait le pire moment. C'est l'utilisateur qui déclenche la bascule,
- * depuis le bandeau de mise à jour.
+ * `skipWaiting()` is never called on its own. Swapping assets under a page
+ * that is already loaded breaks chunk loading — and mid-session is the worst
+ * possible moment for that. The switch is the user's to make, from the update
+ * banner.
  */
 
 const VERSION = 'v1';
@@ -31,8 +31,8 @@ self.addEventListener('install', (event) => {
   event.waitUntil(
     caches
       .open(SHELL_CACHE)
-      // `addAll` échoue en bloc si une seule URL tombe : on les prend une par
-      // une pour qu'une page indisponible ne fasse pas rater l'installation.
+      // `addAll` fails as a whole if a single URL does: they are taken one by
+      // one so that one unreachable page cannot fail the install.
       .then((cache) => Promise.all(SHELL_URLS.map((url) => cache.add(url).catch(() => {})))),
   );
 });
@@ -53,7 +53,7 @@ self.addEventListener('message', (event) => {
   if (event.data && event.data.type === 'SKIP_WAITING') self.skipWaiting();
 });
 
-/** Ne met en cache que des réponses complètes et servables. */
+/** Only caches responses that are complete and servable. */
 function isCacheable(response) {
   return response && response.status === 200 && response.type === 'basic';
 }

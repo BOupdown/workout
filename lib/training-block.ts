@@ -4,7 +4,7 @@
  * A block is a stretch of weeks with one intent: strength, hypertrophy,
  * peaking, a deload, coming back from an injury. The label is free text,
  * deliberately: the app has no business encoding a methodology, and the same
- * feature then serves someone writing "prépa compét" as well as "force".
+ * feature then serves someone writing "meet prep" as well as "strength".
  *
  * A block has a **start and an end**, both chosen up front. That is what lets
  * the counter say "week 2 of 4" rather than just "week 2" — and the whole
@@ -22,7 +22,7 @@ import type { Id, LocalDate, Timestamp } from './db/types';
 
 export interface TrainingBlock {
   id: Id;
-  /** What the user calls it. Free text — "Strength", "Deload", "Prépa". */
+  /** What the user calls it. Free text — "Strength", "Deload", "Meet prep". */
   label: string;
   startsOn: LocalDate;
   /** Inclusive: the last day of the block, not the first day after it. */

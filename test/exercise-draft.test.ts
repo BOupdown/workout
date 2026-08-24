@@ -22,23 +22,23 @@ const draft = (over: Partial<ExerciseDraft> = {}): ExerciseDraft => ({
   ...over,
 });
 
-describe('options du formulaire', () => {
-  it('couvre les quatre natures de charge', () => {
+describe('the form options', () => {
+  it('covers all four kinds of load', () => {
     expect(LOAD_TYPE_OPTIONS.map((o) => o.value).sort()).toEqual(
       ['assisted', 'bodyweight', 'external', 'weighted_bodyweight'].sort(),
     );
   });
 
-  it('couvre les deux façons de mesurer l’effort', () => {
+  it('covers both ways of measuring effort', () => {
     expect(METRIC_OPTIONS.map((o) => o.value)).toEqual(['reps', 'time']);
   });
 
-  it('nomme chaque groupe musculaire en français', () => {
+  it('gives every muscle group a label', () => {
     expect(Object.keys(MUSCLE_GROUP_LABELS)).toHaveLength(13);
     expect(Object.values(MUSCLE_GROUP_LABELS).every((label) => label.length > 0)).toBe(true);
   });
 
-  it('n’expose aucun libellé technique du modèle', () => {
+  it('exposes no technical wording from the model', () => {
     const labels = LOAD_TYPE_OPTIONS.map((o) => o.label).join(' ');
     expect(labels).not.toContain('bodyweight');
     expect(labels).not.toContain('_');
@@ -46,18 +46,19 @@ describe('options du formulaire', () => {
 });
 
 describe('draftAllowsIncrement', () => {
-  it('refuse le pas de progression au poids du corps', () => {
+  it('refuses an increment for bodyweight', () => {
     expect(draftAllowsIncrement({ loadType: 'bodyweight' })).toBe(false);
   });
 
-  it('l’autorise partout où il y a une charge', () => {
+  it('allows one wherever there is a load', () => {
     for (const loadType of ['external', 'weighted_bodyweight', 'assisted'] as const) {
       expect(draftAllowsIncrement({ loadType })).toBe(true);
     }
   });
 
-  it('s’accorde avec la validation', () => {
-    // Le formulaire et la base doivent dire la même chose, sans règle dupliquée.
+  it('agrees with the validation', () => {
+    // The form and the database have to say the same thing, with no rule
+    // written twice.
     for (const { value } of LOAD_TYPE_OPTIONS) {
       const requirements = setFieldRequirements({ loadType: value, metric: 'reps' });
       expect(draftAllowsIncrement({ loadType: value })).toBe(requirements.weightKg === 'required');
@@ -70,7 +71,7 @@ describe('exerciseDraftToInput', () => {
     expect(exerciseDraftToInput(draft({ name: '  Sandbag carry  ' })).name).toBe('Sandbag carry');
   });
 
-  it('omet un groupe musculaire non renseigné', () => {
+  it('leaves out a muscle group that was not filled in', () => {
     expect('muscleGroup' in exerciseDraftToInput(draft())).toBe(false);
   });
 
@@ -78,28 +79,28 @@ describe('exerciseDraftToInput', () => {
     expect(exerciseDraftToInput(draft({ muscleGroup: 'shoulders' })).muscleGroup).toBe('shoulders');
   });
 
-  it('lit le pas de progression avec la virgule française', () => {
+  it('reads an increment written with a decimal comma', () => {
     expect(exerciseDraftToInput(draft({ defaultIncrementKg: '2,5' })).defaultIncrementKg).toBe(2.5);
   });
 
-  it('n’émet jamais de pas de progression au poids du corps', () => {
-    // Même si le champ traîne une valeur d'un choix précédent.
+  it('never emits an increment for bodyweight', () => {
+    // Even when the field still carries a value from an earlier choice.
     const input = exerciseDraftToInput(
       draft({ loadType: 'bodyweight', defaultIncrementKg: '2,5' }),
     );
     expect('defaultIncrementKg' in input).toBe(false);
   });
 
-  it('omet un pas illisible plutôt que de le deviner', () => {
+  it('leaves out an unreadable increment rather than guessing it', () => {
     expect('defaultIncrementKg' in exerciseDraftToInput(draft({ defaultIncrementKg: 'abc' }))).toBe(
       false,
     );
   });
 });
 
-describe('exerciseDraftToInput — accord avec la base', () => {
+describe('exerciseDraftToInput — agreement with the database', () => {
   it.each(LOAD_TYPE_OPTIONS.map((o) => o.value))(
-    'un brouillon rempli est accepté — %s',
+    'a filled-in draft is accepted — %s',
     async (loadType) => {
       const exercise = await createExercise(
         exerciseDraftToInput(
@@ -113,18 +114,18 @@ describe('exerciseDraftToInput — accord avec la base', () => {
     },
   );
 
-  it('accepte un exercice au temps', async () => {
+  it('accepts an exercise counted in time', async () => {
     const exercise = await createExercise(
       exerciseDraftToInput(draft({ name: 'Chaise au mur', loadType: 'bodyweight', metric: 'time' })),
     );
     expect(exercise.metric).toBe('time');
   });
 
-  it('remonte le conflit de nom avec l’exercice existant', async () => {
+  it('reports the name clash, naming the existing exercise', async () => {
     await createExercise(exerciseDraftToInput(draft()));
 
     await createExercise(exerciseDraftToInput(draft({ name: 'SANDBAG-CARRY' }))).then(
-      () => expect.unreachable('la création aurait dû être refusée'),
+      () => expect.unreachable('the creation should have been refused'),
       (error: ExerciseNameConflictError) => {
         expect(error).toBeInstanceOf(ExerciseNameConflictError);
         expect(error.existing.name).toBe('Sandbag carry');
@@ -132,13 +133,13 @@ describe('exerciseDraftToInput — accord avec la base', () => {
     );
   });
 
-  it('refuse un nom vide via la validation de la base', async () => {
+  it('refuses an empty name through the database validation', async () => {
     await expect(createExercise(exerciseDraftToInput(draft({ name: '   ' })))).rejects.toThrow();
   });
 });
 
 describe('exerciseToDraft', () => {
-  it('recharge un exercice existant sans rien perdre', async () => {
+  it('reloads an existing exercise without losing anything', async () => {
     const exercise = await createExercise({
       name: 'Sandbag carry',
       loadType: 'external',
@@ -158,7 +159,7 @@ describe('exerciseToDraft', () => {
     });
   });
 
-  it('rend des champs vides pour ce qui n’est pas renseigné', async () => {
+  it('returns empty fields for what was never filled in', async () => {
     const exercise = await createExercise({
       name: 'Ring dip',
       loadType: 'bodyweight',
@@ -170,9 +171,9 @@ describe('exerciseToDraft', () => {
     expect(draft.defaultIncrementKg).toBe('');
   });
 
-  it('fait un aller-retour stable', async () => {
-    // Ouvrir le formulaire puis enregistrer sans rien toucher ne doit rien
-    // changer : c'est ce qui rend une correction de nom sans danger.
+  it('round-trips without drifting', async () => {
+    // Opening the form and saving without touching anything must change
+    // nothing: that is what makes correcting a name safe.
     const exercise = await createExercise({
       name: 'Pendlay row',
       loadType: 'external',
@@ -195,21 +196,21 @@ describe('exerciseToDraft', () => {
 });
 
 describe('exerciseDraftToUpdate', () => {
-  it('coupe les espaces autour du nom', () => {
+  it('trims the whitespace around the name', () => {
     expect(exerciseDraftToUpdate(draft({ name: '  Sandbag carry  ' })).name).toBe('Sandbag carry');
   });
 
-  it('rend undefined, et non une absence, pour un groupe musculaire effacé', () => {
-    // La différence compte : `Table.update` lit une clé présente à `undefined`
-    // comme « supprime-la », et une clé absente comme « n'y touche pas ». Sans
-    // ça, effacer un groupe musculaire serait impossible.
+  it('returns undefined, not an absence, for a cleared muscle group', () => {
+    // The difference matters: `Table.update` reads a key present and set to
+    // `undefined` as "delete it", and an absent key as "leave it alone".
+    // Without that, clearing a muscle group would be impossible.
     const update = exerciseDraftToUpdate(draft({ muscleGroup: '' }));
     expect('muscleGroup' in update).toBe(true);
     expect(update.muscleGroup).toBeUndefined();
   });
 
-  it('efface le pas de progression quand la charge disparaît', () => {
-    // Un exercice au poids du corps n'a pas de charge à incrémenter.
+  it('clears the increment when the load goes away', () => {
+    // A bodyweight exercise has no load to step up.
     const update = exerciseDraftToUpdate(
       draft({ loadType: 'bodyweight', defaultIncrementKg: '2.5' }),
     );
@@ -217,9 +218,9 @@ describe('exerciseDraftToUpdate', () => {
     expect(update.defaultIncrementKg).toBeUndefined();
   });
 
-  it('renvoie toujours les champs de nature, même inchangés', () => {
-    // updateExercise ne compte que les changements *effectifs* : les renvoyer
-    // tels quels doit rester un no-op, pas un rejet.
+  it('always sends the nature fields back, unchanged or not', () => {
+    // updateExercise counts only *actual* changes: sending them back as they
+    // were has to stay a no-op, not a refusal.
     const update = exerciseDraftToUpdate(draft());
     expect(update.loadType).toBe('external');
     expect(update.metric).toBe('reps');
