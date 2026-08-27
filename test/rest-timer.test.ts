@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import {
   clampRestDuration,
+  restDurationFromParts,
+  splitRestDuration,
   DEFAULT_REST_SEC,
   extendRest,
   isRestStale,
@@ -139,5 +141,60 @@ describe('parseRestTimer', () => {
 
   it('bounds a stored duration that makes no sense', () => {
     expect(parseRestTimer('{"startedAt":1,"durationSec":999999}')?.durationSec).toBe(MAX_REST_SEC);
+  });
+});
+
+describe('splitRestDuration', () => {
+  it('splits a duration into the two fields', () => {
+    expect(splitRestDuration(150)).toEqual({ minutes: '2', seconds: '30' });
+  });
+
+  it('pads the seconds, since the two fields read as one duration', () => {
+    // "1" and "5" would say one minute five, and this field never means five.
+    expect(splitRestDuration(65)).toEqual({ minutes: '1', seconds: '05' });
+  });
+
+  it('shows a duration under the minute as zero minutes', () => {
+    expect(splitRestDuration(45)).toEqual({ minutes: '0', seconds: '45' });
+  });
+
+  it('shows what was actually kept, bounds included', () => {
+    expect(splitRestDuration(99_999)).toEqual({ minutes: '60', seconds: '00' });
+  });
+});
+
+describe('restDurationFromParts', () => {
+  it('reads the two fields as one duration', () => {
+    expect(restDurationFromParts({ minutes: '2', seconds: '30' })).toBe(150);
+  });
+
+  it('treats an empty field as zero', () => {
+    expect(restDurationFromParts({ minutes: '2', seconds: '' })).toBe(120);
+    expect(restDurationFromParts({ minutes: '', seconds: '45' })).toBe(45);
+  });
+
+  it('does not cap the seconds at 59', () => {
+    // Someone after two and a half minutes may well type 150 into the box
+    // already under their thumb.
+    expect(restDurationFromParts({ minutes: '', seconds: '150' })).toBe(150);
+  });
+
+  it('waits rather than commits while the fields are empty', () => {
+    expect(restDurationFromParts({ minutes: '', seconds: '' })).toBeNull();
+  });
+
+  it('reads a cleared field as an edit in progress, not a rest of zero', () => {
+    expect(restDurationFromParts({ minutes: '0', seconds: '0' })).toBeNull();
+  });
+
+  it('refuses anything that is not whole digits', () => {
+    expect(restDurationFromParts({ minutes: '1.5', seconds: '' })).toBeNull();
+    expect(restDurationFromParts({ minutes: '', seconds: '30s' })).toBeNull();
+    expect(restDurationFromParts({ minutes: '-2', seconds: '' })).toBeNull();
+  });
+
+  it('bounds an entry at both ends', () => {
+    expect(restDurationFromParts({ minutes: '', seconds: '2' })).toBe(MIN_REST_SEC);
+    expect(restDurationFromParts({ minutes: '90', seconds: '' })).toBe(MAX_REST_SEC);
   });
 });

@@ -44,10 +44,56 @@ export interface RestProgress {
   fraction: number;
 }
 
+/** A duration split across the two fields of the custom setting. */
+export interface RestDurationParts {
+  minutes: string;
+  seconds: string;
+}
+
+/** Whole digits only: a rest of 1.5 seconds is a typo, not an intention. */
+const DIGITS_PATTERN = /^\d{1,4}$/;
+
 /** Keeps a duration inside the bounds, rounded to a whole second. */
 export function clampRestDuration(seconds: number): number {
   if (!Number.isFinite(seconds)) return DEFAULT_REST_SEC;
   return Math.min(MAX_REST_SEC, Math.max(MIN_REST_SEC, Math.round(seconds)));
+}
+
+/** Fills the custom fields from the duration currently in force. */
+export function splitRestDuration(totalSec: number): RestDurationParts {
+  const total = clampRestDuration(totalSec);
+
+  return {
+    minutes: String(Math.floor(total / 60)),
+    // Padded, because these two fields are read as one duration: "1" and "5"
+    // says one minute five, and this field never means five.
+    seconds: String(total % 60).padStart(2, '0'),
+  };
+}
+
+/**
+ * The duration typed into the custom fields, or `null` while they do not yet
+ * hold one — empty, mid-edit, or a stray character.
+ *
+ * An empty field counts as zero, so "2" with no seconds is two minutes; and
+ * seconds are not capped at 59, because someone who wants two and a half
+ * minutes may well type 150 into the box that is already under their thumb.
+ * The result is clamped like any other duration, so nothing out of bounds can
+ * be set from here either.
+ */
+export function restDurationFromParts(parts: RestDurationParts): number | null {
+  const minutes = parts.minutes.trim();
+  const seconds = parts.seconds.trim();
+
+  if (minutes === '' && seconds === '') return null;
+  if (minutes !== '' && !DIGITS_PATTERN.test(minutes)) return null;
+  if (seconds !== '' && !DIGITS_PATTERN.test(seconds)) return null;
+
+  const total =
+    (minutes === '' ? 0 : Number(minutes)) * 60 + (seconds === '' ? 0 : Number(seconds));
+
+  // A rest of zero is a field being cleared, not a choice.
+  return total === 0 ? null : clampRestDuration(total);
 }
 
 /**

@@ -22,7 +22,14 @@ import {
   type BackupSummary,
 } from '@/lib/db/backup';
 import { formatDuration } from '@/lib/format';
-import { REST_DURATIONS_SEC } from '@/lib/rest-timer';
+import {
+  MAX_REST_SEC,
+  MIN_REST_SEC,
+  REST_DURATIONS_SEC,
+  restDurationFromParts,
+  splitRestDuration,
+  type RestDurationParts,
+} from '@/lib/rest-timer';
 import { WEIGHT_UNITS } from '@/lib/units';
 
 const DATE_FORMAT = new Intl.DateTimeFormat('en-GB', {
@@ -45,11 +52,41 @@ export function SettingsScreen() {
   const backup = useBackupExport();
   const fileInput = useRef<HTMLInputElement>(null);
 
+  /**
+   * The custom fields hold their own text while being typed. Reading them
+   * straight from the stored duration would fight the typing: clearing the
+   * minutes to type "2" would land on the floor of 5 s and put "0" back under
+   * the thumb. `null` means "not being edited", and the fields then show
+   * whatever is in force.
+   */
+  const [draft, setDraft] = useState<RestDurationParts | null>(null);
+  const [customOpen, setCustomOpen] = useState(false);
+
   const [busy, setBusy] = useState(false);
   const [confirming, setConfirming] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
+
+  const isPreset = (REST_DURATIONS_SEC as readonly number[]).includes(rest.durationSec);
+  // Shown whenever the duration in force is not one of the four, so a custom
+  // rest is never hidden behind a button that looks unselected.
+  const showCustom = customOpen || !isPreset;
+  const parts = draft ?? splitRestDuration(rest.durationSec);
+
+  const editParts = (changes: Partial<RestDurationParts>) => {
+    const next = { ...parts, ...changes };
+    setDraft(next);
+
+    // Committed on every keystroke, so the choice holds even if the field is
+    // never blurred — a phone is just as likely to be pocketed as tapped away.
+    const seconds = restDurationFromParts(next);
+    if (seconds !== null) rest.setDurationSec(seconds);
+  };
+
+  // Back to what was actually kept: an entry out of bounds was clamped, and the
+  // fields must say so rather than keep showing the number that did not stick.
+  const settleParts = () => setDraft(null);
 
   const handleFile = async (file: File) => {
     setBusy(true);
@@ -143,7 +180,11 @@ export function SettingsScreen() {
               <button
                 key={option}
                 type="button"
-                onClick={() => rest.setDurationSec(option)}
+                onClick={() => {
+                  setCustomOpen(false);
+                  setDraft(null);
+                  rest.setDurationSec(option);
+                }}
                 aria-pressed={rest.durationSec === option}
                 className={`h-14 flex-1 rounded-control border-2 font-mono text-[0.9375rem] font-semibold tabular-nums transition-transform active:scale-[0.98] ${
                   rest.durationSec === option
@@ -155,6 +196,66 @@ export function SettingsScreen() {
               </button>
             ))}
           </div>
+
+          {/* Four buttons cannot cover every rest anyone trains on: a heavy
+              triple wants five minutes, a superset wants forty seconds. The
+              presets stay the one-tap path, and the exact number is one tap
+              further rather than absent. */}
+          {showCustom ? (
+            <div
+              className={`mt-1.5 rounded-control border-2 px-3 py-3 ${
+                isPreset ? 'border-line' : 'border-ink'
+              }`}
+            >
+              <div className="flex items-center gap-2">
+                <input
+                  type="text"
+                  inputMode="numeric"
+                  enterKeyHint="done"
+                  autoComplete="off"
+                  aria-label="Rest, minutes"
+                  value={parts.minutes}
+                  onFocus={(event) => event.currentTarget.select()}
+                  onChange={(event) => editParts({ minutes: event.target.value })}
+                  onBlur={settleParts}
+                  className="h-14 min-w-0 flex-1 rounded-control border-2 border-line bg-surface text-center font-mono text-xl font-semibold text-ink tabular-nums outline-none focus:border-ink"
+                />
+                <span className="shrink-0 text-sm text-muted">min</span>
+
+                <input
+                  type="text"
+                  inputMode="numeric"
+                  enterKeyHint="done"
+                  autoComplete="off"
+                  aria-label="Rest, seconds"
+                  value={parts.seconds}
+                  onFocus={(event) => event.currentTarget.select()}
+                  onChange={(event) => editParts({ seconds: event.target.value })}
+                  onBlur={settleParts}
+                  className="h-14 min-w-0 flex-1 rounded-control border-2 border-line bg-surface text-center font-mono text-xl font-semibold text-ink tabular-nums outline-none focus:border-ink"
+                />
+                <span className="shrink-0 text-sm text-muted">s</span>
+              </div>
+
+              {/* Said plainly, because both ends are enforced silently: an entry
+                  outside them is pulled back into range the moment you leave
+                  the field. */}
+              {/* In the units of the two fields above, not as a duration:
+                  `formatDuration` reads the ceiling as "1:00:00", which says
+                  nothing useful next to a box labelled min. */}
+              <p className="mt-2 text-xs text-muted">
+                Any time from {MIN_REST_SEC} s to {MAX_REST_SEC / 60} min.
+              </p>
+            </div>
+          ) : (
+            <button
+              type="button"
+              onClick={() => setCustomOpen(true)}
+              className="mt-1.5 h-14 w-full rounded-control border-2 border-transparent bg-surface text-[0.9375rem] font-semibold text-muted transition-transform active:scale-[0.98]"
+            >
+              Custom time
+            </button>
+          )}
         </section>
 
         {!install.installed ? (
