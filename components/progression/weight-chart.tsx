@@ -3,8 +3,12 @@
 import { useState } from 'react';
 import type { WeightTrend } from '@/lib/bodyweight-trend';
 import { formatNumber } from '@/lib/format';
-import { buildChartGeometry } from '@/lib/progression';
+import { boxesOverlap, buildChartGeometry, monoTextBox } from '@/lib/progression';
 import { toDisplayWeight, type WeightUnit } from '@/lib/units';
+
+/** Matching the `text-[10px]` and `text-[9px]` the two label kinds are set in. */
+const DIRECT_LABEL_SIZE = 10;
+const TICK_LABEL_SIZE = 9;
 
 interface WeightChartProps {
   trend: WeightTrend;
@@ -50,6 +54,37 @@ export function WeightChart({ trend, unit, windowLabel }: WeightChartProps) {
   // single weigh-in does not stack two labels on one dot.
   const labelled = new Set([0, lastIndex]);
 
+  // Resolved once, then used both to draw the labels and to work out which axis
+  // ticks they cover. The first reading is always at the left edge here, which
+  // is where the axis prints its own numbers — so this chart meets the
+  // collision more often than the progression one, not less.
+  const directLabels = [...labelled].map((index) => {
+    const p = plotted[index];
+    const nudgeLeft = index === lastIndex && plotted.length > 1;
+
+    return {
+      index,
+      x: nudgeLeft ? p.x - 6 : p.x,
+      y: p.y - 10,
+      anchor: nudgeLeft
+        ? ('end' as const)
+        : index === 0 && plotted.length > 1
+          ? ('start' as const)
+          : ('middle' as const),
+      text: format(p.point.value),
+    };
+  });
+
+  const directBoxes = directLabels.map((label) =>
+    monoTextBox(label.text, label.x, label.y, DIRECT_LABEL_SIZE, label.anchor),
+  );
+
+  /** A tick keeps its number only where nothing is already printed there. */
+  const tickIsClear = (tick: { y: number; value: number }) => {
+    const box = monoTextBox(format(tick.value), BOX.padding.left, tick.y - 4, TICK_LABEL_SIZE);
+    return !directBoxes.some((direct) => boxesOverlap(direct, box));
+  };
+
   return (
     <figure className="m-0">
       <svg
@@ -70,13 +105,15 @@ export function WeightChart({ trend, unit, windowLabel }: WeightChartProps) {
               className="stroke-line"
               strokeWidth={1}
             />
-            <text
-              x={BOX.padding.left}
-              y={tick.y - 4}
-              className="fill-muted font-mono text-[9px] tabular-nums"
-            >
-              {format(tick.value)}
-            </text>
+            {tickIsClear(tick) ? (
+              <text
+                x={BOX.padding.left}
+                y={tick.y - 4}
+                className="fill-muted font-mono text-[9px] tabular-nums"
+              >
+                {format(tick.value)}
+              </text>
+            ) : null}
           </g>
         ))}
 
@@ -101,21 +138,17 @@ export function WeightChart({ trend, unit, windowLabel }: WeightChartProps) {
           />
         ))}
 
-        {[...labelled].map((index) => {
-          const p = plotted[index];
-          const nudgeLeft = index === lastIndex && plotted.length > 1;
-          return (
-            <text
-              key={`label-${index}`}
-              x={nudgeLeft ? p.x - 6 : p.x}
-              y={p.y - 10}
-              textAnchor={nudgeLeft ? 'end' : index === 0 && plotted.length > 1 ? 'start' : 'middle'}
-              className="fill-ink font-mono text-[10px] font-semibold tabular-nums"
-            >
-              {format(p.point.value)}
-            </text>
-          );
-        })}
+        {directLabels.map((label) => (
+          <text
+            key={`label-${label.index}`}
+            x={label.x}
+            y={label.y}
+            textAnchor={label.anchor}
+            className="fill-ink font-mono text-[10px] font-semibold tabular-nums"
+          >
+            {label.text}
+          </text>
+        ))}
 
         {/* Wide hit areas: a 10px dot cannot be aimed at with a finger. */}
         {plotted.map((p, index) => (
