@@ -37,6 +37,22 @@ export function formatWeight(kilograms: number, unit: WeightUnit = 'kg'): string
   return `${formatNumber(toDisplayWeight(kilograms, unit))} ${unit}`;
 }
 
+/**
+ * Tonnage, grouped: `18,400` rather than `18400`.
+ *
+ * Grouped rather than shortened to "18.4 t". A tonne is a kilogram word, and
+ * the same number in pounds would have to become something else — so the
+ * separator says the same thing in both units, which no abbreviation does.
+ *
+ * Rounded to the whole unit: a week's volume is tens of thousands, and a
+ * decimal on it is noise dressed as precision.
+ */
+const VOLUME_FORMAT = new Intl.NumberFormat('en-GB', { maximumFractionDigits: 0 });
+
+export function formatVolume(value: number): string {
+  return VOLUME_FORMAT.format(Math.round(value));
+}
+
 /** Duration as `m:ss`, or `h:mm:ss` past the hour. */
 export function formatDuration(totalSeconds: number): string {
   const total = Math.max(0, Math.round(totalSeconds));

@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { db } from '../lib/db/db';
 import { archiveExercise } from '../lib/db/exercises';
-import { getSessionDetail, listSessionSummaries } from '../lib/db/queries';
+import { getSessionDetail, listSessionSummaries, readTrainingLoad } from '../lib/db/queries';
 import { createSet } from '../lib/db/sets';
 import {
   addExerciseToSession,
@@ -362,5 +362,77 @@ describe('a reference that no longer resolves', () => {
     expect(summaries).toHaveLength(1);
     expect(summaries[0].setCount).toBe(1);
     expect(summaries[0].exerciseNames).toEqual(['Missing exercise']);
+  });
+});
+
+describe('readTrainingLoad', () => {
+  /** A finished session on a given day, holding one squat set. */
+  async function squatOn(day: Date, weightKg = 100, reps = 5) {
+    const { session } = await startSession({ startedAt: day.getTime() });
+    const block = await addExerciseToSession(session.id, squat.id);
+    await createSet({ sessionExerciseId: block.id, weightKg, reps, kind: 'work' });
+    await endSession(session.id);
+    return session;
+  }
+
+  it('totals the sessions inside the range', async () => {
+    // Monday 24 to Sunday 30 August 2026.
+    await squatOn(new Date(2026, 7, 24, 18, 0));
+    await squatOn(new Date(2026, 7, 27, 18, 0));
+
+    const load = await readTrainingLoad('2026-08-24', '2026-08-30');
+
+    expect(load.sessionCount).toBe(2);
+    expect(load.workSets).toBe(2);
+    expect(load.volumeKg).toBe(1000);
+    expect(load.byGroup).toEqual([{ group: 'quads', workSets: 2, volumeKg: 1000 }]);
+  });
+
+  it('takes both ends of the range', async () => {
+    // Inclusive at each end, which is what makes a Monday-to-Sunday week seven
+    // days rather than five.
+    await squatOn(new Date(2026, 7, 24, 8, 0));
+    await squatOn(new Date(2026, 7, 30, 22, 0));
+
+    expect((await readTrainingLoad('2026-08-24', '2026-08-30')).sessionCount).toBe(2);
+  });
+
+  it('leaves the neighbouring days out', async () => {
+    await squatOn(new Date(2026, 7, 23, 18, 0)); // the Sunday before
+    await squatOn(new Date(2026, 7, 31, 18, 0)); // the Monday after
+
+    const load = await readTrainingLoad('2026-08-24', '2026-08-30');
+
+    expect(load.sessionCount).toBe(0);
+    expect(load.byGroup).toEqual([]);
+  });
+
+  it('reports an empty week rather than failing on one', async () => {
+    const load = await readTrainingLoad('2026-08-24', '2026-08-30');
+
+    expect(load).toEqual({ sessionCount: 0, workSets: 0, volumeKg: 0, byGroup: [] });
+  });
+
+  it('counts a session in progress, which is training already done', async () => {
+    const { session } = await startSession({ startedAt: new Date(2026, 7, 26, 18, 0).getTime() });
+    const block = await addExerciseToSession(session.id, squat.id);
+    await createSet({ sessionExerciseId: block.id, weightKg: 100, reps: 5, kind: 'work' });
+
+    expect((await readTrainingLoad('2026-08-24', '2026-08-30')).workSets).toBe(1);
+  });
+
+  it('resolves each exercise once, however many sets name it', async () => {
+    // The property that keeps a week cheap: de-duplicated ids into one
+    // `bulkGet`, not one read per set.
+    const { session } = await startSession({ startedAt: new Date(2026, 7, 26, 18, 0).getTime() });
+    const block = await addExerciseToSession(session.id, squat.id);
+    for (let i = 0; i < 5; i += 1) {
+      await createSet({ sessionExerciseId: block.id, weightKg: 100, reps: 5, kind: 'work' });
+    }
+
+    const load = await readTrainingLoad('2026-08-24', '2026-08-30');
+
+    expect(load.workSets).toBe(5);
+    expect(load.byGroup).toEqual([{ group: 'quads', workSets: 5, volumeKg: 2500 }]);
   });
 });

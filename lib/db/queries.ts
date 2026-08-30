@@ -17,6 +17,7 @@
 
 import { db } from './db';
 import { listSessionExercises } from './sessions';
+import { EMPTY_LOAD, summariseTrainingLoad, type TrainingLoad } from '../training-load';
 import type {
   Exercise,
   Id,
@@ -28,6 +29,14 @@ import type {
   LocalDate,
   Timestamp,
 } from './types';
+
+/** A period's training load, with the number of sessions that produced it. */
+export interface PeriodLoad extends TrainingLoad {
+  sessionCount: number;
+}
+
+/** A period with nothing in it. Read-only, and never mutated by anything here. */
+export const EMPTY_PERIOD_LOAD: PeriodLoad = { sessionCount: 0, ...EMPTY_LOAD };
 
 /**
  * Stand-in for a block whose exercise cannot be resolved.
@@ -243,4 +252,48 @@ export async function listSessionSummaries(
       });
     },
   );
+}
+
+/**
+ * What was trained between two days, muscle by muscle.
+ *
+ * **No new index.** The obvious query — every set in a date range — has none to
+ * run on: `sets` is indexed by session, by block and by exercise, never by
+ * date, and adding `performedAt` would be a schema version and a migration for
+ * one screen. The range is taken on `sessions.date`, which *is* indexed and was
+ * declared for exactly this, and the sets are then fetched per session over
+ * `sets.sessionId`. A week is three to five sessions, so that is a handful of
+ * indexed lookups rather than a scan of every set ever logged.
+ *
+ * In a read transaction, so the sessions, their sets and the exercises they
+ * name all come from one snapshot: a set written mid-read would otherwise be
+ * counted in the total and missing from its muscle, or the reverse.
+ */
+export async function readTrainingLoad(
+  from: LocalDate,
+  to: LocalDate,
+): Promise<PeriodLoad> {
+  return db.transaction('r', db.sessions, db.sets, db.exercises, async () => {
+    const sessions = await db.sessions.where('date').between(from, to, true, true).toArray();
+    if (sessions.length === 0) return EMPTY_PERIOD_LOAD;
+
+    const sets = (
+      await Promise.all(
+        sessions.map((session) => db.sets.where('sessionId').equals(session.id).toArray()),
+      )
+    ).flat();
+
+    // De-duplicated ids, so a session of five sets of squat costs one lookup.
+    // Unresolved ones are simply absent from the map, which `summariseTrainingLoad`
+    // reads as "no muscle" rather than as a reason to fail.
+    const ids = [...new Set(sets.map((set) => set.exerciseId))];
+    const exercises = await db.exercises.bulkGet(ids);
+
+    const exerciseById = new Map<Id, Exercise>();
+    for (const exercise of exercises) {
+      if (exercise) exerciseById.set(exercise.id, exercise);
+    }
+
+    return { sessionCount: sessions.length, ...summariseTrainingLoad(sets, exerciseById) };
+  });
 }

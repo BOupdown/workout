@@ -1,5 +1,15 @@
 import { describe, expect, it } from 'vitest';
-import { gridBounds, monthBounds, monthGrid, monthOf, shiftMonth } from '../lib/calendar';
+import {
+  gridBounds,
+  monthBounds,
+  monthGrid,
+  monthOf,
+  shiftMonth,
+  shiftWeek,
+  weekEnd,
+  weekOf,
+  weekStartOf,
+} from '../lib/calendar';
 
 const flat = (year: number, month: number) => monthGrid({ year, month }).flat();
 const dates = (year: number, month: number) => flat(year, month).map((day) => day.date);
@@ -145,5 +155,60 @@ describe('monthBounds', () => {
     const grid = monthGrid({ year: 2026, month: 8 });
 
     expect(gridBounds(grid).from < monthBounds({ year: 2026, month: 8 }).from).toBe(true);
+  });
+});
+
+describe('weekStartOf', () => {
+  it('walks back to the Monday of the week', () => {
+    // Sunday 30 August 2026 belongs to the week opening on the 24th.
+    expect(weekStartOf('2026-08-30')).toBe('2026-08-24');
+    expect(weekStartOf('2026-08-26')).toBe('2026-08-24');
+  });
+
+  it('leaves a Monday where it is', () => {
+    expect(weekStartOf('2026-08-24')).toBe('2026-08-24');
+  });
+
+  it('keeps Sunday at the end of its week, not the start of the next', () => {
+    // The one the `en-GB` week inherits and a `getDay()` of 0 invites getting
+    // wrong: Sunday is day seven here.
+    expect(weekEnd(weekStartOf('2026-08-30'))).toBe('2026-08-30');
+  });
+
+  it('reaches back into the previous month', () => {
+    // Tuesday 1 September 2026 opens on Monday 31 August.
+    expect(weekStartOf('2026-09-01')).toBe('2026-08-31');
+  });
+});
+
+describe('shiftWeek', () => {
+  it('moves a whole week either way', () => {
+    expect(shiftWeek('2026-08-24', 1)).toBe('2026-08-31');
+    expect(shiftWeek('2026-08-24', -1)).toBe('2026-08-17');
+  });
+
+  it('rolls over the year', () => {
+    expect(shiftWeek('2025-12-29', 1)).toBe('2026-01-05');
+    expect(shiftWeek('2026-01-05', -1)).toBe('2025-12-29');
+  });
+
+  it('crosses the clock changes', () => {
+    // The two weeks that break under millisecond arithmetic in a zone that
+    // observes daylight saving: adding 7 × 86 400 000 across the spring change
+    // lands at 23:00 the evening before, which reads as the wrong day. Under
+    // `TZ=UTC` this is ordinary arithmetic and proves nothing — which is why
+    // it is written as dates rather than as a duration.
+    expect(shiftWeek('2026-03-23', 1)).toBe('2026-03-30');
+    expect(shiftWeek('2026-10-19', 1)).toBe('2026-10-26');
+  });
+
+  it('goes nowhere on a delta of zero', () => {
+    expect(shiftWeek('2026-08-24', 0)).toBe('2026-08-24');
+  });
+});
+
+describe('weekOf', () => {
+  it('names the week an instant falls in', () => {
+    expect(weekOf(new Date(2026, 7, 30, 18, 0).getTime())).toBe('2026-08-24');
   });
 });
