@@ -14,6 +14,7 @@
 
 import type { Exercise, Id, SetEntry, Timestamp } from './db/types';
 import { setFieldRequirements } from './db/validation';
+import { estimateOneRepMaxKg, supportsOneRepMax } from './one-rep-max';
 
 export type ProgressionMetric = 'weightKg' | 'reps' | 'durationSec';
 
@@ -55,6 +56,20 @@ export function isBetterPerformance(
   return metric === 'weightKg' && (candidate.reps ?? 0) > (incumbent.reps ?? 0);
 }
 
+/**
+ * What the curve is plotting.
+ *
+ * Orthogonal to `ProgressionMetric`, which says *which measure* an exercise
+ * progresses on. This says whether the number drawn was performed or derived —
+ * a distinction worth a type of its own, because everything the app shows is
+ * the first and this is the single exception.
+ */
+export type ProgressionView =
+  /** The quantity as it was logged. The default, and the app's normal register. */
+  | 'measured'
+  /** A one-rep max estimated from load and reps. See `./one-rep-max`. */
+  | 'oneRepMax';
+
 /** A session's best work set, for the tracked quantity. */
 export interface SessionPoint {
   sessionId: Id;
@@ -62,7 +77,13 @@ export interface SessionPoint {
   value: number;
   /** Reps of that set, when the value is a load. */
   reps?: number;
-  /** Number of work sets in the session. */
+  /**
+   * The load the estimate came from. Present only in the `oneRepMax` view,
+   * where the value on the axis was performed by nobody: without this the
+   * headline is a number with no set behind it.
+   */
+  fromWeightKg?: number;
+  /** Number of work sets in the session that the view could read. */
   setCount: number;
 }
 
@@ -75,7 +96,10 @@ export interface SessionPoint {
 export function buildProgression(
   sets: SetEntry[],
   exercise: Pick<Exercise, 'loadType' | 'metric'>,
+  view: ProgressionView = 'measured',
 ): SessionPoint[] {
+  if (view === 'oneRepMax') return buildEstimatedProgression(sets, exercise);
+
   const metric = progressionMetric(exercise);
   const bySession = new Map<Id, SessionPoint>();
 
@@ -102,6 +126,62 @@ export function buildProgression(
     if (isBetterPerformance({ value, reps: set.reps }, existing, metric)) {
       existing.value = value;
       if (metric === 'weightKg') existing.reps = set.reps;
+    }
+  }
+
+  return [...bySession.values()].sort((a, b) => a.performedAt - b.performedAt);
+}
+
+/**
+ * The same reduction, over estimates instead of loads.
+ *
+ * The best set of a session is no longer the heaviest: five at 100 estimates
+ * 112.5 and beats a single at 105, which is the whole reason this view exists.
+ *
+ * Sets the formula cannot read — too many reps, no load — are **skipped, not
+ * zeroed**. A session made only of twenties therefore has no point at all, and
+ * the curve shows a gap rather than a dip that never happened.
+ *
+ * No rep tiebreak, unlike the measured curve. Two sets that estimate the same
+ * max *are* the same estimate; picking one over the other would be reading a
+ * difference the model does not contain.
+ */
+function buildEstimatedProgression(
+  sets: SetEntry[],
+  exercise: Pick<Exercise, 'loadType' | 'metric'>,
+): SessionPoint[] {
+  if (!supportsOneRepMax(exercise)) return [];
+
+  const bySession = new Map<Id, SessionPoint>();
+
+  for (const set of sets) {
+    if (set.kind !== 'work') continue;
+    if (set.weightKg === undefined || set.reps === undefined) continue;
+
+    const value = estimateOneRepMaxKg(set.weightKg, set.reps);
+    if (value === null) continue;
+
+    const existing = bySession.get(set.sessionId);
+    if (!existing) {
+      bySession.set(set.sessionId, {
+        sessionId: set.sessionId,
+        performedAt: set.performedAt,
+        value,
+        reps: set.reps,
+        fromWeightKg: set.weightKg,
+        setCount: 1,
+      });
+      continue;
+    }
+
+    existing.setCount += 1;
+
+    // Strictly greater, as everywhere else: on a tie the session's first set
+    // keeps the point.
+    if (value > existing.value) {
+      existing.value = value;
+      existing.reps = set.reps;
+      existing.fromWeightKg = set.weightKg;
     }
   }
 

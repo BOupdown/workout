@@ -8,6 +8,7 @@ import {
   progressionDelta,
   progressionMetric,
   type ProgressionMetric,
+  type ProgressionView,
   type SessionPoint,
 } from '@/lib/progression';
 
@@ -31,7 +32,10 @@ export interface ExerciseProgression {
  * it was laid down for. Grouping by session happens in memory, over a bounded
  * tail.
  */
-export function useExerciseProgression(exercise: Exercise | undefined): ExerciseProgression {
+export function useExerciseProgression(
+  exercise: Exercise | undefined,
+  view: ProgressionView = 'measured',
+): ExerciseProgression {
   const sets = useLiveQuery(
     () => (exercise ? recentSetsForExercise(exercise.id, MAX_SETS) : undefined),
     [exercise?.id],
@@ -45,7 +49,7 @@ export function useExerciseProgression(exercise: Exercise | undefined): Exercise
 
   // `recentSetsForExercise` returns reverse-chronological order; progression
   // reads the other way round.
-  const points = buildProgression(sets, exercise);
+  const points = buildProgression(sets, exercise, view);
 
   return {
     loading: false,

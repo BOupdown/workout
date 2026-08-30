@@ -10,6 +10,8 @@ interface ProgressionChartProps {
   metric: ProgressionMetric;
   unit: WeightUnit;
   label: string;
+  /** What one tick is. Said in words, since the axis cannot say it. */
+  caption: string;
 }
 
 const BOX = {
@@ -34,7 +36,13 @@ const DATE_FORMAT = new Intl.DateTimeFormat('en-GB', { day: 'numeric', month: 's
  * axis carries the rest. No value is locked inside the tooltip: the table that
  * follows stays the complete source.
  */
-export function ProgressionChart({ points, metric, unit, label }: ProgressionChartProps) {
+export function ProgressionChart({
+  points,
+  metric,
+  unit,
+  label,
+  caption,
+}: ProgressionChartProps) {
   const [selected, setSelected] = useState<number | null>(null);
 
   const format = (value: number) =>
@@ -154,12 +162,20 @@ export function ProgressionChart({ points, metric, unit, label }: ProgressionCha
         ) : null}
       </svg>
 
-      <figcaption className="mt-1 flex items-baseline justify-between gap-2 text-[0.6875rem] text-muted">
-        <span>One tick per session, best work set.</span>
+      {/* Wraps: the estimated view lengthens both halves, and on a 375 px
+          screen they would otherwise collide rather than stack. */}
+      <figcaption className="mt-1 flex flex-wrap items-baseline justify-between gap-x-2 gap-y-0.5 text-[0.6875rem] text-muted">
+        <span>{caption}</span>
         {active ? (
-          <span className="shrink-0 font-mono text-ink tabular-nums">
+          <span className="font-mono text-ink tabular-nums">
             {DATE_FORMAT.format(active.point.performedAt)} · {format(active.point.value)}
-            {active.point.reps !== undefined ? ` × ${active.point.reps}` : ''}
+            {/* An estimate names the set it came from. The measured curve has
+                no such distance to close: its value *is* the set. */}
+            {active.point.fromWeightKg !== undefined
+              ? ` from ${active.point.reps} × ${format(active.point.fromWeightKg)}`
+              : active.point.reps !== undefined
+                ? ` × ${active.point.reps}`
+                : ''}
           </span>
         ) : null}
       </figcaption>
