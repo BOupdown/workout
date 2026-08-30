@@ -1,5 +1,5 @@
 /**
- * Laying out a month.
+ * Laying out a month, and naming a week.
  *
  * Kept apart from the screen because calendars are where off-by-one errors
  * live: the first of the month lands on a different weekday every time, weeks
@@ -11,7 +11,7 @@
  * problem — already solved once, in `./db/keys`.
  */
 
-import { toLocalDate } from './db/keys';
+import { localMidnight, toLocalDate } from './db/keys';
 import type { LocalDate } from './db/types';
 
 /** Weeks start on Monday, as the app's `en-GB` formatting already assumes. */
@@ -104,4 +104,54 @@ export function monthBounds({ year, month }: YearMonth): { from: LocalDate; to: 
     from: toLocalDate(new Date(year, month - 1, 1).getTime()),
     to: toLocalDate(last.getTime()),
   };
+}
+
+// ---------------------------------------------------------------------------
+// Weeks
+// ---------------------------------------------------------------------------
+
+/**
+ * A week, named by the Monday it starts on.
+ *
+ * One `LocalDate` rather than a pair, because the end is derivable and two
+ * fields would be two things to keep in step — the sort of pair that ends up
+ * describing an eight-day week after one careless edit.
+ */
+export type WeekStart = LocalDate;
+
+/**
+ * Every day arithmetic here goes through `Date.setDate`, never through adding
+ * milliseconds.
+ *
+ * A week is not 7 × 86 400 000 ms twice a year: add that across the spring
+ * change and you land at 23:00 the evening before, which `toLocalDate` then
+ * reads as the wrong day. `setDate` counts in calendar days, which is what a
+ * week is made of.
+ */
+function shiftDays(date: LocalDate, days: number): LocalDate {
+  const moved = new Date(localMidnight(date));
+  moved.setDate(moved.getDate() + days);
+  return toLocalDate(moved.getTime());
+}
+
+/** The Monday of the week containing `date`. */
+export function weekStartOf(date: LocalDate): WeekStart {
+  const day = new Date(localMidnight(date));
+  // `getDay()` is 0 for Sunday; shift so Monday is 0 and Sunday is 6.
+  return shiftDays(date, -((day.getDay() + 6) % DAYS_IN_WEEK));
+}
+
+/** The Sunday closing a week. */
+export function weekEnd(start: WeekStart): LocalDate {
+  return shiftDays(start, DAYS_IN_WEEK - 1);
+}
+
+/** The week `delta` weeks away. */
+export function shiftWeek(start: WeekStart, delta: number): WeekStart {
+  return shiftDays(start, delta * DAYS_IN_WEEK);
+}
+
+/** The week a given instant falls in. */
+export function weekOf(timestamp: number): WeekStart {
+  return weekStartOf(toLocalDate(timestamp));
 }

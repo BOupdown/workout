@@ -12,6 +12,7 @@ import { ExerciseEditSheet } from '@/components/exercises/exercise-edit-sheet';
 import { ExerciseFormSheet } from '@/components/exercises/exercise-form-sheet';
 import { CalendarView } from './calendar-view';
 import { ProgressionSheet } from './progression-sheet';
+import { WeeklyLoadScreen } from './weekly-load-screen';
 
 /**
  * The way into progression outside a session.
@@ -20,7 +21,7 @@ import { ProgressionSheet } from './progression-sheet';
  * progress, whereas you mostly look at it **before** training.
  */
 export function ExerciseIndexScreen() {
-  const [view, setView] = useState<'exercises' | 'calendar'>('exercises');
+  const [view, setView] = useState<'exercises' | 'weekly' | 'calendar'>('exercises');
   const [search, setSearch] = useState('');
   const [openExercise, setOpenExercise] = useState<Exercise | null>(null);
   const [editing, setEditing] = useState<Exercise | null>(null);
@@ -74,12 +75,13 @@ export function ExerciseIndexScreen() {
 
   return (
     <div className="flex h-full flex-col">
-      {/* Two subjects rather than one scroll: exercises are a per-movement
-          question, the calendar a per-day one, and stacking them would make
-          the second permanently below the fold. */}
+      {/* Three subjects rather than one scroll, and they answer three different
+          questions: exercises ask "is this movement going up", the week asks
+          "did each muscle get its share", the calendar asks "did I turn up".
+          Stacking them would put the last two permanently below the fold. */}
       <div className="shrink-0 bg-raised px-4 pt-[calc(env(safe-area-inset-top)+0.875rem)]">
         <div className="flex gap-1.5" role="tablist" aria-label="Progress view">
-          {(['exercises', 'calendar'] as const).map((option) => (
+          {(['exercises', 'weekly', 'calendar'] as const).map((option) => (
             <button
               key={option}
               type="button"
@@ -99,6 +101,10 @@ export function ExerciseIndexScreen() {
       {view === 'calendar' ? (
         <div className="min-h-0 flex-1">
           <CalendarView />
+        </div>
+      ) : view === 'weekly' ? (
+        <div className="min-h-0 flex-1">
+          <WeeklyLoadScreen />
         </div>
       ) : (
       <>

@@ -75,8 +75,8 @@ app/                routes: session, history, progress, settings
 components/         screens and components, by domain
 hooks/              Dexie live queries and entry state
 lib/db/             model, schema, validation, write layers
-lib/                pure logic: formatting, drafts, progression, units
-test/               701 tests — *.test.ts logic (Node), *.test.tsx screens (jsdom)
+lib/                pure logic: progression, weekly load, plates, 1RM, formatting, units
+test/               823 tests — *.test.ts logic (Node), *.test.tsx screens (jsdom)
 ```
 
 ## Principles
