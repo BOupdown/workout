@@ -1,6 +1,7 @@
 'use client';
 
 import {
+  Barbell,
   DeviceMobile,
   DownloadSimple,
   HardDrives,
@@ -15,13 +16,14 @@ import { useWeightUnit } from '@/hooks/use-weight-unit';
 import { useStorageStatus } from '@/hooks/use-storage-status';
 import { useBackupExport } from '@/hooks/use-backup';
 import { useRestTimer } from '@/hooks/use-rest-timer';
+import { usePlateSetup } from '@/hooks/use-plate-setup';
 import {
   BackupFormatError,
   importDatabase,
   parseBackup,
   type BackupSummary,
 } from '@/lib/db/backup';
-import { formatDuration } from '@/lib/format';
+import { formatDuration, formatNumber } from '@/lib/format';
 import {
   MAX_REST_SEC,
   MIN_REST_SEC,
@@ -30,6 +32,7 @@ import {
   splitRestDuration,
   type RestDurationParts,
 } from '@/lib/rest-timer';
+import { PLATE_DENOMINATIONS } from '@/lib/plates';
 import { WEIGHT_UNITS } from '@/lib/units';
 
 const DATE_FORMAT = new Intl.DateTimeFormat('en-GB', {
@@ -49,6 +52,7 @@ export function SettingsScreen() {
   const install = useInstallPrompt();
   const [unit, setUnit] = useWeightUnit();
   const rest = useRestTimer();
+  const plates = usePlateSetup(unit);
   const backup = useBackupExport();
   const fileInput = useRef<HTMLInputElement>(null);
 
@@ -164,6 +168,54 @@ export function SettingsScreen() {
               </button>
             ))}
           </div>
+        </section>
+
+        {/* Under Units on purpose: an inventory is a list of physical objects
+            with a number printed on them, so it belongs to the unit rather than
+            being converted with it. Switching to pounds shows a second rack,
+            not this one restated as 20.41. */}
+        <section className="rounded-panel bg-raised px-4 py-3.5">
+          <div className="flex items-center gap-2">
+            <Barbell size={18} weight="bold" className="shrink-0 text-ink" />
+            <h2 className="text-[0.9375rem] font-semibold text-ink">Plates</h2>
+          </div>
+          {/* Which sizes are on the rack, not how many of each. In a gym the
+              count is effectively unlimited and availability is the real
+              constraint — no 15s here, no 1.25s there — and it is the one thing
+              the calculator has to know to stop proposing a loading nobody can
+              build. */}
+          <p className="mt-1.5 text-sm text-muted">
+            The sizes your gym has, per side. Used to work out what goes on the bar.
+          </p>
+
+          <div className="mt-3 flex flex-wrap gap-1.5">
+            {PLATE_DENOMINATIONS[unit].map((plate) => {
+              const owned = plates.plates.includes(plate);
+
+              return (
+                <button
+                  key={plate}
+                  type="button"
+                  onClick={() => plates.togglePlate(plate)}
+                  aria-pressed={owned}
+                  aria-label={`${formatNumber(plate)} ${unit} plates`}
+                  className={`h-12 min-w-16 grow rounded-control border-2 font-mono text-[0.9375rem] font-semibold tabular-nums transition-transform active:scale-[0.98] ${
+                    owned
+                      ? 'border-ink bg-raised text-ink'
+                      : 'border-transparent bg-surface text-muted line-through'
+                  }`}
+                >
+                  {formatNumber(plate)}
+                </button>
+              );
+            })}
+          </div>
+
+          {plates.plates.length === 0 ? (
+            <p className="mt-2 text-xs text-muted">
+              With nothing turned on there is no loading to work out.
+            </p>
+          ) : null}
         </section>
 
         <section className="rounded-panel bg-raised px-4 py-3.5">

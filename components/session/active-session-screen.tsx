@@ -21,7 +21,7 @@ import {
 import { getBodyWeight } from '@/lib/db/bodyweight';
 import { listSessionSummaries } from '@/lib/db/queries';
 import { createSet } from '@/lib/db/sets';
-import { formatElapsed } from '@/lib/format';
+import { formatElapsed, parseNumberInput } from '@/lib/format';
 import type { Id, SetEntry, SetKind } from '@/lib/db/types';
 import { NO_MESSAGES, toFieldMessages, type FieldMessages } from '@/lib/errors';
 import { moveBlock } from '@/lib/session-order';
@@ -31,6 +31,7 @@ import { SessionDetailSheet } from '@/components/history/session-detail-sheet';
 import { BodyweightSheet } from './bodyweight-sheet';
 import { ExercisePicker } from './exercise-picker';
 import { ExerciseRow } from './exercise-row';
+import { PlateSheet } from './plate-sheet';
 import { SetEditorSheet } from './set-editor-sheet';
 import { RestTimerBar } from './rest-timer-bar';
 import { SessionHeader } from './session-header';
@@ -60,6 +61,7 @@ export function ActiveSessionScreen() {
   const [kind, setKind] = useState<SetKind>('work');
   const [editingSetId, setEditingSetId] = useState<Id | null>(null);
   const [bodyweightOpen, setBodyweightOpen] = useState(false);
+  const [platesOpen, setPlatesOpen] = useState(false);
   const [notesOpen, setNotesOpen] = useState(false);
   const [removalCount, setRemovalCount] = useState<number | null>(null);
   // Exercises the layout could not carry over. Cleared as soon as it is read.
@@ -340,6 +342,7 @@ export function ActiveSessionScreen() {
           saving={saving}
           onSave={handleSave}
           onShowProgression={() => setProgressionFor(activeEntry.exercise.id)}
+          onShowPlates={() => setPlatesOpen(true)}
           unit={unit}
           kind={kind}
           onKindChange={setKind}
@@ -348,6 +351,17 @@ export function ActiveSessionScreen() {
 
       {pickerOpen ? (
         <ExercisePicker onPick={handlePick} onClose={() => setPickerOpen(false)} />
+      ) : null}
+
+      {/* Reads the draft rather than a copy of it: change the load behind the
+          sheet and the loading it shows is the one for the set about to be
+          saved, never the one it was opened on. */}
+      {platesOpen ? (
+        <PlateSheet
+          target={parseNumberInput(controller.draft.weightKg)}
+          unit={unit}
+          onClose={() => setPlatesOpen(false)}
+        />
       ) : null}
 
       {progressionExercise ? (
