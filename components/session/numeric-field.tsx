@@ -1,7 +1,7 @@
 'use client';
 
 import { Minus, Plus } from '@phosphor-icons/react';
-import type { FocusEvent } from 'react';
+import type { FocusEvent, ReactNode } from 'react';
 
 interface NumericFieldProps {
   label: string;
@@ -13,6 +13,12 @@ interface NumericFieldProps {
   unit?: string;
   error?: string;
   disabled?: boolean;
+  /**
+   * A control for whatever this particular number opens onto, sat at the end of
+   * the step row — where it gets a full-height target without taking a line of
+   * its own, and without the label row having to grow to hold one.
+   */
+  action?: ReactNode;
 }
 
 const STEP_BUTTON =
@@ -42,6 +48,7 @@ export function NumericField({
   unit,
   error,
   disabled,
+  action,
 }: NumericFieldProps) {
   const errorId = error ? `error-${label}` : undefined;
 
@@ -93,6 +100,7 @@ export function NumericField({
         >
           <Plus size={20} weight="bold" />
         </button>
+        {action}
       </div>
 
       {error ? (

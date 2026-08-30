@@ -1,6 +1,6 @@
 'use client';
 
-import { Check, TrendUp } from '@phosphor-icons/react';
+import { Barbell, Check, TrendUp } from '@phosphor-icons/react';
 import type { SetDraftController } from '@/hooks/use-set-draft';
 import type { FieldMessages } from '@/lib/errors';
 import type { Exercise, SessionExerciseWithSets, SetKind } from '@/lib/db/types';
@@ -17,6 +17,7 @@ interface SetEntryPanelProps {
   unit: WeightUnit;
   onSave: () => void;
   onShowProgression: () => void;
+  onShowPlates: () => void;
   kind: SetKind;
   onKindChange: (kind: SetKind) => void;
 }
@@ -74,6 +75,7 @@ export function SetEntryPanel({
   unit,
   onSave,
   onShowProgression,
+  onShowPlates,
   kind,
   onKindChange,
 }: SetEntryPanelProps) {
@@ -84,6 +86,22 @@ export function SetEntryPanel({
   const originLabel = ORIGIN_LABELS[referenceOrigin];
   const nextSetNumber = entry.sets.length + 1;
   const fieldUnits: Partial<Record<DraftField, string>> = { weightKg: unit, durationSec: 's' };
+
+  /*
+   * `external` only, and it is the load type that decides — not the presence of
+   * a load field.
+   *
+   * The other two that carry a number mean something a bar cannot hold: on a
+   * weighted pull-up the load hangs off a belt, on an assisted machine it is
+   * weight *removed* by a stack. Halving either across two sleeves would be
+   * arithmetic about an object that is not there.
+   *
+   * A leg press is `external` and has no bar either — the model does not say
+   * whether an exercise is loaded by hand or by a pin, and inventing a field to
+   * find out would be a migration to settle a question the user answers by not
+   * tapping the button.
+   */
+  const loadsABar = entry.exercise.loadType === 'external';
 
   return (
     <section
@@ -132,6 +150,18 @@ export function SetEntryPanel({
             value={draft[field]}
             disabled={saving}
             error={messages.fields[field]}
+            action={
+              field === 'weightKg' && loadsABar ? (
+                <button
+                  type="button"
+                  onClick={onShowPlates}
+                  aria-label="Plates for this load"
+                  className="flex h-11 w-11 shrink-0 items-center justify-center rounded-control bg-surface text-ink transition-transform active:scale-95"
+                >
+                  <Barbell size={20} weight="bold" />
+                </button>
+              ) : undefined
+            }
             onChange={(value) => setField(field, value)}
             onStep={(direction) =>
               setField(
