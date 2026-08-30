@@ -135,6 +135,113 @@ describe('buildProgression', () => {
   });
 });
 
+describe('buildProgression — the estimated view', () => {
+  it('picks the best estimate, which is not the heaviest set', () => {
+    // The reason the view exists: five at 100 estimates 112.5 and beats a
+    // single at 105, which the measured curve ranks the other way round.
+    const sets = [
+      set({ performedAt: 100, weightKg: 105, reps: 1 }),
+      set({ performedAt: 100, weightKg: 100, reps: 5 }),
+    ];
+
+    expect(buildProgression(sets, squat)[0].value).toBe(105);
+    expect(buildProgression(sets, squat, 'oneRepMax')[0].value).toBe(112.5);
+  });
+
+  it('falls where the measured curve rises', () => {
+    // Ten at 60 then five at 65: the bar got heavier and the showing got
+    // weaker. This is the exact reading the load axis cannot give.
+    const sets = [
+      set({ sessionId: 'a', performedAt: 100, weightKg: 60, reps: 10 }),
+      set({ sessionId: 'b', performedAt: 200, weightKg: 65, reps: 5 }),
+    ];
+
+    expect(buildProgression(sets, squat).map((p) => p.value)).toEqual([60, 65]);
+    expect(buildProgression(sets, squat, 'oneRepMax').map((p) => p.value)).toEqual([80, 73.1]);
+  });
+
+  it('names the set behind the estimate', () => {
+    const [point] = buildProgression(
+      [set({ performedAt: 100, weightKg: 100, reps: 5 })],
+      squat,
+      'oneRepMax',
+    );
+
+    expect(point.value).toBe(112.5);
+    expect(point.reps).toBe(5);
+    expect(point.fromWeightKg).toBe(100);
+  });
+
+  it('skips a set out of range instead of counting it as nothing', () => {
+    const [point] = buildProgression(
+      [
+        set({ performedAt: 100, weightKg: 40, reps: 20 }),
+        set({ performedAt: 100, weightKg: 100, reps: 5 }),
+      ],
+      squat,
+      'oneRepMax',
+    );
+
+    expect(point.value).toBe(112.5);
+    expect(point.setCount).toBe(1);
+  });
+
+  it('leaves a session out entirely when nothing in it can be read', () => {
+    // A gap in the curve, not a dip that never happened.
+    const points = buildProgression(
+      [
+        set({ sessionId: 'a', performedAt: 100, weightKg: 100, reps: 5 }),
+        set({ sessionId: 'b', performedAt: 200, weightKg: 40, reps: 20 }),
+      ],
+      squat,
+      'oneRepMax',
+    );
+
+    expect(points).toHaveLength(1);
+    expect(points[0].sessionId).toBe('a');
+  });
+
+  it('leaves the warm-ups out, as the measured curve does', () => {
+    const points = buildProgression(
+      [
+        set({ performedAt: 100, kind: 'warmup', weightKg: 40, reps: 10 }),
+        set({ performedAt: 100, weightKg: 100, reps: 5 }),
+      ],
+      squat,
+      'oneRepMax',
+    );
+
+    expect(points[0].value).toBe(112.5);
+    expect(points[0].setCount).toBe(1);
+  });
+
+  it('has nothing to plot for an exercise it cannot read', () => {
+    // Push-ups carry no load; a pull-up carries only the belt.
+    expect(buildProgression([set({ performedAt: 100, reps: 20 })], pushUps, 'oneRepMax')).toEqual(
+      [],
+    );
+    expect(
+      buildProgression([set({ performedAt: 100, weightKg: 10, reps: 5 })], pullUp, 'oneRepMax'),
+    ).toEqual([]);
+  });
+
+  it('keeps the earlier set on a tie, as everywhere else', () => {
+    // 5 × 100 and 10 × 75 both estimate 112.5. Neither is the better set, so
+    // the one that got there first keeps the point.
+    const [point] = buildProgression(
+      [
+        set({ performedAt: 100, order: 0, weightKg: 100, reps: 5 }),
+        set({ performedAt: 100, order: 1, weightKg: 84.375, reps: 10 }),
+      ],
+      squat,
+      'oneRepMax',
+    );
+
+    expect(point.value).toBe(112.5);
+    expect(point.reps).toBe(5);
+  });
+});
+
 describe('buildProgression — on real sets', () => {
   it('rebuilds the progression across two sessions', async () => {
     const older = Date.parse('2026-08-09T09:00:00Z');
