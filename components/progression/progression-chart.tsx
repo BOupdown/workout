@@ -1,9 +1,19 @@
 'use client';
 
 import { useState } from 'react';
-import { buildChartGeometry, type ProgressionMetric, type SessionPoint } from '@/lib/progression';
+import {
+  boxesOverlap,
+  buildChartGeometry,
+  monoTextBox,
+  type ProgressionMetric,
+  type SessionPoint,
+} from '@/lib/progression';
 import { formatDuration, formatNumber } from '@/lib/format';
 import { toDisplayWeight, type WeightUnit } from '@/lib/units';
+
+/** Matching the `text-[10px]` and `text-[9px]` the two label kinds are set in. */
+const DIRECT_LABEL_SIZE = 10;
+const TICK_LABEL_SIZE = 9;
 
 interface ProgressionChartProps {
   points: SessionPoint[];
@@ -60,6 +70,40 @@ export function ProgressionChart({
   // stacked on top of each other when the record is also the latest session.
   const labelled = new Set([peakIndex, lastIndex]);
 
+  // Resolved once, then used both to draw the labels and to work out which
+  // axis ticks they cover. Computing the placement twice is how the two fell
+  // out of step in the first place.
+  const directLabels = [...labelled].map((index) => {
+    const p = plotted[index];
+    const nudgeLeft = index === lastIndex && plotted.length > 1;
+
+    return {
+      index,
+      x: nudgeLeft ? p.x - 6 : p.x,
+      y: p.y - 10,
+      anchor: nudgeLeft ? ('end' as const) : index === 0 ? ('start' as const) : ('middle' as const),
+      text: format(p.point.value),
+    };
+  });
+
+  const directBoxes = directLabels.map((label) =>
+    monoTextBox(label.text, label.x, label.y, DIRECT_LABEL_SIZE, label.anchor),
+  );
+
+  /**
+   * A tick keeps its number only where nothing is already printed there.
+   *
+   * The case that forced this: when the best session is also the first, its
+   * label sits at the left edge, at the top — exactly where the axis prints its
+   * own maximum — and the two numbers land on top of each other, leaving
+   * neither readable. The gridline stays either way; it is the text that has to
+   * give, and it gives to the value that is more precise about a real point.
+   */
+  const tickIsClear = (tick: { y: number; value: number }) => {
+    const box = monoTextBox(format(tick.value), BOX.padding.left, tick.y - 4, TICK_LABEL_SIZE);
+    return !directBoxes.some((direct) => boxesOverlap(direct, box));
+  };
+
   return (
     <figure className="m-0">
       <svg
@@ -79,13 +123,15 @@ export function ProgressionChart({
               className="stroke-line"
               strokeWidth={1}
             />
-            <text
-              x={BOX.padding.left}
-              y={tick.y - 4}
-              className="fill-muted font-mono text-[9px] tabular-nums"
-            >
-              {format(tick.value)}
-            </text>
+            {tickIsClear(tick) ? (
+              <text
+                x={BOX.padding.left}
+                y={tick.y - 4}
+                className="fill-muted font-mono text-[9px] tabular-nums"
+              >
+                {format(tick.value)}
+              </text>
+            ) : null}
           </g>
         ))}
 
@@ -112,21 +158,17 @@ export function ProgressionChart({
           />
         ))}
 
-        {[...labelled].map((index) => {
-          const p = plotted[index];
-          const nudgeLeft = index === lastIndex && plotted.length > 1;
-          return (
-            <text
-              key={`label-${index}`}
-              x={nudgeLeft ? p.x - 6 : p.x}
-              y={p.y - 10}
-              textAnchor={nudgeLeft ? 'end' : index === 0 ? 'start' : 'middle'}
-              className="fill-ink font-mono text-[10px] font-semibold tabular-nums"
-            >
-              {format(p.point.value)}
-            </text>
-          );
-        })}
+        {directLabels.map((label) => (
+          <text
+            key={`label-${label.index}`}
+            x={label.x}
+            y={label.y}
+            textAnchor={label.anchor}
+            className="fill-ink font-mono text-[10px] font-semibold tabular-nums"
+          >
+            {label.text}
+          </text>
+        ))}
 
         {/* Wide hit areas: the target is bigger than the mark, an 8px dot
             cannot be aimed at with a finger. */}

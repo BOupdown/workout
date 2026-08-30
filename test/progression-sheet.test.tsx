@@ -99,6 +99,38 @@ describe('ProgressionSheet', () => {
   });
 });
 
+describe('the chart labels', () => {
+  it('prints the peak once when it is also the first session', async () => {
+    // The collision this was written for: the best session at the left edge
+    // puts its own label exactly where the axis prints its maximum, and both
+    // numbers become unreadable. The gridline stays; the axis gives up its
+    // text to the label that is precise about a real point.
+    await logSession(squat, [{ weightKg: 100, reps: 5 }]);
+    await logSession(squat, [{ weightKg: 90, reps: 5 }]);
+
+    render(<ProgressionSheet exercise={squat} onClose={vi.fn()} />);
+
+    const chart = (await screen.findByRole('img')).querySelectorAll('text');
+    const hundreds = [...chart].filter((node) => node.textContent === '100');
+
+    expect(hundreds).toHaveLength(1);
+  });
+
+  it('keeps the axis numbers a label is nowhere near', async () => {
+    // Suppression has to be the exception: an axis stripped of its ticks would
+    // be a worse chart than one with two numbers in a corner.
+    await logSession(squat, [{ weightKg: 60, reps: 5 }]);
+    await logSession(squat, [{ weightKg: 100, reps: 5 }]);
+
+    render(<ProgressionSheet exercise={squat} onClose={vi.fn()} />);
+
+    const chart = await screen.findByRole('img');
+    const ticks = [...chart.querySelectorAll('g text')];
+
+    expect(ticks.length).toBeGreaterThan(0);
+  });
+});
+
 describe('the estimated 1RM view', () => {
   const estimateButton = () => screen.getByRole('button', { name: 'Est. 1RM' });
 

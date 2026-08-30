@@ -3,9 +3,11 @@ import { createSet, recentSetsForExercise } from '../lib/db/sets';
 import { addExerciseToSession, endSession, startSession } from '../lib/db/sessions';
 import type { Exercise, SetEntry } from '../lib/db/types';
 import {
+  boxesOverlap,
   buildChartGeometry,
   buildProgression,
   isBetterPerformance,
+  monoTextBox,
   progressionDelta,
   progressionMetric,
   recordSet,
@@ -442,5 +444,53 @@ describe('recordSet', () => {
 
     const top = buildProgression(sets, squat).reduce((a, b) => (b.value > a.value ? b : a));
     expect(recordSet(sets, squat)?.weightKg).toBe(top.value);
+  });
+});
+
+describe('monoTextBox', () => {
+  it('measures a left-anchored label from where it starts', () => {
+    // Four characters at 10 px, 0.6 em of advance each.
+    expect(monoTextBox('92.5', 14, 30, 10)).toEqual({ x: 14, y: 20, width: 24, height: 10 });
+  });
+
+  it('spreads a centred label either side of its point', () => {
+    expect(monoTextBox('80', 100, 30, 10, 'middle').x).toBe(94);
+  });
+
+  it('hangs a right-anchored label back from its point', () => {
+    expect(monoTextBox('80', 100, 30, 10, 'end').x).toBe(88);
+  });
+
+  it('takes the baseline as the bottom, not the middle', () => {
+    // Nothing drawn on these charts has a descender, so a full line box would
+    // report a collision for labels that clear each other comfortably.
+    const box = monoTextBox('80', 0, 30, 10);
+    expect(box.y + box.height).toBe(30);
+  });
+});
+
+describe('boxesOverlap', () => {
+  const box = (x: number, y: number, width = 20, height = 10) => ({ x, y, width, height });
+
+  it('sees two labels printed on the same spot', () => {
+    expect(boxesOverlap(box(14, 8), box(14, 8))).toBe(true);
+  });
+
+  it('leaves labels on the same line but far apart alone', () => {
+    expect(boxesOverlap(box(14, 8), box(200, 8))).toBe(false);
+  });
+
+  it('leaves labels in the same column but far apart alone', () => {
+    expect(boxesOverlap(box(14, 8), box(14, 100))).toBe(false);
+  });
+
+  it('does not call touching edges an overlap', () => {
+    // Flush against each other is legible; only genuine coverage is not.
+    expect(boxesOverlap(box(14, 8), box(34, 8))).toBe(false);
+    expect(boxesOverlap(box(14, 8), box(14, 18))).toBe(false);
+  });
+
+  it('catches a partial cover', () => {
+    expect(boxesOverlap(box(14, 8), box(30, 12))).toBe(true);
   });
 });

@@ -261,6 +261,50 @@ export interface ChartGeometry<T> {
   peakIndex: number;
 }
 
+/** A drawn piece of text, in the chart's own units. */
+export interface LabelBox {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
+/**
+ * The box a piece of monospaced text will occupy.
+ *
+ * **Estimated, not measured.** SVG can measure text, but only once it is in a
+ * document — and a layout decision that depends on the DOM cannot be taken in a
+ * pure function, nor tested without rendering one. Every label on these charts
+ * is set in the same monospaced face, where the advance width is a fixed
+ * fraction of the size, so an estimate is exact enough to answer the only
+ * question asked of it: do these two touch.
+ *
+ * The height is the cap height rather than the line box. Nothing drawn here has
+ * a descender — digits, a point and a minus sign — and a full line box would
+ * report a collision for labels that clear each other comfortably.
+ */
+export function monoTextBox(
+  text: string,
+  x: number,
+  baseline: number,
+  fontSize: number,
+  anchor: 'start' | 'middle' | 'end' = 'start',
+): LabelBox {
+  const width = text.length * fontSize * MONO_ADVANCE;
+  const left = anchor === 'start' ? x : anchor === 'middle' ? x - width / 2 : x - width;
+
+  return { x: left, y: baseline - fontSize, width, height: fontSize };
+}
+
+/** Advance width of the monospaced stack, as a fraction of the font size. */
+const MONO_ADVANCE = 0.6;
+
+export function boxesOverlap(a: LabelBox, b: LabelBox): boolean {
+  return (
+    a.x < b.x + b.width && b.x < a.x + a.width && a.y < b.y + b.height && b.y < a.y + a.height
+  );
+}
+
 /** Round ticks: at most `count`, on a readable step. */
 function niceTicks(min: number, max: number, count = 3): number[] {
   if (max === min) return [max];
