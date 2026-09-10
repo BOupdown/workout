@@ -46,8 +46,8 @@ import { SetEntryPanel } from './set-entry-panel';
  *
  * The goal it holds: one set in two taps when the exercise is already in the
  * session - one tap on its row (which activates it *and* reloads the draft),
- * one tap on "Save set". The already-active block repeats in a single tap,
- * since the draft is not cleared after saving.
+ * one tap on "Save set". Each draft draws from the matching set number in the
+ * previous session, so a familiar routine returns in its usual order.
  */
 export function ActiveSessionScreen() {
   const state = useActiveSession();
@@ -76,7 +76,7 @@ export function ActiveSessionScreen() {
   // last one added.
   const activeEntry = entries.find((entry) => entry.id === selectedBlockId) ?? entries.at(-1);
 
-  const controller = useSetDraft(activeEntry);
+  const controller = useSetDraft(activeEntry, detail?.startedAt);
   const [unit] = useWeightUnit();
   const rest = useRestTimer();
   const recordSetIds = useSessionRecords(entries);

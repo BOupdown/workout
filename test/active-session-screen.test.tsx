@@ -29,6 +29,20 @@ async function sessionWithHistory() {
 
 const savedSets = () => db.sets.count();
 
+/** A finished session, then an empty current block of the same exercise. */
+async function currentBlockAfter(values: Array<{ weightKg: number; reps: number }>) {
+  const { session: previous } = await startSession({ startedAt: Date.now() - 60_000 });
+  const previousBlock = await addExerciseToSession(previous.id, squat.id);
+  for (const value of values) {
+    await createSet({ sessionExerciseId: previousBlock.id, ...value, kind: 'work' });
+  }
+  await endSession(previous.id);
+
+  const { session: current } = await startSession();
+  const currentBlock = await addExerciseToSession(current.id, squat.id);
+  return { previousBlock, currentBlock };
+}
+
 describe('the two-tap promise', () => {
   it('logs a set in two taps when the exercise is already in the session', async () => {
     // This is the app's whole thesis, and until now no test held it: one tap on
@@ -77,6 +91,59 @@ describe('the two-tap promise', () => {
 
     expect(load.value).toBe('100');
     expect(reps.value).toBe('5');
+  });
+});
+
+describe('set-number defaults from the previous session', () => {
+  it('matches first and second sets by their displayed rank', async () => {
+    const user = userEvent.setup();
+    await currentBlockAfter([
+      { weightKg: 90, reps: 8 },
+      { weightKg: 100, reps: 5 },
+    ]);
+
+    render(<ActiveSessionScreen />);
+    const panel = await screen.findByRole('region', { name: /Log a set of Squat/ });
+    const load = within(panel).getByLabelText('Load') as HTMLInputElement;
+    const reps = within(panel).getByLabelText('Reps') as HTMLInputElement;
+
+    await expect.poll(() => load.value).toBe('90');
+    expect(reps.value).toBe('8');
+
+    await user.click(within(panel).getByRole('button', { name: /Save set/ }));
+    await expect.poll(() => savedSets()).toBe(3);
+    await expect.poll(() => load.value).toBe('100');
+    expect(reps.value).toBe('5');
+  });
+
+  it('keeps the current default when the previous session has no matching rank', async () => {
+    const user = userEvent.setup();
+    await currentBlockAfter([{ weightKg: 90, reps: 8 }]);
+
+    render(<ActiveSessionScreen />);
+    const panel = await screen.findByRole('region', { name: /Log a set of Squat/ });
+    await expect.poll(() => (within(panel).getByLabelText('Load') as HTMLInputElement).value).toBe('90');
+    await user.click(within(panel).getByRole('button', { name: /Save set/ }));
+    await expect.poll(() => savedSets()).toBe(2);
+
+    expect((within(panel).getByLabelText('Load') as HTMLInputElement).value).toBe('90');
+    expect((within(panel).getByLabelText('Reps') as HTMLInputElement).value).toBe('8');
+  });
+
+  it('never overwrites a value the user has started typing while history refreshes', async () => {
+    const user = userEvent.setup();
+    const { previousBlock } = await currentBlockAfter([{ weightKg: 90, reps: 8 }]);
+
+    render(<ActiveSessionScreen />);
+    const panel = await screen.findByRole('region', { name: /Log a set of Squat/ });
+    const load = within(panel).getByLabelText('Load') as HTMLInputElement;
+    await expect.poll(() => load.value).toBe('90');
+    await user.clear(load);
+    await user.type(load, '95');
+
+    // A write to the source block makes the live history query run again.
+    await createSet({ sessionExerciseId: previousBlock.id, weightKg: 100, reps: 5 });
+    await expect.poll(() => load.value).toBe('95');
   });
 });
 

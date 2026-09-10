@@ -38,8 +38,7 @@ const FIELD_MODES: Record<DraftField, 'decimal' | 'numeric'> = {
 const ORIGIN_LABELS: Record<string, string | null> = {
   none: null,
   block: null,
-  session: 'previous set',
-  history: 'last session',
+  history: 'previous session',
 };
 
 /**

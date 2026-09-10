@@ -165,35 +165,36 @@ describe('draftToSetInput — agreement with the validation', () => {
 });
 
 describe('resolveDraftReference', () => {
-  const set = (id: string, sessionId: string, weightKg: number) => ({ id, sessionId, weightKg });
+  const set = (id: string, weightKg: number) => ({ id, weightKg });
 
-  it('always prefers the last set of the block', () => {
-    const block = { sessionId: 's1', sets: [set('a', 's1', 90), set('b', 's1', 100)] };
-    const reference = resolveDraftReference(block, [set('vieux', 's0', 60)]);
+  it('matches the first current set to the first previous set', () => {
+    const reference = resolveDraftReference({ sets: [] }, [set('a', 90), set('b', 100)]);
 
-    expect(reference.set).toEqual(set('b', 's1', 100));
-    expect(reference.origin).toBe('block');
-  });
-
-  it('reaches back into the history when the block is empty', () => {
-    const reference = resolveDraftReference({ sessionId: 's1', sets: [] }, [set('a', 's0', 95)]);
-
-    expect(reference.set).toEqual(set('a', 's0', 95));
+    expect(reference.set).toEqual(set('a', 90));
     expect(reference.origin).toBe('history');
   });
 
-  it('tells a set of the running session apart', () => {
-    // A second block of the same exercise within one session: announcing
-    // "last session" would be false, the set is ten minutes old.
-    const reference = resolveDraftReference({ sessionId: 's1', sets: [] }, [set('a', 's1', 100)]);
+  it('matches the second current set to the second previous set', () => {
+    const reference = resolveDraftReference(
+      { sets: [set('current', 95)] },
+      [set('first', 90), set('second', 100)],
+    );
 
-    expect(reference.origin).toBe('session');
+    expect(reference.set).toEqual(set('second', 100));
+    expect(reference.origin).toBe('history');
+  });
+
+  it('keeps the current default when the previous session did not have the rank', () => {
+    const reference = resolveDraftReference({ sets: [set('one', 90)] }, [set('first', 100)]);
+
+    expect(reference.set).toEqual(set('one', 90));
+    expect(reference.origin).toBe('block');
   });
 
   it('has no reference with neither block nor history', () => {
     expect(resolveDraftReference(undefined, undefined).origin).toBe('none');
-    expect(resolveDraftReference({ sessionId: 's1', sets: [] }, []).origin).toBe('none');
-    expect(resolveDraftReference({ sessionId: 's1', sets: [] }, undefined).set).toBeUndefined();
+    expect(resolveDraftReference({ sets: [] }, []).origin).toBe('none');
+    expect(resolveDraftReference({ sets: [] }, undefined).set).toBeUndefined();
   });
 });
 

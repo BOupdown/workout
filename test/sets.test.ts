@@ -1,7 +1,13 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { db } from '../lib/db/db';
-import { createSet, deleteSet, recentSetsForExercise, updateSet } from '../lib/db/sets';
-import { addExerciseToSession, startSession } from '../lib/db/sessions';
+import {
+  createSet,
+  deleteSet,
+  latestPriorSessionSetsForExercise,
+  recentSetsForExercise,
+  updateSet,
+} from '../lib/db/sets';
+import { addExerciseToSession, endSession, startSession } from '../lib/db/sessions';
 import type { Exercise, SetEntry } from '../lib/db/types';
 import { SetValidationError, setFieldRequirements } from '../lib/db/validation';
 import { referenceExercises, resetDatabase } from './helpers';
@@ -105,6 +111,36 @@ describe('createSet — cas valides', () => {
 
     expect(sansLest.weightKg).toBe(0);
     expect(avecLest.weightKg).toBe(10);
+  });
+});
+
+describe('latestPriorSessionSetsForExercise', () => {
+  it('takes every set, in display order, from the latest earlier session', async () => {
+    await createSet({ sessionExerciseId: blocks.squat, weightKg: 80, reps: 8 });
+    await endSession(sessionId);
+
+    const middle = await startSession({ startedAt: startedAt + 86_400_000 });
+    const middleBlock = await addExerciseToSession(middle.session.id, squat.id);
+    await createSet({ sessionExerciseId: middleBlock.id, weightKg: 90, reps: 6 });
+    await createSet({ sessionExerciseId: middleBlock.id, weightKg: 100, reps: 4 });
+    await endSession(middle.session.id);
+
+    const current = await startSession({ startedAt: startedAt + 172_800_000 });
+    const copied = await latestPriorSessionSetsForExercise(
+      squat.id,
+      current.session.id,
+      current.session.startedAt,
+    );
+
+    expect(copied.map((set) => [set.weightKg, set.reps])).toEqual([
+      [90, 6],
+      [100, 4],
+    ]);
+  });
+
+  it('returns no defaults when there is no earlier session with the exercise', async () => {
+    const copied = await latestPriorSessionSetsForExercise(squat.id, sessionId, startedAt);
+    expect(copied).toEqual([]);
   });
 });
 

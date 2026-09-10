@@ -215,3 +215,43 @@ export async function recentSetsForExercise(
     .limit(limit)
     .toArray();
 }
+
+/**
+ * The sets of the exercise block most recently completed before a session.
+ *
+ * A training screen numbers sets by their position in the block rather than by
+ * their stored `order` (which can have gaps after a deletion). Returning the
+ * whole block in that same display order lets a new session copy set 1 to set
+ * 1, set 2 to set 2, and so on — without treating a warm-up as invisible.
+ *
+ * A session can technically contain an exercise twice. In that unusual case,
+ * the latest block in its latest prior session is the useful analogue of the
+ * block the user is currently logging.
+ */
+export async function latestPriorSessionSetsForExercise(
+  exerciseId: Id,
+  currentSessionId: Id,
+  currentStartedAt: number,
+): Promise<SetEntry[]> {
+  const latest = await db.sets
+    .where('[exerciseId+performedAt+order]')
+    .between(
+      [exerciseId, MIN_NUMBER_KEY, MIN_NUMBER_KEY],
+      [exerciseId, currentStartedAt, MIN_NUMBER_KEY],
+      true,
+      false,
+    )
+    .reverse()
+    .filter((set) => set.sessionId !== currentSessionId)
+    .first();
+
+  if (!latest) return [];
+
+  return db.sets
+    .where('[sessionExerciseId+order]')
+    .between(
+      [latest.sessionExerciseId, MIN_NUMBER_KEY],
+      [latest.sessionExerciseId, MAX_NUMBER_KEY],
+    )
+    .toArray();
+}

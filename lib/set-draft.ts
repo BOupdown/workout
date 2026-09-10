@@ -49,11 +49,9 @@ export function visibleDraftFields(requirements: SetFieldRequirements): DraftFie
 export type DraftReferenceOrigin =
   /** No reference value available. */
   | 'none'
-  /** The previous set of this block — "same again". */
+  /** No matching historical rank: repeat the current block's last set. */
   | 'block'
-  /** Another block of the same exercise, in the current session. */
-  | 'session'
-  /** An earlier session — "pick up where I left off". */
+  /** The set at the same displayed rank in the previous session. */
   | 'history';
 
 export interface DraftReference {
@@ -61,32 +59,28 @@ export interface DraftReference {
   origin: DraftReferenceOrigin;
 }
 
-type SetReference = Partial<Record<DraftField, number>> & { sessionId: Id };
+type SetReference = Partial<Record<DraftField, number>>;
 
 /**
- * Picks the set that supplies the default values.
- *
- * Order matters: the block's last set always wins; failing that we go back to
- * the last work set of this exercise, which may come from another block of the
- * current session as easily as from a past one. The two are told apart so we
- * never announce "last session" about a set logged ten minutes ago.
+ * Picks the set at the same displayed rank from the prior session. A block's
+ * first visible set is rank zero, its second is rank one, and so on: `order`
+ * itself may be sparse after a deletion, so it is deliberately not used here.
+ * If that earlier rank does not exist, the established "same again" default
+ * remains in force rather than clearing a draft the user was ready to save.
  */
 export function resolveDraftReference(
-  block: { sessionId: Id; sets: SetReference[] } | undefined,
+  block: { sets: SetReference[] } | undefined,
   history: SetReference[] | undefined,
 ): DraftReference {
   if (!block) return { set: undefined, origin: 'none' };
 
+  const previous = history?.[block.sets.length];
+  if (previous) return { set: previous, origin: 'history' };
+
   const lastInBlock = block.sets.at(-1);
-  if (lastInBlock) return { set: lastInBlock, origin: 'block' };
-
-  const previous = history?.[0];
-  if (!previous) return { set: undefined, origin: 'none' };
-
-  return {
-    set: previous,
-    origin: previous.sessionId === block.sessionId ? 'session' : 'history',
-  };
+  return lastInBlock
+    ? { set: lastInBlock, origin: 'block' }
+    : { set: undefined, origin: 'none' };
 }
 
 /**
