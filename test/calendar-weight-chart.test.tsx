@@ -97,7 +97,7 @@ describe('the bodyweight chart in the calendar', () => {
 
     await user.click(screen.getByRole('button', { name: 'Previous month' }));
 
-    await screen.findByText('July 2026');
+    await screen.findByRole('heading', { name: 'July 2026' });
     await expect.poll(() => chart(), { timeout: 5000 }).not.toBeNull();
     expect(chart()?.getAttribute('aria-label')).toContain('from 85 to 83');
   });

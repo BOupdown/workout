@@ -7,6 +7,7 @@ import {
   HardDrives,
   Scales,
   ShieldCheck,
+  SignOut,
   Timer,
   UploadSimple,
 } from '@phosphor-icons/react';
@@ -33,6 +34,7 @@ import {
   type RestDurationParts,
 } from '@/lib/rest-timer';
 import { PLATE_DENOMINATIONS } from '@/lib/plates';
+import { getSupabaseClient } from '@/lib/supabase/client';
 import { WEIGHT_UNITS } from '@/lib/units';
 
 const DATE_FORMAT = new Intl.DateTimeFormat('en-GB', {
@@ -68,6 +70,8 @@ export function SettingsScreen() {
 
   const [busy, setBusy] = useState(false);
   const [confirming, setConfirming] = useState(false);
+  const [signOutConfirming, setSignOutConfirming] = useState(false);
+  const [signingOut, setSigningOut] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -115,6 +119,21 @@ export function SettingsScreen() {
     }
   };
 
+  const signOut = async () => {
+    setSigningOut(true);
+    setError(null);
+
+    const { error } = await getSupabaseClient().auth.signOut();
+    setSigningOut(false);
+
+    if (error) {
+      setError('Could not sign out. Check your connection and try again.');
+      return;
+    }
+
+    // AuthGate observes the session change and returns to the sign-in screen.
+  };
+
   return (
     <div className="flex h-full flex-col">
       <header className="shrink-0 border-b border-line bg-raised px-4 pt-[calc(env(safe-area-inset-top)+0.875rem)] pb-3.5">
@@ -125,7 +144,7 @@ export function SettingsScreen() {
         <section className="flex gap-3 rounded-panel bg-raised px-4 py-3.5">
           <ShieldCheck size={20} weight="duotone" className="mt-0.5 shrink-0 text-muted" />
           <p className="text-sm text-muted">
-            Your data stays on your phone. No account, no server, nothing is sent anywhere.
+            Your training is saved to your account and kept available across your devices.
           </p>
         </section>
 
@@ -356,7 +375,7 @@ export function SettingsScreen() {
                   ? 'Checking…'
                   : storage.persisted
                     ? 'Durable storage granted: your data will not be cleared if the device runs short of space.'
-                    : 'Storage is not durable: the browser may clear your data if it runs short of space.'}
+                    : 'Browser storage can be cleared, but your synced training stays available from your account.'}
                 {storage.usageBytes !== null ? ` ${formatBytes(storage.usageBytes)} used.` : ''}
               </p>
 
@@ -373,14 +392,52 @@ export function SettingsScreen() {
           )}
         </section>
 
+        <section className="rounded-panel border border-line bg-raised px-4 py-3.5">
+          <div className="flex items-center gap-2">
+            <SignOut size={18} weight="bold" className="shrink-0 text-ink" />
+            <h2 className="text-[0.9375rem] font-semibold text-ink">Account</h2>
+          </div>
+          <p className="mt-1.5 text-sm text-muted">
+            Signing out does not delete the training data saved on this device.
+          </p>
+
+          {signOutConfirming ? (
+            <div className="mt-3 flex gap-2">
+              <button
+                type="button"
+                onClick={() => setSignOutConfirming(false)}
+                disabled={signingOut}
+                className="h-14 flex-1 rounded-control bg-surface text-[0.9375rem] font-medium text-muted transition-transform active:scale-[0.98] disabled:opacity-50"
+              >
+                Stay signed in
+              </button>
+              <button
+                type="button"
+                onClick={() => void signOut()}
+                disabled={signingOut}
+                className="h-14 flex-1 rounded-control bg-danger text-[0.9375rem] font-semibold text-surface transition-transform active:scale-[0.98] disabled:opacity-50"
+              >
+                {signingOut ? 'Signing out…' : 'Sign out'}
+              </button>
+            </div>
+          ) : (
+            <button
+              type="button"
+              onClick={() => setSignOutConfirming(true)}
+              className="mt-3 h-14 w-full rounded-control border-2 border-danger text-[0.9375rem] font-semibold text-danger transition-transform active:scale-[0.98]"
+            >
+              Sign out
+            </button>
+          )}
+        </section>
+
         <section className="rounded-panel bg-raised px-4 py-3.5">
           <div className="flex items-center gap-2">
             <DownloadSimple size={18} weight="bold" className="shrink-0 text-ink" />
             <h2 className="text-[0.9375rem] font-semibold text-ink">Backup</h2>
           </div>
           <p className="mt-1.5 text-sm text-muted">
-            A file you keep. It is the only protection that survives clearing the browser or
-            changing phone.
+            A portable copy of your training outside your account, useful for your own archive.
           </p>
 
           {/* Stated even when it was never done: "never" is the answer that

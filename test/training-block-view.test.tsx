@@ -136,6 +136,26 @@ describe('blocks on the grid', () => {
   const cellFor = (date: string) =>
     screen.getByRole('button', { name: new RegExp(`^${date}`) }).getAttribute('aria-label');
 
+  /** The grid deliberately shows one month, so inspect a past date in its own
+   * month rather than assuming every `daysAgo()` value is a leading day. */
+  const showMonthOf = async (user: ReturnType<typeof userEvent.setup>, date: string) => {
+    const targetMonth = date.slice(0, 7);
+    const currentMonth = today().slice(0, 7);
+
+    if (targetMonth < currentMonth) {
+      await user.click(screen.getByRole('button', { name: 'Previous month' }));
+      await screen.findByRole('button', { name: new RegExp(`^${date}`) });
+      return -1;
+    } else if (targetMonth > currentMonth) {
+      await user.click(screen.getByRole('button', { name: 'Next month' }));
+      await screen.findByRole('button', { name: new RegExp(`^${date}`) });
+      return 1;
+    }
+
+    await screen.findByRole('button', { name: new RegExp(`^${date}`) });
+    return 0;
+  };
+
   it('marks a block that is already over too', async () => {
     // The flaw that was reported: a past block drew as an empty day, so the
     // shape of the month could not be read — which is the whole reason blocks
@@ -143,21 +163,27 @@ describe('blocks on the grid', () => {
     await createTrainingBlock('Peaking', daysAgo(20), daysAgo(11));
     await createTrainingBlock('Strength', daysAgo(10), daysAgo(-17));
 
+    const user = userEvent.setup();
     render(<CalendarView />);
     await screen.findByRole('button', { name: new RegExp(`^${today()}`) }, { timeout: 5000 });
 
+    const monthOffset = await showMonthOf(user, daysAgo(15));
     await expect.poll(() => cellFor(daysAgo(15))).toMatch(/Peaking/);
+    if (monthOffset < 0) await user.click(screen.getByRole('button', { name: 'Next month' }));
+    await screen.findByRole('button', { name: new RegExp(`^${today()}`) });
     expect(cellFor(today())).toMatch(/Strength/);
   });
 
   it('leaves a day outside every block bare', async () => {
     await createTrainingBlock('Strength', daysAgo(10), daysAgo(-17));
 
+    const user = userEvent.setup();
     render(<CalendarView />);
     await screen.findByRole('button', { name: new RegExp(`^${today()}`) }, { timeout: 5000 });
 
     // The running block acts as the witness that the queries have answered.
     await expect.poll(() => cellFor(today())).toMatch(/Strength/);
+    await showMonthOf(user, daysAgo(20));
     expect(cellFor(daysAgo(20))).not.toMatch(/Strength/);
   });
 

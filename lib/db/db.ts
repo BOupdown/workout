@@ -8,6 +8,8 @@ import type {
   Session,
   SessionExercise,
   SetEntry,
+  SyncOperation,
+  SyncTable,
 } from './types';
 import type { TrainingBlock } from '../training-block';
 import {
@@ -19,6 +21,7 @@ import {
   assertSessionShape,
   assertSetShape,
 } from './validation';
+import { syncWritesAreMuted } from './sync-mute';
 
 /**
  * The app's IndexedDB database.
@@ -95,6 +98,8 @@ export class WorkoutDB extends Dexie {
   bodyweights!: Table<BodyWeight, string>;
   trainingBlocks!: Table<TrainingBlock, string>;
   retiredExercises!: Table<RetiredExercise, string>;
+  /** Durable offline outbox. Never uploaded itself: its rows describe uploads. */
+  syncOperations!: Table<SyncOperation, number>;
 
   constructor() {
     super('workout');
@@ -256,6 +261,10 @@ export class WorkoutDB extends Dexie {
      */
     this.version(7).stores({ retiredExercises: 'nameKey' });
 
+    // Kept outside the domain tables so pending cloud work survives a reload
+    // and a short network outage. `++id` gives operations a stable FIFO order.
+    this.version(8).stores({ syncOperations: '++id, table, key, [table+key]' });
+
     // Starting catalogue, once, when the database is created.
     this.on('populate', (transaction) => {
       transaction.table<Exercise, string>('exercises').bulkAdd(buildSeedExercises());
@@ -277,6 +286,13 @@ export class WorkoutDB extends Dexie {
     installShapeGuard(this.bodyweights, assertBodyWeightShape);
     installShapeGuard(this.trainingBlocks, assertTrainingBlockShape);
     installShapeGuard(this.retiredExercises, assertRetiredExerciseShape);
+    installSyncOutbox(this.exercises, 'exercises', (row) => row.id);
+    installSyncOutbox(this.sessions, 'sessions', (row) => row.id);
+    installSyncOutbox(this.sessionExercises, 'sessionExercises', (row) => row.id);
+    installSyncOutbox(this.sets, 'sets', (row) => row.id);
+    installSyncOutbox(this.bodyweights, 'bodyweights', (row) => row.date);
+    installSyncOutbox(this.trainingBlocks, 'trainingBlocks', (row) => row.id);
+    installSyncOutbox(this.retiredExercises, 'retiredExercises', (row) => row.nameKey);
   }
 }
 
@@ -294,6 +310,46 @@ function installShapeGuard<T>(table: Table<T, string>, assertShape: (value: unkn
 
   table.hook('updating', (modifications, _primaryKey, entity) => {
     assertShape({ ...entity, ...modifications });
+  });
+}
+
+/**
+ * Dexie hooks run for every write path, including a future feature that does
+ * not use today's helper functions. The outbox write happens after the source
+ * transaction succeeds, so an aborted set never becomes a phantom upload.
+ */
+function installSyncOutbox<T>(
+  table: Table<T, string>,
+  tableName: SyncTable,
+  keyOf: (row: T) => string,
+) {
+  const enqueue = (key: string, kind: SyncOperation['kind']) => {
+    if (syncWritesAreMuted()) return;
+    db.syncOperations.add({ table: tableName, key, kind, createdAt: Date.now() }).catch(() => {
+      // Local training data always wins over bookkeeping. A later write or the
+      // next application start will retry the snapshot if IndexedDB was under
+      // storage pressure.
+    });
+  };
+
+  table.hook('creating', function (_primaryKey, row) {
+    const key = keyOf(row);
+    const muted = syncWritesAreMuted();
+    this.onsuccess = () => {
+      if (!muted) enqueue(key, 'upsert');
+    };
+  });
+  table.hook('updating', function (_changes, primaryKey) {
+    const muted = syncWritesAreMuted();
+    this.onsuccess = () => {
+      if (!muted) enqueue(String(primaryKey), 'upsert');
+    };
+  });
+  table.hook('deleting', function (primaryKey) {
+    const muted = syncWritesAreMuted();
+    this.onsuccess = () => {
+      if (!muted) enqueue(String(primaryKey), 'delete');
+    };
   });
 }
 

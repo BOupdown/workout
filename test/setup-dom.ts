@@ -9,6 +9,46 @@ import 'fake-indexeddb/auto';
 import { cleanup } from '@testing-library/react';
 import { afterEach, vi } from 'vitest';
 
+/**
+ * Node 26 exposes a disabled `localStorage` global unless it is given a file.
+ * Vitest copies that value onto jsdom's window, replacing jsdom's own storage
+ * with `undefined`. Tests exercise browser persistence heavily, so give every
+ * screen worker an isolated in-memory implementation instead of making `npm
+ * test` depend on a Node command-line flag.
+ */
+class MemoryStorage implements Storage {
+  #values = new Map<string, string>();
+
+  get length() {
+    return this.#values.size;
+  }
+
+  clear() {
+    this.#values.clear();
+  }
+
+  getItem(key: string) {
+    return this.#values.get(key) ?? null;
+  }
+
+  key(index: number) {
+    return [...this.#values.keys()][index] ?? null;
+  }
+
+  removeItem(key: string) {
+    this.#values.delete(key);
+  }
+
+  setItem(key: string, value: string) {
+    this.#values.set(String(key), String(value));
+  }
+}
+
+Object.defineProperty(window, 'localStorage', {
+  configurable: true,
+  value: new MemoryStorage(),
+});
+
 // Unmounting between tests. Without it a screen from the previous test stays in
 // the document and every `getByRole` finds two of everything.
 afterEach(cleanup);

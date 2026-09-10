@@ -25,6 +25,29 @@ export type Timestamp = number;
  */
 export type LocalDate = string;
 
+/**
+ * A local item waiting to be mirrored to the signed-in account. The outbox is
+ * intentionally separate from the training data: an offline workout remains
+ * usable even when the network disappears halfway through a set.
+ */
+export type SyncTable =
+  | 'exercises'
+  | 'sessions'
+  | 'sessionExercises'
+  | 'sets'
+  | 'bodyweights'
+  | 'trainingBlocks'
+  | 'retiredExercises';
+
+export interface SyncOperation {
+  id?: number;
+  table: SyncTable;
+  /** UUID for most tables; date/name key for the two natural-key tables. */
+  key: string;
+  kind: 'upsert' | 'delete';
+  createdAt: Timestamp;
+}
+
 // ---------------------------------------------------------------------------
 // Exercise
 // ---------------------------------------------------------------------------
