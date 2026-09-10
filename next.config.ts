@@ -3,17 +3,17 @@ import type { NextConfig } from "next";
 /**
  * Response headers.
  *
- * This app has no account, no cookie and no server state, so the classic
- * consequences of XSS — stolen sessions, forged requests — do not apply here.
- * What it does hold is somebody's training history, sitting in IndexedDB on
- * their phone, under a promise that nothing leaves the device.
+ * The app stores a fast offline copy in IndexedDB and talks only to its own
+ * Supabase project for authentication and account-scoped synchronisation.
  *
- * That promise is what these headers actually protect. `default-src 'self'`
- * and `connect-src 'self'` mean code that somehow ran here would have nowhere
- * to send anything: no third-party origin is reachable, at all. The rest
- * closes the cheap doors — framing, MIME sniffing, referrer leakage, and the
- * device APIs the app never asks for.
+ * The policy permits no third party except that configured project origin. The
+ * rest closes the cheap doors — framing, MIME sniffing, referrer leakage, and
+ * the device APIs the app never asks for.
  */
+const supabaseOrigin = process.env.NEXT_PUBLIC_SUPABASE_URL
+  ? new URL(process.env.NEXT_PUBLIC_SUPABASE_URL).origin
+  : null;
+
 const csp = [
   "default-src 'self'",
   // Next inlines its bootstrap script, and a nonce would mean rendering every
@@ -26,7 +26,7 @@ const csp = [
   // covers inlined icons.
   "img-src 'self' data: blob:",
   "font-src 'self'",
-  "connect-src 'self'",
+  ["connect-src 'self'", supabaseOrigin].filter(Boolean).join(' '),
   "manifest-src 'self'",
   "worker-src 'self'",
   "object-src 'none'",
