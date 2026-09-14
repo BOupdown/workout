@@ -6,8 +6,18 @@ import { useEffect, useRef, useState } from 'react';
 import { supabaseConfig } from '@/lib/supabase/config';
 import { getSupabaseClient } from '@/lib/supabase/client';
 import { WorkoutSync } from '@/components/sync/workout-sync';
+import { ResetPasswordScreen } from './reset-password-screen';
 
-type Mode = 'sign-in' | 'sign-up';
+type Mode = 'sign-in' | 'sign-up' | 'forgot-password';
+
+function markPasswordRecovery(active: boolean) {
+  const url = new URL(window.location.href);
+  if (active) url.searchParams.set('reset-password', '1');
+  else url.searchParams.delete('reset-password');
+  for (const key of ['error', 'error_code', 'error_description']) url.searchParams.delete(key);
+  url.hash = '';
+  window.history.replaceState(window.history.state, '', url);
+}
 
 /**
  * A signed-in account is the boundary around a Workout database. Local Dexie
@@ -17,20 +27,63 @@ type Mode = 'sign-in' | 'sign-up';
 export function AuthGate({ children }: { children: React.ReactNode }) {
   const configured = supabaseConfig() !== null;
   const [user, setUser] = useState<User | null | undefined>(() => (configured ? undefined : null));
+  const [recovering, setRecovering] = useState(false);
+  const [linkError, setLinkError] = useState(false);
+  const recoveryIntent = useRef(false);
 
   useEffect(() => {
     if (!configured) return;
 
+    // Read the intent before Supabase consumes and removes the token fragment.
+    const url = new URL(window.location.href);
+    const fragment = new URLSearchParams(url.hash.slice(1));
+    let recoveryRequested = url.searchParams.get('reset-password') === '1'
+      || fragment.get('type') === 'recovery';
+    const invalidLink = fragment.has('error') || url.searchParams.has('error');
+    recoveryIntent.current = recoveryRequested;
     const client = getSupabaseClient();
     let alive = true;
+    let initializedSession = false;
 
-    client.auth.getSession().then(({ data }) => {
-      if (alive) setUser(data.session?.user ?? null);
+    const { data: listener } = client.auth.onAuthStateChange((event, session) => {
+      if (!alive) return;
+      if (event === 'PASSWORD_RECOVERY' && session) {
+        recoveryRequested = true;
+        recoveryIntent.current = true;
+        markPasswordRecovery(true);
+        setRecovering(true);
+        setLinkError(false);
+      }
+      if (event === 'SIGNED_OUT' && recoveryIntent.current) {
+        setRecovering(false);
+        setLinkError(true);
+      }
+      // Initialization below also checks URL errors before exposing the app.
+      if (initializedSession && event !== 'INITIAL_SESSION') setUser(session?.user ?? null);
     });
 
-    const { data: listener } = client.auth.onAuthStateChange((_event, session) => {
-      if (alive) setUser(session?.user ?? null);
-    });
+    const initialize = async () => {
+      try {
+        const initialized = await client.auth.initialize();
+        const { data, error } = await client.auth.getSession();
+        if (!alive) return;
+        if (invalidLink || (recoveryRequested && (initialized.error || error || !data.session))) {
+          setLinkError(true);
+          markPasswordRecovery(false);
+        } else if (recoveryRequested && data.session) {
+          markPasswordRecovery(true);
+          setRecovering(true);
+        }
+        initializedSession = true;
+        setUser(data.session?.user ?? null);
+      } catch {
+        if (!alive) return;
+        setLinkError(recoveryRequested || invalidLink);
+        initializedSession = true;
+        setUser(null);
+      }
+    };
+    void initialize();
 
     return () => {
       alive = false;
@@ -40,6 +93,29 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
 
   if (!configured) return <CloudSetupMissing />;
   if (user === undefined) return <AuthLoading />;
+  if (linkError) return (
+    <AuthScreen
+      initialMode="forgot-password"
+      initialMessage="This link is invalid or has expired. Request a new password reset email."
+      onNavigate={() => {
+        markPasswordRecovery(false);
+        recoveryIntent.current = false;
+        setLinkError(false);
+        setRecovering(false);
+      }}
+    />
+  );
+  if (recovering && user) return (
+    <ResetPasswordScreen
+      email={user.email}
+      onExpired={() => setLinkError(true)}
+      onComplete={() => {
+        markPasswordRecovery(false);
+        recoveryIntent.current = false;
+        setRecovering(false);
+      }}
+    />
+  );
   if (user === null) return <AuthScreen />;
 
   return <WorkoutSync userId={user.id}>{children}</WorkoutSync>;
@@ -68,12 +144,16 @@ function CloudSetupMissing() {
   );
 }
 
-export function AuthScreen() {
-  const [mode, setMode] = useState<Mode>('sign-in');
+export function AuthScreen({ initialMode = 'sign-in', initialMessage = null, onNavigate }: {
+  initialMode?: Mode;
+  initialMessage?: string | null;
+  onNavigate?: () => void;
+} = {}) {
+  const [mode, setMode] = useState<Mode>(initialMode);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [busy, setBusy] = useState(false);
-  const [message, setMessage] = useState<string | null>(null);
+  const [message, setMessage] = useState<string | null>(initialMessage);
   const [confirmationPending, setConfirmationPending] = useState(false);
   const requestInFlight = useRef(false);
 
@@ -99,6 +179,17 @@ export function AuthScreen() {
 
     const client = getSupabaseClient();
     try {
+      if (mode === 'forgot-password') {
+        const { error } = await client.auth.resetPasswordForEmail(email.trim(), {
+          // Reuse the existing allowed root callback. PASSWORD_RECOVERY opens
+          // the password form; no extra redirect URL configuration is needed.
+          redirectTo: window.location.origin,
+        });
+        setMessage(error
+          ? 'We couldn’t send the reset email. Please wait a minute and try again.'
+          : 'If an account exists for this address, we’ve sent a password reset link. Check your inbox or spam.');
+        return;
+      }
       const result =
         mode === 'sign-in'
           ? await client.auth.signInWithPassword({ email, password })
@@ -151,8 +242,11 @@ export function AuthScreen() {
     }
   };
 
-  const switchMode = () => {
-    setMode((current) => (current === 'sign-in' ? 'sign-up' : 'sign-in'));
+  const switchMode = (next: Mode) => {
+    if (requestInFlight.current) return;
+    onNavigate?.();
+    setMode(next);
+    setPassword('');
     setMessage(null);
     setConfirmationPending(false);
   };
@@ -164,10 +258,12 @@ export function AuthScreen() {
           <Barbell size={24} weight="bold" aria-hidden />
         </div>
         <h1 className="mt-6 text-2xl font-semibold tracking-[-0.03em] text-ink">
-          {mode === 'sign-in' ? 'Your training, on every device.' : 'Start your training log.'}
+          {mode === 'forgot-password' ? 'Forgot your password?' : mode === 'sign-in' ? 'Your training, on every device.' : 'Start your training log.'}
         </h1>
         <p className="mt-2 max-w-[32ch] text-sm leading-6 text-muted">
-          {mode === 'sign-in'
+          {mode === 'forgot-password'
+            ? 'Enter your account email and we’ll send you a link to choose a new password.'
+            : mode === 'sign-in'
             ? 'Sign in to keep your sessions backed up and in sync.'
             : 'One account keeps your training history safe across devices.'}
         </p>
@@ -179,6 +275,7 @@ export function AuthScreen() {
               className="mt-1.5 h-12 w-full rounded-control border border-line bg-surface px-3 text-base text-ink outline-none transition focus:border-ink"
               autoComplete="email"
               type="email"
+              disabled={busy}
               value={email}
               onChange={(event) => {
                 setEmail(event.target.value);
@@ -190,18 +287,26 @@ export function AuthScreen() {
               required
             />
           </label>
-          <label className="block text-sm font-medium text-ink">
+          {mode !== 'forgot-password' && <label className="block text-sm font-medium text-ink">
             Password
             <input
               className="mt-1.5 h-12 w-full rounded-control border border-line bg-surface px-3 text-base text-ink outline-none transition focus:border-ink"
               autoComplete={mode === 'sign-in' ? 'current-password' : 'new-password'}
               type="password"
+              disabled={busy}
               minLength={8}
               value={password}
               onChange={(event) => setPassword(event.target.value)}
               required
             />
-          </label>
+          </label>}
+
+          {mode === 'sign-in' && (
+            <button type="button" disabled={busy} onClick={() => switchMode('forgot-password')}
+              className="min-h-11 text-sm font-medium text-ink underline decoration-line underline-offset-4 disabled:opacity-60">
+              Forgot password?
+            </button>
+          )}
 
           {message && (
             <p className="rounded-control bg-accent-wash px-3 py-2.5 text-sm leading-5 text-ink" role="status">
@@ -215,7 +320,7 @@ export function AuthScreen() {
             disabled={busy || (mode === 'sign-up' && confirmationPending)}
           >
             <LockKey size={18} weight="bold" aria-hidden />
-            {busy ? 'Working…' : mode === 'sign-in' ? 'Sign in' : 'Create account'}
+            {busy ? 'Working…' : mode === 'forgot-password' ? 'Send reset link' : mode === 'sign-in' ? 'Sign in' : 'Create account'}
           </button>
 
           {mode === 'sign-up' && confirmationPending && (
@@ -231,8 +336,8 @@ export function AuthScreen() {
         </form>
 
         <p className="mt-6 text-center text-sm text-muted">
-          {mode === 'sign-in' ? 'New here?' : 'Already have an account?'}{' '}
-          <button className="font-medium text-ink underline decoration-line underline-offset-4" type="button" onClick={switchMode}>
+          {mode === 'forgot-password' ? 'Remember your password?' : mode === 'sign-in' ? 'New here?' : 'Already have an account?'}{' '}
+          <button className="min-h-11 font-medium text-ink underline decoration-line underline-offset-4 disabled:opacity-60" type="button" disabled={busy} onClick={() => switchMode(mode === 'sign-in' ? 'sign-up' : 'sign-in')}>
             {mode === 'sign-in' ? 'Create an account' : 'Sign in'}
           </button>
         </p>
