@@ -3,7 +3,7 @@ import { withoutSyncOutbox } from './sync-mute';
 
 export const TRAINING_TABLES = [
   'exercises', 'sessions', 'sessionExercises', 'sets', 'bodyweights',
-  'trainingBlocks', 'retiredExercises',
+  'trainingBlocks', 'retiredExercises', 'routines',
 ] as const;
 
 export const accountDatabaseName = (userId: string) => `workout.account.${encodeURIComponent(userId)}`;

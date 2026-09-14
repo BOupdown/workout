@@ -131,6 +131,13 @@ export function SetEntryPanel({
         </span>
       </div>
 
+      {entry.target ? <div className="mb-2 flex flex-wrap items-center justify-between gap-x-2 gap-y-1 text-xs text-muted">
+        <p>Target: {entry.target.sets} × {entry.target.metric === 'reps'
+          ? `${entry.target.repsMin}–${entry.target.repsMax} reps${entry.exercise.perSide ? ' / side' : ''}`
+          : `${entry.target.durationSec}s`} · Rest {entry.target.restSec}s</p>
+        <p className="font-mono tabular-nums">{entry.sets.filter((set) => set.kind === 'work').length}/{entry.target.sets} work sets</p>
+      </div> : null}
+
       {messages.general.length > 0 ? (
         <div role="alert" className="mb-3 rounded-control bg-danger/10 px-3 py-2 text-sm text-danger">
           {messages.general.map((message) => (

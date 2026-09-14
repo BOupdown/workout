@@ -37,7 +37,30 @@ export type SyncTable =
   | 'sets'
   | 'bodyweights'
   | 'trainingBlocks'
+  | 'routines'
   | 'retiredExercises';
+
+/** A plan, never a performed set. Copied into a session when it starts. */
+export type ExerciseTarget = {
+  sets: number;
+  restSec: number;
+} & ({ metric: 'reps'; repsMin: number; repsMax: number } | { metric: 'time'; durationSec: number });
+
+export interface RoutineExercise {
+  id: Id;
+  exerciseId: Id;
+  /** Kept so an exercise removed from the catalogue remains identifiable. */
+  exerciseName: string;
+  target: ExerciseTarget;
+}
+
+export interface Routine {
+  id: Id;
+  title: string;
+  exercises: RoutineExercise[];
+  createdAt: Timestamp;
+  updatedAt: Timestamp;
+}
 
 export interface SyncOperation {
   id?: number;
@@ -216,6 +239,9 @@ export interface SessionExercise {
 
   /** Rank within the session. Strictly increasing, not necessarily contiguous. */
   order: number;
+
+  /** Independent snapshot: editing or deleting a routine cannot alter history. */
+  target?: ExerciseTarget;
 
   /**
    * Blocks sharing a number formed a superset, back when the app offered them.

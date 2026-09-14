@@ -12,6 +12,13 @@ account when online. Each account has its own local database and upload queue.
 The app shows whether changes are local, pending, or synchronized. Export a
 JSON backup in Settings for an independent copy.
 
+**Reusable routines.** Open **Your routines** before starting a session. Choose
+and order exercises, set work-set counts, repetition ranges or timed targets,
+and a rest duration for each exercise. Starting a routine copies its targets
+into the session; editing or deleting the routine leaves past sessions intact.
+Targets never count as logged sets. Routines are included in account sync and
+JSON backups, and remain editable offline after the initial account setup.
+
 ## What it looks like
 
 Six weeks of a push / pull / legs programme, three sessions a week.
@@ -64,6 +71,24 @@ npm run dev
 | `npm test` | test suite (Vitest + fake-indexeddb) |
 | `npm run build` | production build |
 | `npm run lint` | ESLint |
+
+### Database migration for routines
+
+Apply `supabase/migrations/20260914160000_routines.sql` to the configured
+Supabase project **before deploying this client**. It adds the per-account
+`routines` table and the optional `session_exercises.target` column. Older
+clients can continue to write blocks without targets. The migration is
+transactional and does not rewrite existing sessions.
+
+An isolated PostgreSQL check covers constraints, RLS isolation, older blocks
+and preservation of targets after routine deletion:
+
+```bash
+npm install --prefix /tmp/workout-sql-test --no-audit --no-fund @electric-sql/pglite
+PGLITE_MODULE=/tmp/workout-sql-test/node_modules/@electric-sql/pglite/dist/index.js node supabase/tests/routines.mjs
+```
+
+This check uses an in-memory database and never connects to Supabase.
 
 ## Stack
 

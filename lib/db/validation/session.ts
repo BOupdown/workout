@@ -6,6 +6,7 @@
  * (`../sessions`).
  */
 
+import { checkExerciseTarget } from './routine';
 import { isLocalDate } from '../keys';
 import type { Exercise } from '../types';
 import {
@@ -147,6 +148,8 @@ export function checkSessionExerciseShape(value: unknown): ValidationIssue[] {
       message: 'Order must be a non-negative integer.',
     });
   }
+
+  if (b.target !== undefined) issues.push(...checkExerciseTarget(b.target));
 
   // Nothing writes this any more (see `SessionExercise.supersetGroup`), but a
   // restored backup can still carry it, and a row is only ever as trustworthy as

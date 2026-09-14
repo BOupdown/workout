@@ -17,6 +17,7 @@ import type {
   BodyWeight,
   Exercise,
   RetiredExercise,
+  Routine,
   Session,
   SessionExercise,
   SetEntry,
@@ -58,6 +59,8 @@ export interface BackupFile {
    * thing tombstones exist to prevent.
    */
   retiredExercises?: RetiredExercise[];
+  /** Optional for backups written before routines existed. */
+  routines?: Routine[];
 }
 
 export interface BackupSummary {
@@ -88,6 +91,7 @@ export async function exportDatabase(): Promise<BackupFile> {
       db.bodyweights,
       db.trainingBlocks,
       db.retiredExercises,
+      db.routines,
     ],
     async () => {
       const [
@@ -98,6 +102,7 @@ export async function exportDatabase(): Promise<BackupFile> {
         bodyweights,
         trainingBlocks,
         retiredExercises,
+        routines,
       ] = await Promise.all([
         db.exercises.toArray(),
         db.sessions.toArray(),
@@ -106,6 +111,7 @@ export async function exportDatabase(): Promise<BackupFile> {
         db.bodyweights.toArray(),
         db.trainingBlocks.toArray(),
         db.retiredExercises.toArray(),
+        db.routines.toArray(),
       ]);
 
       return {
@@ -119,6 +125,7 @@ export async function exportDatabase(): Promise<BackupFile> {
         bodyweights,
         trainingBlocks,
         retiredExercises,
+        routines,
       };
     },
   );
@@ -169,7 +176,7 @@ export function readBackup(value: unknown): BackupFile {
 
   // Absent is fine — older files predate the timeline. Present but not a list
   // is not: that is a corrupt file claiming to carry weights.
-  for (const optional of ['bodyweights', 'trainingBlocks', 'retiredExercises'] as const) {
+  for (const optional of ['bodyweights', 'trainingBlocks', 'retiredExercises', 'routines'] as const) {
     if (candidate[optional] !== undefined && !Array.isArray(candidate[optional])) {
       throw new BackupFormatError(`Incomplete backup: ${optional} is unreadable.`);
     }
@@ -214,6 +221,7 @@ export async function importDatabase(backup: BackupFile): Promise<BackupSummary>
       db.bodyweights,
       db.trainingBlocks,
       db.retiredExercises,
+      db.routines,
     ],
     async () => {
       await Promise.all([
@@ -231,6 +239,12 @@ export async function importDatabase(backup: BackupFile): Promise<BackupSummary>
       await db.sets.bulkAdd(backup.sets);
       await db.bodyweights.bulkPut(bodyWeightsFrom(backup));
       await db.trainingBlocks.bulkPut(backup.trainingBlocks ?? []);
+      // Old files do not describe routines. Preserve those already on device;
+      // missing exercises remain visibly unavailable until the routine is edited.
+      if (backup.routines !== undefined) {
+        await db.routines.clear();
+        await db.routines.bulkPut(backup.routines);
+      }
 
       // Cleared only when the file has something to say about tombstones. See
       // `BackupFile.retiredExercises`: absent means "written before these

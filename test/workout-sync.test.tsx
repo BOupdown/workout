@@ -4,6 +4,7 @@ import { db } from '../lib/db/db';
 import { startSession, getActiveSession, addExerciseToSession } from '../lib/db/sessions';
 import { createSet } from '../lib/db/sets';
 import { WorkoutSync } from '../lib/supabase/sync';
+import { saveRoutine, deleteRoutine, startSessionFromRoutine } from '../lib/db/routines';
 import { referenceExercises, resetDatabase } from './helpers';
 
 type Row = Record<string, unknown>;
@@ -45,6 +46,20 @@ function remoteClient() {
       };
       return {
         select: () => query,
+        update(changes: Row) {
+          const filters: Array<[string, unknown]> = [];
+          const mutation = {
+            eq: (field: string, value: unknown) => { filters.push([field, value]); return mutation; },
+            abortSignal: () => mutation,
+            then: (resolve: (value: unknown) => unknown) => Promise.resolve().then(() => {
+              for (const row of rows.get(table) ?? []) {
+                if (filters.every(([field, value]) => row[field] === value)) Object.assign(row, changes);
+              }
+              return resolve({ error: null });
+            }),
+          };
+          return mutation;
+        },
         upsert(input: Row | Row[]) {
           const write = async () => {
           const stored = rows.get(table) ?? [];
@@ -76,6 +91,44 @@ function remoteClient() {
 beforeEach(async () => {
   localStorage.clear();
   await resetDatabase();
+});
+
+it('syncs routine targets to another device and retains the session after routine deletion', async () => {
+  const remote = remoteClient();
+  const sync = new WorkoutSync(userId, remote.client);
+  await sync.sync();
+  const { squat } = await referenceExercises();
+  const target = { metric: 'reps' as const, sets: 4, repsMin: 6, repsMax: 8, restSec: 150 };
+  const routine = await saveRoutine({ title: 'Strength', exercises: [{ id: 'first', exerciseId: squat.id, exerciseName: squat.name, target }] });
+  const { session } = await startSessionFromRoutine(routine.id);
+  await sync.sync();
+  expect(remote.rows.get('routines')?.[0]).toMatchObject({ id: routine.id, exercises: routine.exercises });
+  expect(remote.rows.get('session_exercises')?.[0].target).toEqual(target);
+  await resetDatabase();
+  const anotherDevice = new WorkoutSync(userId, remote.client);
+  await anotherDevice.sync();
+  expect(await db.routines.get(routine.id)).toEqual(routine);
+  expect((await db.sessionExercises.toArray())[0].target).toEqual(target);
+  await deleteRoutine(routine.id);
+  await anotherDevice.sync();
+  expect(await db.routines.count()).toBe(0);
+  expect(remote.rows.get('routines')?.[0].deleted_at).toBeTruthy();
+  expect((await db.sessions.get(session.id))?.id).toBe(session.id);
+  expect((await db.sessionExercises.toArray())[0].target).toEqual(target);
+});
+
+it('remaps exercises in a routine made offline before the first download', async () => {
+  const remote = remoteClient();
+  await new WorkoutSync(userId, remote.client).sync();
+  const cloudSquat = (await referenceExercises()).squat;
+  await resetDatabase();
+  const { squat } = await referenceExercises();
+  const routine = await saveRoutine({ title: 'Offline', exercises: [{ id: 'first', exerciseId: squat.id, exerciseName: squat.name, target: { metric: 'reps', sets: 3, repsMin: 8, repsMax: 12, restSec: 90 } }] });
+  const sync = new WorkoutSync(userId, remote.client);
+  await sync.sync();
+  expect((await db.routines.get(routine.id))?.exercises[0].exerciseId).toBe(cloudSquat.id);
+  expect(remote.rows.get('routines')?.[0].exercises).toEqual((await db.routines.get(routine.id))?.exercises);
+  await expect(startSessionFromRoutine(routine.id)).resolves.toHaveProperty('firstBlockId');
 });
 
 it('keeps the active session and its sets through repeated periodic syncs', async () => {

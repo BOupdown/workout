@@ -191,3 +191,20 @@ body {
     display: flex;
   }
 }
+
+/* Native modal keeps keyboard focus and VoiceOver inside the routine editor. */
+.routine-dialog {
+  width: 100%;
+  max-width: 430px;
+  height: 100dvh;
+  max-height: 100dvh;
+  margin: 0 auto;
+  padding: 0;
+  border: 0;
+  background: var(--surface);
+  color: var(--ink);
+}
+.routine-dialog[open] { display: flex; flex-direction: column; animation: routine-enter 180ms ease-out; }
+.routine-dialog::backdrop { background: #0006; }
+@keyframes routine-enter { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+@media (prefers-reduced-motion: reduce) { .routine-dialog[open] { animation: none; } }

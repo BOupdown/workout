@@ -2,6 +2,8 @@
 
 import { Barbell, CaretRight, ClockCounterClockwise, Plus } from '@phosphor-icons/react';
 import { useLiveQuery } from 'dexie-react-hooks';
+import { RoutinesPanel } from '@/components/routines/routines-panel';
+import { startSessionFromRoutine } from '@/lib/db/routines';
 import { useState } from 'react';
 import { useActiveSession } from '@/hooks/use-active-session';
 import { useRestTimer } from '@/hooks/use-rest-timer';
@@ -66,6 +68,7 @@ export function ActiveSessionScreen() {
   const [removalCount, setRemovalCount] = useState<number | null>(null);
   // Exercises the layout could not carry over. Cleared as soon as it is read.
   const [leftBehind, setLeftBehind] = useState<string[]>([]);
+  const [routinesOpen, setRoutinesOpen] = useState(false);
   const [pickerOpenForStart, setPickerOpenForStart] = useState(false);
 
   const detail = state.status === 'ready' ? state.detail : undefined;
@@ -196,7 +199,7 @@ export function ActiveSessionScreen() {
       // Nothing moves: the panel has to stay exactly where it is for the
       // one-tap repeat. And only once the set is in the database — a rejected
       // set is a correction to make, not a rest to take.
-      rest.start();
+      rest.start(activeEntry.target?.restSec);
     } catch (error) {
       setMessages(toFieldMessages(error, controller.visibleFields));
     } finally {
@@ -229,6 +232,18 @@ export function ActiveSessionScreen() {
         <LastSessionCard />
 
         <BackupReminderCard />
+
+        <button type="button" onClick={() => setRoutinesOpen(true)} className="mt-3 flex min-h-14 w-full items-center justify-center gap-2 rounded-control border border-line text-[0.9375rem] font-medium">
+          Your routines
+        </button>
+        {routinesOpen ? <RoutinesPanel onClose={() => setRoutinesOpen(false)} onStart={async (id) => {
+          const { firstBlockId } = await startSessionFromRoutine(id);
+          setSelectedBlockId(firstBlockId ?? null);
+          setRoutinesOpen(false);
+          setLeftBehind([]);
+          rest.dismiss();
+          void storage.ensurePersisted();
+        }} /> : null}
 
         {/* Reopening a layout is offered beside starting empty, not instead of
             it: on a split, the session you want back is rarely the last one, so

@@ -5,6 +5,7 @@ import type {
   BodyWeight,
   Exercise,
   RetiredExercise,
+  Routine,
   Session,
   SessionExercise,
   SetEntry,
@@ -15,6 +16,7 @@ import type { TrainingBlock } from '../training-block';
 import {
   assertBodyWeightShape,
   assertExerciseShape,
+  assertRoutineShape,
   assertRetiredExerciseShape,
   assertTrainingBlockShape,
   assertSessionExerciseShape,
@@ -100,6 +102,8 @@ export class WorkoutDB extends Dexie {
   retiredExercises!: Table<RetiredExercise, string>;
   /** Durable offline outbox. Never uploaded itself: its rows describe uploads. */
   syncOperations!: Table<SyncOperation, number>;
+
+  routines!: Table<Routine, string>;
 
   localMetadata!: Table<{ key: string; value: string }, string>;
 
@@ -286,6 +290,7 @@ export class WorkoutDB extends Dexie {
     this.version(8).stores({ syncOperations: '++id, table, key, [table+key]' });
 
     this.version(9).stores({ localMetadata: 'key' });
+    this.version(10).stores({ routines: 'id, title, updatedAt' });
 
     // Starting catalogue, once, when the database is created.
     this.on('populate', () => withoutSyncOutbox(async () => {
@@ -301,6 +306,7 @@ export class WorkoutDB extends Dexie {
     // transaction.
     //
     // Throwing here aborts the transaction: nothing is written by halves.
+    installShapeGuard(this.routines, assertRoutineShape);
     installShapeGuard(this.exercises, assertExerciseShape);
     installShapeGuard(this.sets, assertSetShape);
     installShapeGuard(this.sessions, assertSessionShape);
@@ -308,6 +314,7 @@ export class WorkoutDB extends Dexie {
     installShapeGuard(this.bodyweights, assertBodyWeightShape);
     installShapeGuard(this.trainingBlocks, assertTrainingBlockShape);
     installShapeGuard(this.retiredExercises, assertRetiredExerciseShape);
+    installSyncOutbox(this.routines, 'routines', (row) => row.id);
     installSyncOutbox(this.exercises, 'exercises', (row) => row.id);
     installSyncOutbox(this.sessions, 'sessions', (row) => row.id);
     installSyncOutbox(this.sessionExercises, 'sessionExercises', (row) => row.id);

@@ -16,9 +16,11 @@ export type ValidatedEntity =
   | 'exercise'
   | 'bodyWeight'
   | 'trainingBlock'
-  | 'retiredExercise';
+  | 'retiredExercise'
+  | 'routine';
 
 const ENTITY_LABELS: Record<ValidatedEntity, string> = {
+  routine: 'Routine',
   set: 'Set',
   session: 'Session',
   sessionExercise: 'Session exercise',

@@ -5,6 +5,8 @@ import type {
   BodyWeight,
   Exercise,
   RetiredExercise,
+  Routine,
+  ExerciseTarget,
   Session,
   SessionExercise,
   SetEntry,
@@ -13,6 +15,7 @@ import type {
 } from '@/lib/db/types';
 import type { TrainingBlock } from '@/lib/training-block';
 import { getSupabaseClient } from './client';
+import { assertRoutineShape } from '@/lib/db/validation';
 import { TRAINING_TABLES } from '@/lib/db/account';
 
 const REMOTE_TABLE: Record<SyncTable, string> = {
@@ -23,6 +26,7 @@ const REMOTE_TABLE: Record<SyncTable, string> = {
   bodyweights: 'bodyweights',
   trainingBlocks: 'training_blocks',
   retiredExercises: 'retired_exercises',
+  routines: 'routines',
 };
 
 type RemoteRow = Record<string, unknown>;
@@ -160,7 +164,7 @@ function remoteSession(row: RemoteRow): Session {
   return { id: string(row.id), startedAt: timestamp(row.started_at), endedAt: row.ended_at === null ? undefined : timestamp(row.ended_at), date: string(row.date), title: optionalString(row.title), notes: optionalString(row.notes), createdAt: timestamp(row.created_at) };
 }
 function remoteSessionExercise(row: RemoteRow): SessionExercise {
-  return { id: string(row.id), sessionId: string(row.session_id), exerciseId: string(row.exercise_id), order: number(row.position), notes: optionalString(row.notes) };
+  return { id: string(row.id), sessionId: string(row.session_id), exerciseId: string(row.exercise_id), order: number(row.position), notes: optionalString(row.notes), ...(row.target == null ? {} : { target: row.target as ExerciseTarget }) };
 }
 function remoteSet(row: RemoteRow): SetEntry {
   return { id: string(row.id), sessionId: string(row.session_id), sessionExerciseId: string(row.session_exercise_id), exerciseId: string(row.exercise_id), performedAt: timestamp(row.performed_at), loggedAt: timestamp(row.logged_at), order: number(row.position), kind: string(row.kind) as SetEntry['kind'], weightKg: optionalNumber(row.weight_kg), reps: optionalNumber(row.reps), durationSec: optionalNumber(row.duration_sec), rpe: optionalNumber(row.rpe), isFailure: row.is_failure === true, notes: optionalString(row.notes) };
@@ -168,6 +172,12 @@ function remoteSet(row: RemoteRow): SetEntry {
 function remoteBodyweight(row: RemoteRow): BodyWeight { return { date: string(row.date), weightKg: number(row.weight_kg), recordedAt: timestamp(row.recorded_at) }; }
 function remoteBlock(row: RemoteRow): TrainingBlock { return { id: string(row.id), label: string(row.label), startsOn: string(row.starts_on), endsOn: string(row.ends_on), createdAt: timestamp(row.created_at) }; }
 function remoteRetired(row: RemoteRow): RetiredExercise { return { nameKey: string(row.name_key), retiredAt: timestamp(row.retired_at) }; }
+
+function remoteRoutine(row: RemoteRow): Routine {
+  const routine = { id: string(row.id), title: string(row.title), exercises: row.exercises, createdAt: timestamp(row.created_at), updatedAt: timestamp(row.updated_at) };
+  assertRoutineShape(routine);
+  return routine as Routine;
+}
 
 /** Keyset pagination keeps deletions from shifting later pages. Continue to an
  * empty page: a server can cap replies below the requested page size. */
@@ -192,11 +202,11 @@ async function readTable(client: SupabaseClient, table: string, userId: string, 
 }
 
 async function readRemote(client: SupabaseClient, userId: string, signal: AbortSignal) {
-  const [exercises, sessions, sessionExercises, sets, bodyweights, trainingBlocks, retiredExercises] = await Promise.all([
+  const [exercises, sessions, sessionExercises, sets, bodyweights, trainingBlocks, retiredExercises, routines] = await Promise.all([
     readTable(client, 'exercises', userId, signal), readTable(client, 'sessions', userId, signal), readTable(client, 'session_exercises', userId, signal),
-    readTable(client, 'sets', userId, signal), readTable(client, 'bodyweights', userId, signal), readTable(client, 'training_blocks', userId, signal), readTable(client, 'retired_exercises', userId, signal, false),
+    readTable(client, 'sets', userId, signal), readTable(client, 'bodyweights', userId, signal), readTable(client, 'training_blocks', userId, signal), readTable(client, 'retired_exercises', userId, signal, false), readTable(client, 'routines', userId, signal),
   ]);
-  const result = { exercises: exercises.map(remoteExercise), sessions: sessions.map(remoteSession), sessionExercises: sessionExercises.map(remoteSessionExercise), sets: sets.map(remoteSet), bodyweights: bodyweights.map(remoteBodyweight), trainingBlocks: trainingBlocks.map(remoteBlock), retiredExercises: retiredExercises.map(remoteRetired) };
+  const result = { exercises: exercises.map(remoteExercise), sessions: sessions.map(remoteSession), sessionExercises: sessionExercises.map(remoteSessionExercise), sets: sets.map(remoteSet), bodyweights: bodyweights.map(remoteBodyweight), trainingBlocks: trainingBlocks.map(remoteBlock), retiredExercises: retiredExercises.map(remoteRetired), routines: routines.map(remoteRoutine) };
   validateSnapshot(result);
   return result;
 }
@@ -248,13 +258,14 @@ async function initializeLocal(database: WorkoutDB, remote: Snapshot, check: () 
     const local = await snapshot(database);
     const pending = await database.syncOperations.orderBy('id').toArray();
     const cloudExists = TRAINING_TABLES.some((name) => remote[name].length > 0);
-    const used = new Set(local.sessionExercises.map((row) => row.exerciseId));
+    const used = new Set([...local.sessionExercises.map((row) => row.exerciseId), ...local.routines.flatMap((routine) => routine.exercises.map((entry) => entry.exerciseId))]);
     const edited = new Set(pending.filter((row) => row.table === 'exercises' && row.kind === 'upsert').map((row) => row.key));
     local.exercises = local.exercises.filter((row) => !cloudExists || row.isCustom || used.has(row.id) || edited.has(row.id));
     const names = new Map(remote.exercises.map((row) => [row.nameKey, row.id]));
     const remap = new Map(local.exercises.map((row) => [row.id, names.get(row.nameKey) ?? row.id]));
     local.exercises = local.exercises.map((row) => ({ ...row, id: remap.get(row.id)! }));
     local.sessionExercises = local.sessionExercises.map((row) => ({ ...row, exerciseId: remap.get(row.exerciseId) ?? row.exerciseId }));
+    local.routines = local.routines.map((routine) => ({ ...routine, exercises: routine.exercises.map((entry) => ({ ...entry, exerciseId: remap.get(entry.exerciseId) ?? entry.exerciseId })) }));
     local.sets = local.sets.map((row) => ({ ...row, exerciseId: remap.get(row.exerciseId) ?? row.exerciseId }));
     const deletes = new Map<string, SyncOperation>();
     for (const operation of pending) {
@@ -289,17 +300,18 @@ function rowPayload(table: SyncTable, row: Record<string, unknown>, userId: stri
   switch (table) {
     case 'exercises': return { ...common, id: row.id, name: row.name, name_key: row.nameKey, load_type: row.loadType, metric: row.metric, per_side: row.perSide, muscle_group: row.muscleGroup ?? null, default_increment_kg: row.defaultIncrementKg ?? null, is_custom: row.isCustom, archived_at: iso(row.archivedAt as number | undefined), notes: row.notes ?? null, created_at: iso(row.createdAt as number) };
     case 'sessions': return { ...common, id: row.id, started_at: iso(row.startedAt as number), ended_at: iso(row.endedAt as number | undefined), date: row.date, title: row.title ?? null, notes: row.notes ?? null, created_at: iso(row.createdAt as number) };
-    case 'sessionExercises': return { ...common, id: row.id, session_id: row.sessionId, exercise_id: row.exerciseId, position: row.order, notes: row.notes ?? null };
+    case 'sessionExercises': return { ...common, id: row.id, session_id: row.sessionId, exercise_id: row.exerciseId, position: row.order, notes: row.notes ?? null, target: row.target ?? null };
     case 'sets': return { ...common, id: row.id, session_id: row.sessionId, session_exercise_id: row.sessionExerciseId, exercise_id: row.exerciseId, performed_at: iso(row.performedAt as number), logged_at: iso(row.loggedAt as number), position: row.order, kind: row.kind, weight_kg: row.weightKg ?? null, reps: row.reps ?? null, duration_sec: row.durationSec ?? null, rpe: row.rpe ?? null, is_failure: row.isFailure ?? false, notes: row.notes ?? null };
     case 'bodyweights': return { ...common, date: row.date, weight_kg: row.weightKg, recorded_at: iso(row.recordedAt as number) };
     case 'trainingBlocks': return { ...common, id: row.id, label: row.label, starts_on: row.startsOn, ends_on: row.endsOn, created_at: iso(row.createdAt as number) };
+    case 'routines': return { ...common, id: row.id, title: row.title, exercises: row.exercises, created_at: iso(row.createdAt as number), updated_at: iso(row.updatedAt as number) };
     case 'retiredExercises': return { ...common, name_key: row.nameKey, retired_at: iso(row.retiredAt as number) };
   }
 }
 
 async function snapshot(database: WorkoutDB) {
-  return database.transaction('r', [database.exercises, database.sessions, database.sessionExercises, database.sets, database.bodyweights, database.trainingBlocks, database.retiredExercises], async () => ({
-    exercises: await database.exercises.toArray(), sessions: await database.sessions.toArray(), sessionExercises: await database.sessionExercises.toArray(), sets: await database.sets.toArray(), bodyweights: await database.bodyweights.toArray(), trainingBlocks: await database.trainingBlocks.toArray(), retiredExercises: await database.retiredExercises.toArray(),
+  return database.transaction('r', [database.exercises, database.sessions, database.sessionExercises, database.sets, database.bodyweights, database.trainingBlocks, database.retiredExercises, database.routines], async () => ({
+    exercises: await database.exercises.toArray(), sessions: await database.sessions.toArray(), sessionExercises: await database.sessionExercises.toArray(), sets: await database.sets.toArray(), bodyweights: await database.bodyweights.toArray(), trainingBlocks: await database.trainingBlocks.toArray(), retiredExercises: await database.retiredExercises.toArray(), routines: await database.routines.toArray(),
   }));
 }
 

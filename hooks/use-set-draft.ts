@@ -59,7 +59,14 @@ export function useSetDraft(
   const draft =
     block && typed?.key === draftKey
       ? typed.draft
-      : draftFromSet(reference, block?.exercise);
+      : (() => {
+          const initial = draftFromSet(reference, block?.exercise);
+          if (!reference && block?.target) {
+            if (block.target.metric === 'reps') initial.reps = String(block.target.repsMin);
+            else initial.durationSec = String(block.target.durationSec);
+          }
+          return initial;
+        })();
 
   const requirements = block ? setFieldRequirements(block.exercise) : undefined;
 
