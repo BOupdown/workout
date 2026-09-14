@@ -9,7 +9,7 @@ beforeEach(async () => {
   window.localStorage.clear();
 });
 
-const note = () => screen.queryByRole('heading', { name: 'Your training stays here' });
+const note = () => screen.queryByRole('heading', { name: 'Your training, on this device and in your account' });
 
 describe('the first-run note', () => {
   it('shows up on a fresh device', async () => {
@@ -24,8 +24,8 @@ describe('the first-run note', () => {
     render(<FirstRunNote />);
 
     const panel = note()!.closest('div')!.parentElement!;
-    expect(panel.textContent).toMatch(/kept on this phone alone/);
-    expect(panel.textContent).toMatch(/no account and no server/);
+    expect(panel.textContent).toMatch(/saved on this device first/);
+    expect(panel.textContent).toMatch(/synced to your account/);
     expect(screen.getAllByRole('button')).toHaveLength(1);
   });
 
@@ -52,7 +52,7 @@ describe('the first-run note', () => {
   });
 
   it('stays away on a device that was already told', async () => {
-    window.localStorage.setItem('workout.told-where-data-lives', '1');
+    window.localStorage.setItem('workout.told-where-data-lives.cloud-v1', '1');
 
     render(<FirstRunNote />);
 
@@ -72,4 +72,10 @@ describe('the first-run note', () => {
 
     expect(note()).not.toBeNull();
   });
+});
+
+it('corrects the old local-only promise for existing users', () => {
+  localStorage.setItem('workout.told-where-data-lives', '1');
+  render(<FirstRunNote />);
+  expect(note()).not.toBeNull();
 });

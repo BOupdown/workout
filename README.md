@@ -7,8 +7,10 @@ Built for how it is actually used: in the gym, phone in one hand, between two
 sets. **Logging a set takes two taps** when the exercise is already in the
 session, and one to repeat it identically.
 
-All data stays on the device, in IndexedDB. No account, no server, nothing sent
-anywhere.
+Training is saved locally in IndexedDB, then synchronized with your Supabase
+account when online. Each account has its own local database and upload queue.
+The app shows whether changes are local, pending, or synchronized. Export a
+JSON backup in Settings for an independent copy.
 
 ## What it looks like
 
@@ -66,24 +68,24 @@ npm run dev
 ## Stack
 
 Next.js 16 (App Router) · React 19 · TypeScript · Tailwind v4 · Dexie 4
-(IndexedDB) · Vitest.
+(IndexedDB) · Supabase Auth/Postgres · Vitest.
 
 ## Layout
 
 ```
-app/                routes: session, history, progress, settings
+app/                single route with session, history, progress and settings tabs
 components/         screens and components, by domain
 hooks/              Dexie live queries and entry state
 lib/db/             model, schema, validation, write layers
 lib/                pure logic: progression, weekly load, plates, 1RM, formatting, units
-test/               823 tests — *.test.ts logic (Node), *.test.tsx screens (jsdom)
+test/               *.test.ts logic (Node), *.test.tsx screens (jsdom)
 ```
 
 ## Principles
 
 Three rules carry most of the architecture.
 
-**IndexedDB is the single source of truth.** `useLiveQuery` replays queries
+**IndexedDB is the offline working copy.** `useLiveQuery` replays queries
 after every write; there is no React-side copy of the data, so nothing to
 invalidate or resynchronise.
 

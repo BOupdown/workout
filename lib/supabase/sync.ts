@@ -1,5 +1,5 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
-import { db } from '@/lib/db/db';
+import { db, type WorkoutDB } from '@/lib/db/db';
 import { withoutSyncOutbox } from '@/lib/db/sync-mute';
 import type {
   BodyWeight,
@@ -13,6 +13,7 @@ import type {
 } from '@/lib/db/types';
 import type { TrainingBlock } from '@/lib/training-block';
 import { getSupabaseClient } from './client';
+import { TRAINING_TABLES } from '@/lib/db/account';
 
 const REMOTE_TABLE: Record<SyncTable, string> = {
   exercises: 'exercises',
@@ -26,101 +27,93 @@ const REMOTE_TABLE: Record<SyncTable, string> = {
 
 type RemoteRow = Record<string, unknown>;
 
-export type SyncStatus = 'syncing' | 'synced' | 'offline' | 'error';
+export type SyncStatus = 'syncing' | 'synced' | 'pending' | 'offline' | 'error';
 
-/**
- * The device keeps Dexie as its fast offline copy. This coordinator sends only
- * rows that changed locally, then pulls the account's current snapshot. The
- * server's `updated_at` is the tie breaker: after two offline edits of one
- * field, the write that reaches Supabase last becomes the shared value.
- */
 export class WorkoutSync {
   private running = false;
+  private readonly abort = new AbortController();
 
   constructor(
     private readonly userId: string,
     private readonly client: SupabaseClient = getSupabaseClient(),
     private readonly onStatus?: (status: SyncStatus) => void,
+    private readonly database: WorkoutDB = db,
   ) {}
 
+  stop(): void { this.abort.abort(); }
+
+  private check = () => {
+    if (this.abort.signal.aborted) throw new Error('Sync cancelled.');
+  };
+
   async sync(): Promise<void> {
-    if (this.running) return;
+    if (this.running || this.abort.signal.aborted) return;
     if (typeof navigator !== 'undefined' && !navigator.onLine) {
       this.onStatus?.('offline');
       return;
     }
-
     this.running = true;
     this.onStatus?.('syncing');
     try {
-      await this.ensureProfile();
-      const remote = await readRemote(this.client);
-
-      if (await isFirstSync(this.userId)) {
-        // A browser can be shared. Once it has belonged to an account, never
-        // offer those local rows to the next person who signs in on it.
-        if (previousAccount() !== null && previousAccount() !== this.userId) {
-          await replaceLocal(remote);
-        } else if (hasRemoteData(remote)) await replaceLocal(remote);
-        else await uploadSnapshot(this.client, this.userId);
-        await db.syncOperations.clear();
-      } else {
-        await flushOutbox(this.client, this.userId);
-        await replaceLocal(await readRemote(this.client), true);
-      }
-
-      markSynced(this.userId);
-      this.onStatus?.('synced');
+      const work = async () => {
+        this.check();
+        const owner = await this.database.localMetadata.get('owner');
+        if (owner && owner.value !== this.userId) throw new Error('Local account mismatch.');
+        const { error } = await this.client.from('profiles')
+          .upsert({ user_id: this.userId }, { onConflict: 'user_id', ignoreDuplicates: true });
+        if (error) throw error;
+        this.check();
+        if (!await this.database.localMetadata.get('initialized')) {
+          const remote = await readRemote(this.client, this.userId, this.abort.signal);
+          this.check();
+          await initializeLocal(this.database, remote, this.check);
+        }
+        await flushOutbox(this.client, this.userId, this.database, this.check, this.abort.signal);
+        this.check();
+        const remote = await readRemote(this.client, this.userId, this.abort.signal);
+        this.check();
+        const applied = await replaceLocal(this.database, remote, this.check);
+        this.check();
+        this.onStatus?.(applied ? 'synced' : 'pending');
+      };
+      // Serialize coordinators across tabs of this same account when available.
+      if (typeof navigator !== 'undefined' && navigator.locks) {
+        await navigator.locks.request(`workout-sync:${this.database.name}`, { signal: this.abort.signal }, work);
+      } else await work();
     } catch (error) {
-      // The outbox stays untouched on failure. A connectivity hiccup must not
-      // make a logged set look saved when it has not reached the account yet.
-      console.warn('Workout cloud sync will retry.', error);
-      this.onStatus?.('error');
+      if (!this.abort.signal.aborted) {
+        console.warn('Workout cloud sync will retry.', error);
+        this.onStatus?.('error');
+      }
     } finally {
       this.running = false;
     }
   }
-
-  private async ensureProfile() {
-    const { error } = await this.client
-      .from('profiles')
-      .upsert({ user_id: this.userId }, { onConflict: 'user_id', ignoreDuplicates: true });
-    if (error) throw error;
-  }
 }
 
-export function startWorkoutSync(userId: string, onStatus?: (status: SyncStatus) => void): () => void {
-  const sync = new WorkoutSync(userId, getSupabaseClient(), onStatus);
+export function startWorkoutSync(userId: string, onStatus?: (status: SyncStatus) => void, database = db): () => void {
+  const client = getSupabaseClient();
+  const sync = new WorkoutSync(userId, client, onStatus, database);
   const run = () => void sync.sync();
-  run();
   const timer = window.setInterval(run, 12_000);
+  const onVisible = () => { if (document.visibilityState === 'visible') run(); };
+  const onOffline = () => onStatus?.('offline');
   window.addEventListener('online', run);
-  const onVisible = () => {
-    if (document.visibilityState === 'visible') run();
-  };
+  window.addEventListener('offline', onOffline);
   document.addEventListener('visibilitychange', onVisible);
-  return () => {
+  const stop = () => {
+    sync.stop();
     window.clearInterval(timer);
     window.removeEventListener('online', run);
+    window.removeEventListener('offline', onOffline);
     document.removeEventListener('visibilitychange', onVisible);
   };
-}
-
-function stateKey(userId: string) {
-  return `workout.sync.initialized.${userId}`;
-}
-
-function previousAccount(): string | null {
-  return localStorage.getItem('workout.sync.account');
-}
-
-async function isFirstSync(userId: string): Promise<boolean> {
-  return localStorage.getItem(stateKey(userId)) !== 'true';
-}
-
-function markSynced(userId: string) {
-  localStorage.setItem(stateKey(userId), 'true');
-  localStorage.setItem('workout.sync.account', userId);
+  // Cancel immediately on the auth event, before React's effect cleanup runs.
+  const { data } = client.auth.onAuthStateChange((_event, session) => {
+    if (session?.user.id !== userId) stop();
+  });
+  run();
+  return () => { stop(); data.subscription.unsubscribe(); };
 }
 
 function iso(timestamp: number | undefined): string | null {
@@ -176,47 +169,123 @@ function remoteBodyweight(row: RemoteRow): BodyWeight { return { date: string(ro
 function remoteBlock(row: RemoteRow): TrainingBlock { return { id: string(row.id), label: string(row.label), startsOn: string(row.starts_on), endsOn: string(row.ends_on), createdAt: timestamp(row.created_at) }; }
 function remoteRetired(row: RemoteRow): RetiredExercise { return { nameKey: string(row.name_key), retiredAt: timestamp(row.retired_at) }; }
 
-async function readTable(client: SupabaseClient, table: string, deleted = true): Promise<RemoteRow[]> {
-  let query = client.from(table).select('*');
-  if (deleted) query = query.is('deleted_at', null);
-  const { data, error } = await query;
-  if (error) throw error;
-  return (data ?? []) as RemoteRow[];
+/** Keyset pagination keeps deletions from shifting later pages. Continue to an
+ * empty page: a server can cap replies below the requested page size. */
+async function readTable(client: SupabaseClient, table: string, userId: string, signal: AbortSignal, deleted = true): Promise<RemoteRow[]> {
+  const key = table === 'bodyweights' ? 'date' : table === 'retired_exercises' ? 'name_key' : 'id';
+  const rows: RemoteRow[] = [];
+  let cursor: string | undefined;
+  for (;;) {
+    let query = client.from(table).select('*').eq('user_id', userId).order(key).limit(500).abortSignal(signal);
+    if (deleted) query = query.is('deleted_at', null);
+    if (cursor !== undefined) query = query.gt(key, cursor);
+    const { data, error } = await query;
+    if (error) throw error;
+    if (signal.aborted) throw new Error('Sync cancelled.');
+    if (!data) throw new Error('Cloud sync returned no snapshot.');
+    if (data.length === 0) return rows;
+    const next = string(data[data.length - 1][key]);
+    if (cursor !== undefined && next === cursor) throw new Error('Cloud pagination did not advance.');
+    rows.push(...data);
+    cursor = next;
+  }
 }
 
-async function readRemote(client: SupabaseClient) {
+async function readRemote(client: SupabaseClient, userId: string, signal: AbortSignal) {
   const [exercises, sessions, sessionExercises, sets, bodyweights, trainingBlocks, retiredExercises] = await Promise.all([
-    readTable(client, 'exercises'), readTable(client, 'sessions'), readTable(client, 'session_exercises'),
-    readTable(client, 'sets'), readTable(client, 'bodyweights'), readTable(client, 'training_blocks'), readTable(client, 'retired_exercises', false),
+    readTable(client, 'exercises', userId, signal), readTable(client, 'sessions', userId, signal), readTable(client, 'session_exercises', userId, signal),
+    readTable(client, 'sets', userId, signal), readTable(client, 'bodyweights', userId, signal), readTable(client, 'training_blocks', userId, signal), readTable(client, 'retired_exercises', userId, signal, false),
   ]);
-  return { exercises: exercises.map(remoteExercise), sessions: sessions.map(remoteSession), sessionExercises: sessionExercises.map(remoteSessionExercise), sets: sets.map(remoteSet), bodyweights: bodyweights.map(remoteBodyweight), trainingBlocks: trainingBlocks.map(remoteBlock), retiredExercises: retiredExercises.map(remoteRetired) };
+  const result = { exercises: exercises.map(remoteExercise), sessions: sessions.map(remoteSession), sessionExercises: sessionExercises.map(remoteSessionExercise), sets: sets.map(remoteSet), bodyweights: bodyweights.map(remoteBodyweight), trainingBlocks: trainingBlocks.map(remoteBlock), retiredExercises: retiredExercises.map(remoteRetired) };
+  validateSnapshot(result);
+  return result;
 }
 
-function hasRemoteData(snapshot: Awaited<ReturnType<typeof readRemote>>) {
-  return Object.values(snapshot).some((rows) => rows.length > 0);
+type Snapshot = Awaited<ReturnType<typeof readRemote>>;
+const localKey = (table: SyncTable, row: object): string => {
+  const value = row as Record<string, unknown>;
+  return String(value.id ?? (table === 'bodyweights' ? value.date : value.nameKey));
+};
+
+function validateSnapshot(rows: Snapshot) {
+  const exercises = new Set(rows.exercises.map((row) => row.id));
+  const sessions = new Set(rows.sessions.map((row) => row.id));
+  const blocks = new Map(rows.sessionExercises.map((row) => [row.id, row]));
+  if (rows.sessionExercises.some((row) => !sessions.has(row.sessionId) || !exercises.has(row.exerciseId))
+    || rows.sets.some((row) => {
+      const block = blocks.get(row.sessionExerciseId);
+      return !block || block.sessionId !== row.sessionId || block.exerciseId !== row.exerciseId;
+    })) throw new Error('Cloud snapshot is incomplete; local data was kept.');
 }
 
-async function replaceLocal(snapshot: Awaited<ReturnType<typeof readRemote>>, protectPending = false) {
-  await db.transaction('rw', [db.exercises, db.sessions, db.sessionExercises, db.sets, db.bodyweights, db.trainingBlocks, db.retiredExercises, db.syncOperations], async () => {
-    // A set or session may have been saved while the network request was in
-    // flight. Check under the same write lock as the replacement: the next
-    // cycle will upload it before pulling again. Never overwrite that edit.
-    if (protectPending && await db.syncOperations.count() > 0) return;
-    await withoutSyncOutbox(async () => {
-      await Promise.all([db.exercises.clear(), db.sessions.clear(), db.sessionExercises.clear(), db.sets.clear(), db.bodyweights.clear(), db.trainingBlocks.clear(), db.retiredExercises.clear()]);
-      await db.exercises.bulkPut(snapshot.exercises);
-      await db.sessions.bulkPut(snapshot.sessions);
-      await db.sessionExercises.bulkPut(snapshot.sessionExercises);
-      await db.sets.bulkPut(snapshot.sets);
-      await db.bodyweights.bulkPut(snapshot.bodyweights);
-      await db.trainingBlocks.bulkPut(snapshot.trainingBlocks);
-      await db.retiredExercises.bulkPut(snapshot.retiredExercises);
-    });
+/** Called under the same transaction as the pending-write check. */
+async function writeSnapshot(database: WorkoutDB, rows: Snapshot) {
+  await withoutSyncOutbox(async () => {
+    for (const name of TRAINING_TABLES) {
+      await database.table(name).clear();
+      await database.table(name).bulkPut(rows[name]);
+    }
+  });
+}
+
+async function replaceLocal(database: WorkoutDB, rows: Snapshot, check: () => void) {
+  return database.transaction('rw', [...TRAINING_TABLES, 'syncOperations'], async () => {
+    check();
+    if (await database.syncOperations.count() > 0) return false;
+    await writeSnapshot(database, rows);
+    check(); // Cancellation also rolls back an import already in progress.
+    return true;
+  });
+}
+
+/** First download merges unsynced training instead of erasing it. A new
+ * device's seed IDs differ from the cloud catalogue: remap by unique nameKey
+ * before preserving the exercise -> block -> set references. */
+async function initializeLocal(database: WorkoutDB, remote: Snapshot, check: () => void) {
+  await database.transaction('rw', [...TRAINING_TABLES, 'syncOperations', 'localMetadata'], async () => {
+    check();
+    if (await database.localMetadata.get('initialized')) return;
+    const local = await snapshot(database);
+    const pending = await database.syncOperations.orderBy('id').toArray();
+    const cloudExists = TRAINING_TABLES.some((name) => remote[name].length > 0);
+    const used = new Set(local.sessionExercises.map((row) => row.exerciseId));
+    const edited = new Set(pending.filter((row) => row.table === 'exercises' && row.kind === 'upsert').map((row) => row.key));
+    local.exercises = local.exercises.filter((row) => !cloudExists || row.isCustom || used.has(row.id) || edited.has(row.id));
+    const names = new Map(remote.exercises.map((row) => [row.nameKey, row.id]));
+    const remap = new Map(local.exercises.map((row) => [row.id, names.get(row.nameKey) ?? row.id]));
+    local.exercises = local.exercises.map((row) => ({ ...row, id: remap.get(row.id)! }));
+    local.sessionExercises = local.sessionExercises.map((row) => ({ ...row, exerciseId: remap.get(row.exerciseId) ?? row.exerciseId }));
+    local.sets = local.sets.map((row) => ({ ...row, exerciseId: remap.get(row.exerciseId) ?? row.exerciseId }));
+    const deletes = new Map<string, SyncOperation>();
+    for (const operation of pending) {
+      const id = `${operation.table}:${operation.key}`;
+      if (operation.kind === 'delete') deletes.set(id, operation);
+      else deletes.delete(id);
+    }
+    const merged = {} as Snapshot;
+    for (const name of TRAINING_TABLES) {
+      const values = new Map<string, object>();
+      for (const row of remote[name]) values.set(localKey(name, row), row);
+      for (const row of local[name]) values.set(localKey(name, row), row);
+      for (const operation of deletes.values()) if (operation.table === name) values.delete(operation.key);
+      Object.assign(merged, { [name]: [...values.values()] });
+    }
+    validateSnapshot(merged);
+    await writeSnapshot(database, merged);
+    await database.syncOperations.clear();
+    // Rebuild only this captured initial batch, with parents before children.
+    // New writes cannot interleave while this transaction owns the write lock.
+    for (const name of TRAINING_TABLES) {
+      await database.syncOperations.bulkAdd(local[name].map((row) => ({ table: name, key: localKey(name, row), kind: 'upsert' as const, createdAt: Date.now() })));
+    }
+    await database.syncOperations.bulkAdd([...deletes.values()].map((row) => ({ table: row.table, key: row.key, kind: row.kind, createdAt: row.createdAt })));
+    await database.localMetadata.put({ key: 'initialized', value: 'true' });
+    check();
   });
 }
 
 function rowPayload(table: SyncTable, row: Record<string, unknown>, userId: string): RemoteRow {
-  const common = { user_id: userId };
+  const common = table === 'retiredExercises' ? { user_id: userId } : { user_id: userId, deleted_at: null };
   switch (table) {
     case 'exercises': return { ...common, id: row.id, name: row.name, name_key: row.nameKey, load_type: row.loadType, metric: row.metric, per_side: row.perSide, muscle_group: row.muscleGroup ?? null, default_increment_kg: row.defaultIncrementKg ?? null, is_custom: row.isCustom, archived_at: iso(row.archivedAt as number | undefined), notes: row.notes ?? null, created_at: iso(row.createdAt as number) };
     case 'sessions': return { ...common, id: row.id, started_at: iso(row.startedAt as number), ended_at: iso(row.endedAt as number | undefined), date: row.date, title: row.title ?? null, notes: row.notes ?? null, created_at: iso(row.createdAt as number) };
@@ -228,58 +297,54 @@ function rowPayload(table: SyncTable, row: Record<string, unknown>, userId: stri
   }
 }
 
-async function snapshot() {
-  return db.transaction('r', [db.exercises, db.sessions, db.sessionExercises, db.sets, db.bodyweights, db.trainingBlocks, db.retiredExercises], async () => ({
-    exercises: await db.exercises.toArray(), sessions: await db.sessions.toArray(), sessionExercises: await db.sessionExercises.toArray(), sets: await db.sets.toArray(), bodyweights: await db.bodyweights.toArray(), trainingBlocks: await db.trainingBlocks.toArray(), retiredExercises: await db.retiredExercises.toArray(),
+async function snapshot(database: WorkoutDB) {
+  return database.transaction('r', [database.exercises, database.sessions, database.sessionExercises, database.sets, database.bodyweights, database.trainingBlocks, database.retiredExercises], async () => ({
+    exercises: await database.exercises.toArray(), sessions: await database.sessions.toArray(), sessionExercises: await database.sessionExercises.toArray(), sets: await database.sets.toArray(), bodyweights: await database.bodyweights.toArray(), trainingBlocks: await database.trainingBlocks.toArray(), retiredExercises: await database.retiredExercises.toArray(),
   }));
 }
 
-async function upsertRows(client: SupabaseClient, table: SyncTable, rows: object[], userId: string) {
+async function upsertRows(client: SupabaseClient, table: SyncTable, rows: object[], userId: string, signal: AbortSignal) {
   if (!rows.length) return;
   const conflict = table === 'bodyweights' ? 'user_id,date' : table === 'retiredExercises' ? 'user_id,name_key' : 'id';
-  const { error } = await client.from(REMOTE_TABLE[table]).upsert(rows.map((row) => rowPayload(table, row as Record<string, unknown>, userId)), { onConflict: conflict });
+  const { error } = await client.from(REMOTE_TABLE[table]).upsert(rows.map((row) => rowPayload(table, row as Record<string, unknown>, userId)), { onConflict: conflict }).abortSignal(signal);
   if (error) throw error;
 }
 
-async function uploadSnapshot(client: SupabaseClient, userId: string) {
-  const rows = await snapshot();
-  await upsertRows(client, 'exercises', rows.exercises, userId);
-  await upsertRows(client, 'sessions', rows.sessions, userId);
-  await upsertRows(client, 'sessionExercises', rows.sessionExercises, userId);
-  await upsertRows(client, 'sets', rows.sets, userId);
-  await upsertRows(client, 'bodyweights', rows.bodyweights, userId);
-  await upsertRows(client, 'trainingBlocks', rows.trainingBlocks, userId);
-  await upsertRows(client, 'retiredExercises', rows.retiredExercises, userId);
-}
-
-async function flushOutbox(client: SupabaseClient, userId: string) {
-  const pending = await db.syncOperations.orderBy('id').toArray();
+async function flushOutbox(client: SupabaseClient, userId: string, database: WorkoutDB, check: () => void, signal: AbortSignal) {
+  const pending = await database.syncOperations.orderBy('id').toArray();
   const latest = new Map<string, SyncOperation>();
   for (const operation of pending) latest.set(`${operation.table}:${operation.key}`, operation);
   // Map keeps the first insertion's position when its value is replaced. Keep
   // that dependency order: editing a newly created session after logging a set
   // must not move its upload behind the set that references it.
-  for (const operation of latest.values()) {
-    await flushOperation(client, userId, operation);
-    // Acknowledge every superseded intent from this batch, but never an edit
-    // added while the upload was in flight.
+  const operations = [...latest.values()];
+  for (let index = 0; index < operations.length;) {
+    check();
+    const operation = operations[index++];
+    const batch = [operation];
+    // Batch adjacent upserts only, preserving parent/child and deletion order.
+    if (operation.kind === 'upsert') {
+      while (index < operations.length && batch.length < 100
+        && operations[index].kind === 'upsert' && operations[index].table === operation.table) {
+        batch.push(operations[index++]);
+      }
+      const rows = await database.table(operation.table).bulkGet(batch.map((item) => item.key));
+      check();
+      await upsertRows(client, operation.table, rows.filter((row) => row !== undefined), userId, signal);
+    } else await flushOperation(client, userId, operation, signal);
+    check();
+    const keys = new Set(batch.map((item) => item.key));
     const acknowledged = pending
-      .filter((item) => item.table === operation.table && item.key === operation.key)
+      .filter((item) => item.table === operation.table && keys.has(item.key))
       .flatMap((item) => item.id === undefined ? [] : [item.id]);
-    await db.syncOperations.bulkDelete(acknowledged);
+    await database.syncOperations.bulkDelete(acknowledged);
   }
 }
 
-async function flushOperation(client: SupabaseClient, userId: string, operation: SyncOperation) {
+async function flushOperation(client: SupabaseClient, userId: string, operation: SyncOperation, signal: AbortSignal) {
   const table = operation.table;
-  const source = db.table(table) as typeof db.exercises;
-  if (operation.kind === 'upsert') {
-    const row = await source.get(operation.key);
-    if (row) await upsertRows(client, table, [row], userId);
-    return;
-  }
   if (table === 'retiredExercises') return; // Tombstones are intentionally permanent.
-  let query = client.from(REMOTE_TABLE[table]).update({ deleted_at: new Date().toISOString() });
+  let query = client.from(REMOTE_TABLE[table]).update({ deleted_at: new Date().toISOString() }).eq('user_id', userId).abortSignal(signal);
   query = table === 'bodyweights' ? query.eq('date', operation.key) : query.eq('id', operation.key);
   const { error } = await query;
   if (error) throw error;

@@ -118,7 +118,7 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
   );
   if (user === null) return <AuthScreen />;
 
-  return <WorkoutSync userId={user.id}>{children}</WorkoutSync>;
+  return <WorkoutSync key={user.id} userId={user.id}>{children}</WorkoutSync>;
 }
 
 function AuthLoading() {

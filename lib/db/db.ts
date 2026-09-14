@@ -21,7 +21,7 @@ import {
   assertSessionShape,
   assertSetShape,
 } from './validation';
-import { syncWritesAreMuted } from './sync-mute';
+import { syncWritesAreMuted, withoutSyncOutbox } from './sync-mute';
 
 /**
  * The app's IndexedDB database.
@@ -101,8 +101,10 @@ export class WorkoutDB extends Dexie {
   /** Durable offline outbox. Never uploaded itself: its rows describe uploads. */
   syncOperations!: Table<SyncOperation, number>;
 
-  constructor() {
-    super('workout');
+  localMetadata!: Table<{ key: string; value: string }, string>;
+
+  constructor(name = 'workout') {
+    super(name);
 
     // Every domain write must commit its upload intent atomically, including
     // implicit writes and nested transactions. Extend the underlying IndexedDB
@@ -283,10 +285,12 @@ export class WorkoutDB extends Dexie {
     // and a short network outage. `++id` gives operations a stable FIFO order.
     this.version(8).stores({ syncOperations: '++id, table, key, [table+key]' });
 
+    this.version(9).stores({ localMetadata: 'key' });
+
     // Starting catalogue, once, when the database is created.
-    this.on('populate', (transaction) => {
-      transaction.table<Exercise, string>('exercises').bulkAdd(buildSeedExercises());
-    });
+    this.on('populate', () => withoutSyncOutbox(async () => {
+      await this.exercises.bulkAdd(buildSeedExercises());
+    }));
 
     // Last line of defence on structural invariants. Dexie hooks are
     // **synchronous**: they can only check what needs no read (types, bounds,
@@ -375,6 +379,14 @@ function installSyncOutbox<T>(
   });
 }
 
-export const db = new WorkoutDB();
+export let db = new WorkoutDB();
+
+/** Bind once before any training screen mounts. Switching accounts reloads the
+ * page so an unfinished domain action can never continue in another database. */
+export function bindAccountDatabase(database: WorkoutDB): boolean {
+  if (db.name !== 'workout' && db.name !== database.name) return false;
+  db = database;
+  return true;
+}
 
 export { newId, toNameKey } from './keys';

@@ -2,7 +2,8 @@
 
 import { useCallback, useSyncExternalStore } from 'react';
 
-const STORAGE_KEY = 'workout.told-where-data-lives';
+// Re-explain storage once to people who saw the former local-only promise.
+const STORAGE_KEY = 'workout.told-where-data-lives.cloud-v1';
 
 const listeners = new Set<() => void>();
 
