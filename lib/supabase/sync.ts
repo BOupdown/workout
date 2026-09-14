@@ -66,7 +66,7 @@ export class WorkoutSync {
         await db.syncOperations.clear();
       } else {
         await flushOutbox(this.client, this.userId);
-        await replaceLocal(await readRemote(this.client));
+        await replaceLocal(await readRemote(this.client), true);
       }
 
       markSynced(this.userId);
@@ -196,17 +196,23 @@ function hasRemoteData(snapshot: Awaited<ReturnType<typeof readRemote>>) {
   return Object.values(snapshot).some((rows) => rows.length > 0);
 }
 
-async function replaceLocal(snapshot: Awaited<ReturnType<typeof readRemote>>) {
-  await withoutSyncOutbox(() => db.transaction('rw', [db.exercises, db.sessions, db.sessionExercises, db.sets, db.bodyweights, db.trainingBlocks, db.retiredExercises], async () => {
-    await Promise.all([db.exercises.clear(), db.sessions.clear(), db.sessionExercises.clear(), db.sets.clear(), db.bodyweights.clear(), db.trainingBlocks.clear(), db.retiredExercises.clear()]);
-    await db.exercises.bulkPut(snapshot.exercises);
-    await db.sessions.bulkPut(snapshot.sessions);
-    await db.sessionExercises.bulkPut(snapshot.sessionExercises);
-    await db.sets.bulkPut(snapshot.sets);
-    await db.bodyweights.bulkPut(snapshot.bodyweights);
-    await db.trainingBlocks.bulkPut(snapshot.trainingBlocks);
-    await db.retiredExercises.bulkPut(snapshot.retiredExercises);
-  }));
+async function replaceLocal(snapshot: Awaited<ReturnType<typeof readRemote>>, protectPending = false) {
+  await db.transaction('rw', [db.exercises, db.sessions, db.sessionExercises, db.sets, db.bodyweights, db.trainingBlocks, db.retiredExercises, db.syncOperations], async () => {
+    // A set or session may have been saved while the network request was in
+    // flight. Check under the same write lock as the replacement: the next
+    // cycle will upload it before pulling again. Never overwrite that edit.
+    if (protectPending && await db.syncOperations.count() > 0) return;
+    await withoutSyncOutbox(async () => {
+      await Promise.all([db.exercises.clear(), db.sessions.clear(), db.sessionExercises.clear(), db.sets.clear(), db.bodyweights.clear(), db.trainingBlocks.clear(), db.retiredExercises.clear()]);
+      await db.exercises.bulkPut(snapshot.exercises);
+      await db.sessions.bulkPut(snapshot.sessions);
+      await db.sessionExercises.bulkPut(snapshot.sessionExercises);
+      await db.sets.bulkPut(snapshot.sets);
+      await db.bodyweights.bulkPut(snapshot.bodyweights);
+      await db.trainingBlocks.bulkPut(snapshot.trainingBlocks);
+      await db.retiredExercises.bulkPut(snapshot.retiredExercises);
+    });
+  });
 }
 
 function rowPayload(table: SyncTable, row: Record<string, unknown>, userId: string): RemoteRow {
@@ -250,9 +256,17 @@ async function flushOutbox(client: SupabaseClient, userId: string) {
   const pending = await db.syncOperations.orderBy('id').toArray();
   const latest = new Map<string, SyncOperation>();
   for (const operation of pending) latest.set(`${operation.table}:${operation.key}`, operation);
-  for (const operation of [...latest.values()].sort((a, b) => (a.id ?? 0) - (b.id ?? 0))) {
+  // Map keeps the first insertion's position when its value is replaced. Keep
+  // that dependency order: editing a newly created session after logging a set
+  // must not move its upload behind the set that references it.
+  for (const operation of latest.values()) {
     await flushOperation(client, userId, operation);
-    if (operation.id !== undefined) await db.syncOperations.delete(operation.id);
+    // Acknowledge every superseded intent from this batch, but never an edit
+    // added while the upload was in flight.
+    const acknowledged = pending
+      .filter((item) => item.table === operation.table && item.key === operation.key)
+      .flatMap((item) => item.id === undefined ? [] : [item.id]);
+    await db.syncOperations.bulkDelete(acknowledged);
   }
 }
 

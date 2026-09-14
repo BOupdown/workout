@@ -104,6 +104,24 @@ export class WorkoutDB extends Dexie {
   constructor() {
     super('workout');
 
+    // Every domain write must commit its upload intent atomically, including
+    // implicit writes and nested transactions. Extend the underlying IndexedDB
+    // transaction so hooks can use the outbox without changing every caller.
+    this.use({
+      stack: 'dbcore',
+      name: 'workout-sync-outbox',
+      create: (core) => ({
+        ...core,
+        transaction: (stores, mode, options) => core.transaction(
+          mode === 'readwrite' && !stores.includes('syncOperations')
+            ? [...stores, 'syncOperations']
+            : stores,
+          mode,
+          options,
+        ),
+      }),
+    });
+
     this.version(1).stores({
       // `&nameKey`: uniqueness of the normalised name, the guard against
       // duplicate exercises that would fragment a movement's history.
@@ -315,40 +333,44 @@ function installShapeGuard<T>(table: Table<T, string>, assertShape: (value: unkn
 
 /**
  * Dexie hooks run for every write path, including a future feature that does
- * not use today's helper functions. The outbox write happens after the source
- * transaction succeeds, so an aborted set never becomes a phantom upload.
+ * not use today's helper functions. Both writes use the SAME native transaction:
+ * a request's onsuccess is not a transaction commit. Using db.syncOperations
+ * here used to fail because that table was outside the caller's Dexie scope.
  */
 function installSyncOutbox<T>(
   table: Table<T, string>,
   tableName: SyncTable,
   keyOf: (row: T) => string,
 ) {
-  const enqueue = (key: string, kind: SyncOperation['kind']) => {
-    if (syncWritesAreMuted()) return;
-    db.syncOperations.add({ table: tableName, key, kind, createdAt: Date.now() }).catch(() => {
-      // Local training data always wins over bookkeeping. A later write or the
-      // next application start will retry the snapshot if IndexedDB was under
-      // storage pressure.
-    });
+  const enqueue = (transaction: Transaction, key: string, kind: SyncOperation['kind']) => {
+    // Older schema migrations run before the outbox store is created. Those
+    // installations upload their initial snapshot after the upgrade finishes.
+    if (transaction.idbtrans.mode === 'versionchange'
+      && !transaction.idbtrans.objectStoreNames.contains('syncOperations')) return;
+    // The middleware extends the native scope; the public Dexie scope still
+    // contains only the caller's tables. A failed outbox write aborts both.
+    transaction.idbtrans.objectStore('syncOperations').add({
+      table: tableName, key, kind, createdAt: Date.now(),
+    } satisfies SyncOperation);
   };
 
-  table.hook('creating', function (_primaryKey, row) {
+  table.hook('creating', function (_primaryKey, row, transaction) {
     const key = keyOf(row);
-    const muted = syncWritesAreMuted();
+    const muted = syncWritesAreMuted(transaction);
     this.onsuccess = () => {
-      if (!muted) enqueue(key, 'upsert');
+      if (!muted) enqueue(transaction, key, 'upsert');
     };
   });
-  table.hook('updating', function (_changes, primaryKey) {
-    const muted = syncWritesAreMuted();
+  table.hook('updating', function (_changes, primaryKey, _row, transaction) {
+    const muted = syncWritesAreMuted(transaction);
     this.onsuccess = () => {
-      if (!muted) enqueue(String(primaryKey), 'upsert');
+      if (!muted) enqueue(transaction, String(primaryKey), 'upsert');
     };
   });
-  table.hook('deleting', function (primaryKey) {
-    const muted = syncWritesAreMuted();
+  table.hook('deleting', function (primaryKey, _row, transaction) {
+    const muted = syncWritesAreMuted(transaction);
     this.onsuccess = () => {
-      if (!muted) enqueue(String(primaryKey), 'delete');
+      if (!muted) enqueue(transaction, String(primaryKey), 'delete');
     };
   });
 }
