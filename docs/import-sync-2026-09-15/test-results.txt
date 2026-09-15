@@ -1,0 +1,70 @@
+
+> workout@0.1.0 test
+> vitest run test/import-sync-diagnostic.test.tsx
+
+
+ RUN  v4.1.10 /home/omar/Documents/ChatGPT/Application Musculation
+
+stderr | test/import-sync-diagnostic.test.tsx > different exercise IDs: imports all rows and reaches synced
+Workout cloud sync will retry. Error: duplicate key: exercises_user_id_name_key_key
+    at write (/home/omar/Documents/ChatGPT/Application Musculation/test/import-sync-diagnostic.test.tsx:78:171)
+    at Object.abortSignal (/home/omar/Documents/ChatGPT/Application Musculation/test/import-sync-diagnostic.test.tsx:87:110)
+    at upsertRows (/home/omar/Documents/ChatGPT/Application Musculation/lib/supabase/sync.ts:321:171)
+    at flushOutbox (/home/omar/Documents/ChatGPT/Application Musculation/lib/supabase/sync.ts:345:13)
+    at work (/home/omar/Documents/ChatGPT/Application Musculation/lib/supabase/sync.ts:75:9)
+    at WorkoutSync.sync (/home/omar/Documents/ChatGPT/Application Musculation/lib/supabase/sync.ts:86:14)
+    at /home/omar/Documents/ChatGPT/Application Musculation/test/import-sync-diagnostic.test.tsx:113:49
+    at file:///home/omar/Documents/ChatGPT/Application%20Musculation/node_modules/@vitest/runner/dist/chunk-artifact.js:1903:20
+
+stderr | test/import-sync-diagnostic.test.tsx > different exercise IDs: imports all rows and reaches synced
+Workout cloud sync will retry. Error: duplicate key: exercises_user_id_name_key_key
+    at write (/home/omar/Documents/ChatGPT/Application Musculation/test/import-sync-diagnostic.test.tsx:78:171)
+    at Object.abortSignal (/home/omar/Documents/ChatGPT/Application Musculation/test/import-sync-diagnostic.test.tsx:87:110)
+    at upsertRows (/home/omar/Documents/ChatGPT/Application Musculation/lib/supabase/sync.ts:321:171)
+    at flushOutbox (/home/omar/Documents/ChatGPT/Application Musculation/lib/supabase/sync.ts:345:13)
+    at work (/home/omar/Documents/ChatGPT/Application Musculation/lib/supabase/sync.ts:75:9)
+    at WorkoutSync.sync (/home/omar/Documents/ChatGPT/Application Musculation/lib/supabase/sync.ts:86:14)
+    at /home/omar/Documents/ChatGPT/Application Musculation/test/import-sync-diagnostic.test.tsx:113:49
+    at file:///home/omar/Documents/ChatGPT/Application%20Musculation/node_modules/@vitest/runner/dist/chunk-artifact.js:1903:20
+
+stderr | test/import-sync-diagnostic.test.tsx > different exercise IDs: imports all rows and reaches synced
+Workout cloud sync will retry. Error: duplicate key: exercises_user_id_name_key_key
+    at write (/home/omar/Documents/ChatGPT/Application Musculation/test/import-sync-diagnostic.test.tsx:78:171)
+    at Object.abortSignal (/home/omar/Documents/ChatGPT/Application Musculation/test/import-sync-diagnostic.test.tsx:87:110)
+    at upsertRows (/home/omar/Documents/ChatGPT/Application Musculation/lib/supabase/sync.ts:321:171)
+    at flushOutbox (/home/omar/Documents/ChatGPT/Application Musculation/lib/supabase/sync.ts:345:13)
+    at work (/home/omar/Documents/ChatGPT/Application Musculation/lib/supabase/sync.ts:75:9)
+    at WorkoutSync.sync (/home/omar/Documents/ChatGPT/Application Musculation/lib/supabase/sync.ts:86:14)
+    at /home/omar/Documents/ChatGPT/Application Musculation/test/import-sync-diagnostic.test.tsx:113:49
+    at file:///home/omar/Documents/ChatGPT/Application%20Musculation/node_modules/@vitest/runner/dist/chunk-artifact.js:1903:20
+
+stdout | test/import-sync-diagnostic.test.tsx > different exercise IDs: imports all rows and reaches synced
+{"scenario":"different exercise IDs","finalStatus":"error","localSessions":6,"localSets":72,"remoteSessions":0,"remoteSets":0,"pending":100}
+
+ ❯ |screens| test/import-sync-diagnostic.test.tsx (3 tests | 1 failed) 783ms
+   × different exercise IDs: imports all rows and reaches synced 107ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  |screens| test/import-sync-diagnostic.test.tsx > different exercise IDs: imports all rows and reaches synced
+AssertionError: expected 'error' to be 'synced' // Object.is equality
+
+Expected: "synced"
+Received: "error"
+
+ ❯ test/import-sync-diagnostic.test.tsx:124:30
+    122|   };
+    123|   console.log(JSON.stringify(result));
+    124|   expect(result.finalStatus).toBe('synced');
+       |                              ^
+    125|   expect(result.pending).toBe(0);
+    126|   expect(result.remoteSessions).toBe(6);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 2 passed (3)
+   Start at  11:57:38
+   Duration  2.24s (transform 259ms, setup 146ms, import 370ms, tests 783ms, environment 744ms)
+

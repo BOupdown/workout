@@ -323,6 +323,7 @@ async function upsertRows(client: SupabaseClient, table: SyncTable, rows: object
 }
 
 async function flushOutbox(client: SupabaseClient, userId: string, database: WorkoutDB, check: () => void, signal: AbortSignal) {
+  await reconcileExerciseIds(client, userId, database, check, signal);
   const pending = await database.syncOperations.orderBy('id').toArray();
   const latest = new Map<string, SyncOperation>();
   for (const operation of pending) latest.set(`${operation.table}:${operation.key}`, operation);
@@ -351,6 +352,66 @@ async function flushOutbox(client: SupabaseClient, userId: string, database: Wor
       .flatMap((item) => item.id === undefined ? [] : [item.id]);
     await database.syncOperations.bulkDelete(acknowledged);
   }
+}
+
+/** Backups can carry another installation's catalogue IDs. Reuse the account's
+ * IDs before uploading references, including names reserved by soft-deleted
+ * exercises. Running here also recovers imports that failed in older clients. */
+async function reconcileExerciseIds(client: SupabaseClient, userId: string, database: WorkoutDB, check: () => void, signal: AbortSignal) {
+  if (!await database.syncOperations.where('table').equals('exercises').filter(row => row.kind === 'upsert').count()) return;
+  const remote = await readTable(client, 'exercises', userId, signal, false);
+  check();
+  const names = new Map(remote.map(row => [string(row.name_key), string(row.id)]));
+
+  await database.transaction('rw', [database.exercises, database.sessionExercises, database.sets, database.routines, database.syncOperations], async () => {
+    check();
+    // Read again under the write lock: an import or edit may have committed
+    // while the catalogue was downloading.
+    const pending = await database.syncOperations.orderBy('id').toArray();
+    const edited = new Set(pending.filter(row => row.table === 'exercises' && row.kind === 'upsert').map(row => row.key));
+    const exercises = await database.exercises.toArray();
+    const remap = new Map(exercises.flatMap(row => {
+      const id = names.get(row.nameKey);
+      return edited.has(row.id) && id && id !== row.id ? [[row.id, id] as const] : [];
+    }));
+    if (!remap.size) return;
+
+    const remappedExercises = exercises.map(row => ({ ...row, id: remap.get(row.id) ?? row.id }));
+    if (new Set(remappedExercises.map(row => row.id)).size !== exercises.length) {
+      throw new Error('Cloud exercise IDs conflict with local exercises; local data was kept.');
+    }
+    const blocks = (await database.sessionExercises.toArray())
+      .filter(row => remap.has(row.exerciseId)).map(row => ({ ...row, exerciseId: remap.get(row.exerciseId)! }));
+    const sets = (await database.sets.toArray())
+      .filter(row => remap.has(row.exerciseId)).map(row => ({ ...row, exerciseId: remap.get(row.exerciseId)! }));
+    const routines = (await database.routines.toArray())
+      .filter(row => row.exercises.some(entry => remap.has(entry.exerciseId)))
+      .map(row => ({ ...row, exercises: row.exercises.map(entry => ({ ...entry, exerciseId: remap.get(entry.exerciseId) ?? entry.exerciseId })) }));
+
+    // ID changes and their upload intents must commit together. Muting avoids
+    // generating deletions for rows whose identities are only being reconciled.
+    await withoutSyncOutbox(async () => {
+      await database.exercises.clear();
+      await database.exercises.bulkAdd(remappedExercises);
+      await database.sessionExercises.bulkPut(blocks);
+      await database.sets.bulkPut(sets);
+      await database.routines.bulkPut(routines);
+    });
+    const canonicalIds = new Set(remap.values());
+    const upsert = (table: SyncTable, key: string): SyncOperation => ({ table, key, kind: 'upsert', createdAt: Date.now() });
+    await database.syncOperations.clear();
+    await database.syncOperations.bulkAdd([
+      // Restored parents must precede all existing child intents. Discard the
+      // restore's deletes for these canonical IDs, which now represent upserts.
+      ...[...canonicalIds].map(key => upsert('exercises', key)),
+      ...pending.filter(row => row.table !== 'exercises' || (!remap.has(row.key) && !canonicalIds.has(row.key)))
+        .map(({ table, key, kind, createdAt }) => ({ table, key, kind, createdAt })),
+      ...blocks.map(row => upsert('sessionExercises', row.id)),
+      ...sets.map(row => upsert('sets', row.id)),
+      ...routines.map(row => upsert('routines', row.id)),
+    ]);
+    check();
+  });
 }
 
 async function flushOperation(client: SupabaseClient, userId: string, operation: SyncOperation, signal: AbortSignal) {

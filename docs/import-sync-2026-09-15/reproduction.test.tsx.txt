@@ -1,0 +1,131 @@
+import { readFileSync } from 'node:fs';
+import { parseBackup, importDatabase } from '../lib/db/backup';
+import type { SupabaseClient } from '@supabase/supabase-js';
+import { beforeEach, expect, it, vi } from 'vitest';
+import { db } from '../lib/db/db';
+import { startSession, getActiveSession, addExerciseToSession } from '../lib/db/sessions';
+import { createSet } from '../lib/db/sets';
+import { WorkoutSync } from '../lib/supabase/sync';
+import { saveRoutine, deleteRoutine, startSessionFromRoutine } from '../lib/db/routines';
+import { referenceExercises, resetDatabase } from './helpers';
+
+type Row = Record<string, unknown>;
+const userId = 'sync-test-user';
+
+// In-memory remote, with a controllable response delay. Local IndexedDB and
+// all production write/sync code stay real so missing outbox writes are caught.
+function remoteClient() {
+  const rows = new Map<string, Row[]>();
+  let cap = 1000;
+  let failAfter: string | undefined;
+  let duringRead: (() => Promise<void>) | undefined;
+  const client = {
+    from(table: string) {
+      let after: string | undefined;
+      let order = 'id';
+      let maximum = 1000;
+      const read = async () => {
+        if (table === failAfter && after) return { data: null, error: new Error('Network interrupted') };
+        const data = structuredClone(rows.get(table) ?? [])
+          .filter((row) => !row.deleted_at && (!after || String(row[order]) > after))
+          .sort((a, b) => String(a[order]).localeCompare(String(b[order])))
+          .slice(0, Math.min(maximum, cap));
+        if (table === 'sessions' && duringRead) {
+          const action = duringRead;
+          duringRead = undefined;
+          await action();
+        }
+        return { data, error: null };
+      };
+      const query = {
+        is: () => query,
+        eq: () => query,
+        order: (key: string) => { order = key; return query; },
+        gt: (_key: string, cursor: string) => { after = cursor; return query; },
+        limit: (count: number) => { maximum = count; return query; },
+        abortSignal: () => query,
+        then: (resolve: (value: unknown) => unknown) => read().then(resolve),
+      };
+      return {
+        select: () => query,
+        update(changes: Row) {
+          const filters: Array<[string, unknown]> = [];
+          const mutation = {
+            eq: (field: string, value: unknown) => { filters.push([field, value]); return mutation; },
+            abortSignal: () => mutation,
+            then: (resolve: (value: unknown) => unknown) => Promise.resolve().then(() => {
+              for (const row of rows.get(table) ?? []) {
+                if (filters.every(([field, value]) => row[field] === value)) Object.assign(row, changes);
+              }
+              return resolve({ error: null });
+            }),
+          };
+          return mutation;
+        },
+        upsert(input: Row | Row[]) {
+          const write = async () => {
+          const stored = structuredClone(rows.get(table) ?? []);
+          for (const row of Array.isArray(input) ? input : [input]) {
+            for (const [field, parent] of [
+              ['session_id', 'sessions'], ['exercise_id', 'exercises'],
+              ['session_exercise_id', 'session_exercises'],
+            ]) {
+              if (row[field] && !rows.get(parent)?.some((value) => value.id === row[field])) {
+                return { error: new Error(`Missing ${parent} parent`) };
+              }
+            }
+            // Matches the SQL uniqueness constraint, including soft-deleted rows.
+            if (table === 'exercises' && stored.some((value) => value.user_id === row.user_id && value.name_key === row.name_key && value.id !== row.id)) return { error: new Error('duplicate key: exercises_user_id_name_key_key') };
+            const key = (value: Row) => value.id ?? value.date ?? value.name_key ?? value.user_id;
+            const index = stored.findIndex((value) => key(value) === key(row));
+            if (index < 0) stored.push(structuredClone(row));
+            else stored[index] = structuredClone(row);
+          }
+          rows.set(table, stored);
+          return { error: null };
+          };
+          return { then: (resolve: (value: unknown) => unknown) => write().then(resolve), abortSignal: () => write() };
+        },
+      };
+    },
+  } as unknown as SupabaseClient;
+  return { client, rows, setCap: (value: number) => { cap = value; }, failLaterPage: (table?: string) => { failAfter = table; }, onRead: (action: () => Promise<void>) => { duringRead = action; } };
+}
+
+
+const json = readFileSync('docs/import-sync-2026-09-15/random-backup.json', 'utf8');
+beforeEach(async () => { await resetDatabase(); });
+
+it.each(['before first sync', 'same exercise IDs', 'different exercise IDs'])('%s: imports all rows and reaches synced', async (scenario) => {
+  const remote = remoteClient();
+  const status = vi.fn();
+  const sync = new WorkoutSync(userId, remote.client, status);
+  if (scenario === 'same exercise IDs') await importDatabase(parseBackup(json));
+  if (scenario !== 'before first sync') {
+    await sync.sync();
+    expect(status).toHaveBeenLastCalledWith('synced');
+  }
+  const backup = parseBackup(json);
+  await expect(importDatabase(backup)).resolves.toMatchObject({ sessions: 6, sets: 72 });
+  expect(await db.sessions.count()).toBe(6);
+  expect(await db.sets.count()).toBe(72);
+  // Three attempts show whether a later scheduled retry resolves the conflict.
+  for (let attempt = 0; attempt < 3; attempt++) await sync.sync();
+  const result = {
+    scenario,
+    finalStatus: status.mock.calls.at(-1)?.[0],
+    localSessions: await db.sessions.count(),
+    localSets: await db.sets.count(),
+    remoteSessions: remote.rows.get('sessions')?.filter(row => !row.deleted_at).length ?? 0,
+    remoteSets: remote.rows.get('sets')?.filter(row => !row.deleted_at).length ?? 0,
+    pending: await db.syncOperations.count(),
+  };
+  console.log(JSON.stringify(result));
+  expect(result.finalStatus).toBe('synced');
+  expect(result.pending).toBe(0);
+  expect(result.remoteSessions).toBe(6);
+  expect(result.remoteSets).toBe(72);
+  for (const set of backup.sets) {
+    expect(await db.sets.get(set.id)).toMatchObject({ weightKg: set.weightKg, reps: set.reps });
+  }
+});
